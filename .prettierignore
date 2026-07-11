@@ -1,0 +1,6 @@
+node_modules
+.next
+package-lock.json
+packages/db/src/generated
+.ddev
+CONTRIBUTING.md

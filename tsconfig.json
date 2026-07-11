@@ -1,0 +1,5 @@
+{
+  // Type-checks the root config files only. Each workspace has its own tsconfig.json.
+  "extends": "./tsconfig.base.json",
+  "include": ["*.ts"]
+}
