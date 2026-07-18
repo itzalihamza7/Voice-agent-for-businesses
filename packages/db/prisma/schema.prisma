@@ -1,0 +1,19 @@
+// PostgreSQL schema. No tables yet. Planned models:
+//
+// - Agent               one row per voice agent (id, name, business, which version is live)
+// - AgentConfigVersion  one row per saved config version; the full AgentConfig JSON
+//                       (validated by Zod in @voice-agent/shared) in a Json/JSONB column.
+//                       Rows are never updated, so rollback = point the agent at an older row.
+// - Call                one row per phone call (agent, config version used, start/end, sentiment)
+// - TranscriptTurn      one row per spoken turn in a call (speaker, text, time)
+//
+// After adding models: run `ddev npm run db:migrate` to create a migration.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
