@@ -1,0 +1,164 @@
+# Architecture
+
+This document explains how the project is organised and why. Right now the project is
+**boilerplate only**: folders, config, interfaces, and mock implementations. Nothing talks
+to a real AI vendor or a real phone line yet.
+
+## What we are building
+
+A platform where a business can:
+
+1. **Design** a voice agent's conversation in a drag-and-drop editor (the _builder_).
+2. **Run** that agent on phone calls: caller speech → text → AI reply → speech (the _pipeline_).
+3. **Monitor** calls afterwards: logs, transcripts, sentiment (the _dashboard_).
+4. **Version** each agent's design, so it can roll back to an old version or A/B test two versions.
+
+## The big picture
+
+```
+            Browser                                   Server side
+ ┌──────────────────────────────┐      ┌───────────────────────────────────────────────┐
+ │ apps/web (Next.js pages)     │ HTTP │ apps/web/src/app/api   (thin route handlers)  │
+ │  - builder (canvas)          │─────▶│        │                                      │
+ │  - dashboard (calls)         │      │        ▼                                      │
+ └──────────────────────────────┘      │ packages/orchestrator  (sessions, the "glue") │
+                                       │        │                    │                 │
+                                       │        ▼                    ▼                 │
+                                       │ packages/pipeline    packages/agent-config    │
+                                       │  STT → LLM → TTS      versioned configs       │
+                                       │  (provider interfaces)      │                 │
+                                       │                             ▼                 │
+                                       │                      packages/db (Prisma)     │
+                                       │                             │                 │
+                                       └─────────────────────────────┼─────────────────┘
+                                                                     ▼
+                                                              PostgreSQL (DDEV)
+
+ packages/shared: types + schemas that every box above imports.
+```
+
+## The structure we chose: a monorepo with npm workspaces
+
+One Git repository holds one app (`apps/web`) and five small packages (`packages/*`).
+npm workspaces link them, so `import { AgentConfig } from "@voice-agent/shared"` works anywhere.
+
+Why:
+
+- **Shared types are the main requirement.** The builder (in the browser) and the pipeline
+  (on the server) must agree on what an agent config looks like. Putting the types and schemas
+  in one package that both import means they cannot drift apart.
+- **The voice pipeline will outgrow Next.js.** Real phone audio arrives over a long-lived
+  WebSocket (for example from Twilio), which serverless Next.js routes handle badly. Because
+  the pipeline and orchestrator are plain TypeScript packages with no Next.js code, a separate
+  voice server can import them later without rewriting anything.
+- **Clear boundaries help learning.** Each package has one job and one `index.ts` entry point,
+  so it is easy to see what depends on what.
+- **No build step for internal packages.** Each package exports its TypeScript source directly.
+  Next.js compiles the ones it uses (`transpilePackages`), and Vitest runs TypeScript as-is.
+
+Dependencies only point one way:
+
+```
+web → orchestrator → pipeline, agent-config → shared
+                     db (used by agent-config later)
+```
+
+`shared` imports nothing internal. The UI never imports `pipeline` or `db` directly. It goes
+through the API.
+
+## What each folder is for
+
+| Folder                   | Purpose                                                                                                                                                                                                                       |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web/`              | The **frontend**: a Next.js (App Router) app with React and Tailwind CSS.                                                                                                                                                     |
+| `apps/web/src/app/`      | Pages, one folder per URL. `agents/[agentId]/builder` is the builder, `dashboard/calls` is the dashboard.                                                                                                                     |
+| `apps/web/src/app/api/`  | **Server-side** route handlers: the HTTP edge of the orchestration layer. They only parse requests and call the orchestrator. Today they return `501 Not implemented`.                                                        |
+| `apps/web/src/features/` | React components grouped by feature (`builder/`, `dashboard/`). Pages stay small and import from here.                                                                                                                        |
+| `packages/shared/`       | Types and **Zod** schemas used everywhere: `AgentConfig` (the versioned JSON), `CallLog`, `TranscriptTurn`, `Sentiment`.                                                                                                      |
+| `packages/pipeline/`     | The voice pipeline. One folder per step (`providers/stt`, `llm`, `tts`), each with an interface (`types.ts`) and a fake implementation (`mock.ts`). `registry.ts` picks implementations by name. `pipeline.ts` runs one turn. |
+| `packages/agent-config/` | Storing and versioning agent configs. `AgentConfigStore` is the interface, `InMemoryAgentConfigStore` the mock. `versioning.ts` is the placeholder for rollback / A/B logic.                                                  |
+| `packages/orchestrator/` | The "glue": starts a session (loads the agent's config, builds its providers). Later it drives the conversation and saves call logs. Has no HTTP code.                                                                        |
+| `packages/db/`           | Database access with **Prisma 7** and PostgreSQL. The schema has no tables yet, only comments describing the planned ones.                                                                                                    |
+| `.ddev/`                 | DDEV config: the Docker-based development environment (Node 22 + PostgreSQL 17).                                                                                                                                              |
+
+## How "swap a vendor without code changes" works
+
+Each pipeline step depends only on an interface, never on a vendor:
+
+```ts
+interface SpeechToTextProvider {
+  readonly name: string;
+  transcribe(audio: Uint8Array): Promise<{ text: string }>;
+}
+```
+
+Every agent config names the implementation for each step:
+
+```json
+"providers": { "stt": "mock", "llm": "mock", "tts": "mock" }
+```
+
+`createProviders()` in `registry.ts` turns those names into objects. To add a real vendor,
+write one class that implements the interface and add one line to the registry. After that,
+switching an agent from one vendor to another is a config change, not a code change.
+
+## How versioned configs work
+
+- An agent's whole design (flow + provider choices) is one JSON document, `AgentConfig`.
+- `AgentConfigSchema` (Zod) validates it before it is saved, so broken configs never get stored.
+- Saving never overwrites. Every save creates version 1, 2, 3, and so on.
+- `schemaVersion` records the version of the JSON _format_ itself, so old configs can be
+  upgraded if the format changes.
+- **Rollback** = make an old version live again. **A/B test** = send some calls to version A
+  and some to version B, and record on each `CallLog` which `agentVersion` handled it.
+
+## Development environment: DDEV + Docker + PostgreSQL
+
+`ddev start` creates two Docker containers:
+
+- **web**: Node 22. Runs `npm install` and then the Next.js dev server, served at
+  https://voice-agent.ddev.site.
+- **db**: PostgreSQL 17 (user/password/database are all `db`). Data survives `ddev stop`.
+
+All npm commands run inside the container (`ddev npm test`), so every developer gets the same
+Node version and the same Linux binaries, and nobody needs Postgres installed locally.
+`DATABASE_URL` is set for you inside the container.
+
+Tests never need the database: they use the in-memory mocks. So `npm test`, `npm run lint`
+and `npm run build` work without Postgres running.
+
+## Tools
+
+| Tool                              | Why                                                                                                            |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| TypeScript 6.0, strict mode       | Catch mistakes at compile time. Pinned to 6.0 because typescript-eslint does not support 7 yet.                |
+| Next.js 16 (App Router), React 19 | Pages and API routes in one app.                                                                               |
+| Tailwind CSS 4                    | Styling without writing separate CSS files.                                                                    |
+| Zod 4                             | One schema gives both runtime validation and TypeScript types.                                                 |
+| Prisma 7                          | Typed database access and migrations for PostgreSQL.                                                           |
+| Vitest 5                          | Fast tests that run TypeScript directly; one config for all workspaces.                                        |
+| ESLint 9 + Prettier               | Code-quality rules and automatic formatting. ESLint 9 because some Next.js lint plugins do not support 10 yet. |
+| DDEV (on Docker)                  | One-command dev environment with Node and PostgreSQL.                                                          |
+
+## Alternatives we considered
+
+| Alternative                                               | Why we did not pick it (for now)                                                                                                                                                                                      |
+| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A single Next.js app** with everything under `src/lib/` | Simpler at first, but the pipeline would be tied to Next.js, and moving it to a separate voice server later would be a big refactor.                                                                                  |
+| **Turborepo / Nx / pnpm**                                 | Good tools for large monorepos (caching, faster installs). Too much extra to learn for six small workspaces. Easy to add later.                                                                                       |
+| **A separate backend now** (Express, Fastify, NestJS)     | Not needed until real-time phone audio arrives. Next.js API routes are enough as the thin layer today.                                                                                                                |
+| **Hand-written JSON Schema + Ajv**                        | We would have to keep the schema and the TypeScript types in sync by hand. Zod gives both from one source (and can export JSON Schema if we ever need it).                                                            |
+| **Drizzle** instead of Prisma                             | Lighter and closer to SQL, with schemas in TypeScript. Prisma was chosen for its mature docs, migrations and Prisma Studio. Both would work, because the rest of the code only sees the `AgentConfigStore` interface. |
+| **Plain docker-compose** instead of DDEV                  | DDEV already runs on Docker and adds HTTPS URLs, a managed Postgres, `ddev psql`, and one-command start. A separate compose file would be a second way to do the same thing.                                          |
+| **Building packages to `dist/`**                          | Extra build steps and watch processes. Exporting TypeScript source keeps things simple while everything lives in one repo.                                                                                            |
+
+## Where future features will live
+
+| Feature                                                 | Where                                                                                                                                                                                                                                                 |
+| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Agent builder** (drag-and-drop canvas)                | UI: `apps/web/src/features/builder/` (planned library: React Flow). Page: `apps/web/src/app/agents/[agentId]/builder/`. Saves through `apps/web/src/app/api/agents/[agentId]/versions/`. Node and edge shapes: `packages/shared/src/agent-config.ts`. |
+| **Monitoring dashboard** (logs, transcripts, sentiment) | UI: `apps/web/src/features/dashboard/`. Pages: `apps/web/src/app/dashboard/calls/`. Data: `apps/web/src/app/api/calls/`. Types: `packages/shared/src/call.ts`. Tables: `Call` and `TranscriptTurn` in `packages/db/prisma/schema.prisma`.             |
+| **Voice pipeline** (STT → LLM → TTS)                    | `packages/pipeline/`. Real vendors go in `providers/<step>/<vendor>.ts` and get registered in `registry.ts`. Streaming and interruptions go in `pipeline.ts`.                                                                                         |
+| **Versioned configs** (rollback, A/B)                   | Schema: `packages/shared/src/agent-config.ts`. Storage: a Postgres `AgentConfigStore` in `packages/agent-config/`, using the `AgentConfigVersion` table in `packages/db`. Rollback / A/B logic: `packages/agent-config/src/versioning.ts`.            |
+| **Orchestration**                                       | `packages/orchestrator/` holds the logic. `apps/web/src/app/api/` is its HTTP door today. A future `apps/voice-gateway/` (WebSocket server for phone calls) would be a second door into the same package.                                             |
+| **Sentiment analysis**                                  | A new provider interface in `packages/pipeline/src/providers/sentiment/` when it is needed. The `Sentiment` type already exists in `shared`.                                                                                                          |
