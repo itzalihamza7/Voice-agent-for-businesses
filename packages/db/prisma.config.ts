@@ -5,6 +5,6 @@ import { defineConfig } from "prisma/config";
 // without a database, e.g. during `npm install` or in CI.
 export default defineConfig({
   schema: "prisma/schema.prisma",
-  migrations: { path: "prisma/migrations" },
+  migrations: { path: "prisma/migrations", seed: "tsx prisma/seed.ts" },
   datasource: { url: process.env.DATABASE_URL },
 });

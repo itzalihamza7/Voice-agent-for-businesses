@@ -16,11 +16,14 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && npm run typecheck --workspaces --if-present",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:db": "vitest run --config vitest.db.config.ts",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "db:generate": "npm run db:generate -w @voice-agent/db",
-    "db:migrate": "npm run db:migrate -w @voice-agent/db"
+    "db:migrate": "npm run db:migrate -w @voice-agent/db",
+    "db:seed": "npm run db:seed -w @voice-agent/db",
+    "db:setup": "npm run db:setup -w @voice-agent/db"
   },
   "devDependencies": {
     "@types/node": "^22.19.0",
