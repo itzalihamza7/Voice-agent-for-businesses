@@ -42,8 +42,25 @@ export const AgentConfigSchema = z.object({
   flow: AgentFlowSchema,
 });
 
+// What a client sends to save a new version. The server adds agentId (from the URL) and version.
+export const AgentConfigDraftSchema = AgentConfigSchema.omit({ agentId: true, version: true });
+
+export const CreateAgentRequestSchema = z.object({
+  name: z.string().trim().min(1).max(100),
+});
+
+// One row in the agent list.
+export interface AgentSummary {
+  agentId: string;
+  name: string;
+  latestVersion: number;
+  updatedAt: string;
+}
+
 export type FlowNode = z.infer<typeof FlowNodeSchema>;
 export type FlowEdge = z.infer<typeof FlowEdgeSchema>;
 export type AgentFlow = z.infer<typeof AgentFlowSchema>;
 export type ProviderSelection = z.infer<typeof ProviderSelectionSchema>;
 export type AgentConfig = z.infer<typeof AgentConfigSchema>;
+export type AgentConfigDraft = z.infer<typeof AgentConfigDraftSchema>;
+export type CreateAgentRequest = z.infer<typeof CreateAgentRequestSchema>;

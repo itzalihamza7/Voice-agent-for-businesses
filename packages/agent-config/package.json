@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@voice-agent/db": "*",
     "@voice-agent/shared": "*"
   }
 }
