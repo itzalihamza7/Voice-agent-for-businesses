@@ -18,7 +18,11 @@ export default defineConfig([
   {
     rules: {
       // Prefix a parameter with _ to mark it as intentionally unused (e.g. in mocks).
-      "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
+      // ignoreRestSiblings allows `const { id, ...rest } = obj` to drop fields.
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        { argsIgnorePattern: "^_", ignoreRestSiblings: true },
+      ],
     },
   },
 

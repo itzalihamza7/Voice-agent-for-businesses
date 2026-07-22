@@ -10,10 +10,14 @@
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
+    "@voice-agent/agent-config": "*",
+    "@voice-agent/db": "*",
+    "@voice-agent/orchestrator": "*",
     "@voice-agent/shared": "*",
     "next": "16.4.0",
     "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react-dom": "^19.3.0",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
