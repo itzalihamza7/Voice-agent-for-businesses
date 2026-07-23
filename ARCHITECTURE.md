@@ -1,8 +1,9 @@
 # Architecture
 
-This document explains how the project is organised and why. Right now the project is
-**boilerplate only**: folders, config, interfaces, and mock implementations. Nothing talks
-to a real AI vendor or a real phone line yet.
+This document explains how the project is organised and why. Agents and their versioned
+configs are stored in PostgreSQL and served by real API routes. The voice pipeline still uses
+mocks: nothing talks to a real AI vendor or a real phone line yet. The planned phases are in
+[docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## What we are building
 
@@ -59,27 +60,27 @@ Why:
 Dependencies only point one way:
 
 ```
-web → orchestrator → pipeline, agent-config → shared
-                     db (used by agent-config later)
+web → orchestrator → pipeline, agent-config → db, shared
 ```
 
 `shared` imports nothing internal. The UI never imports `pipeline` or `db` directly. It goes
-through the API.
+through the API. Only `apps/web/src/server/` creates the database client and the store.
 
 ## What each folder is for
 
-| Folder                   | Purpose                                                                                                                                                                                                                       |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/web/`              | The **frontend**: a Next.js (App Router) app with React and Tailwind CSS.                                                                                                                                                     |
-| `apps/web/src/app/`      | Pages, one folder per URL. `agents/[agentId]/builder` is the builder, `dashboard/calls` is the dashboard.                                                                                                                     |
-| `apps/web/src/app/api/`  | **Server-side** route handlers: the HTTP edge of the orchestration layer. They only parse requests and call the orchestrator. Today they return `501 Not implemented`.                                                        |
-| `apps/web/src/features/` | React components grouped by feature (`builder/`, `dashboard/`). Pages stay small and import from here.                                                                                                                        |
-| `packages/shared/`       | Types and **Zod** schemas used everywhere: `AgentConfig` (the versioned JSON), `CallLog`, `TranscriptTurn`, `Sentiment`.                                                                                                      |
-| `packages/pipeline/`     | The voice pipeline. One folder per step (`providers/stt`, `llm`, `tts`), each with an interface (`types.ts`) and a fake implementation (`mock.ts`). `registry.ts` picks implementations by name. `pipeline.ts` runs one turn. |
-| `packages/agent-config/` | Storing and versioning agent configs. `AgentConfigStore` is the interface, `InMemoryAgentConfigStore` the mock. `versioning.ts` is the placeholder for rollback / A/B logic.                                                  |
-| `packages/orchestrator/` | The "glue": starts a session (loads the agent's config, builds its providers). Later it drives the conversation and saves call logs. Has no HTTP code.                                                                        |
-| `packages/db/`           | Database access with **Prisma 7** and PostgreSQL. The schema has no tables yet, only comments describing the planned ones.                                                                                                    |
-| `.ddev/`                 | DDEV config: the Docker-based development environment (Node 22 + PostgreSQL 17).                                                                                                                                              |
+| Folder                   | Purpose                                                                                                                                                                                                                                                                                           |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web/`              | The **frontend**: a Next.js (App Router) app with React and Tailwind CSS.                                                                                                                                                                                                                         |
+| `apps/web/src/app/`      | Pages, one folder per URL. `agents/[agentId]/builder` is the builder, `dashboard/calls` is the dashboard.                                                                                                                                                                                         |
+| `apps/web/src/app/api/`  | **Server-side** route handlers: the HTTP edge of the orchestration layer. They validate the request with a shared Zod schema and call the orchestrator. `/api/agents` and `/api/agents/:agentId/versions` work; `/api/calls` and `/api/sessions` still return `501`.                              |
+| `apps/web/src/server/`   | Server-only wiring: one shared Prisma client, the business-scoped config store, and HTTP helpers (body validation, error → status code).                                                                                                                                                          |
+| `apps/web/src/features/` | React components grouped by feature (`builder/`, `dashboard/`). Pages stay small and import from here.                                                                                                                                                                                            |
+| `packages/shared/`       | Types and **Zod** schemas used everywhere: `AgentConfig` (the versioned JSON), `CallLog`, `TranscriptTurn`, `Sentiment`.                                                                                                                                                                          |
+| `packages/pipeline/`     | The voice pipeline. One folder per step (`providers/stt`, `llm`, `tts`), each with an interface (`types.ts`) and a fake implementation (`mock.ts`). `registry.ts` picks implementations by name. `pipeline.ts` runs one turn.                                                                     |
+| `packages/agent-config/` | Storing and versioning agent configs. `AgentConfigStore` is the interface, with two implementations: `InMemoryAgentConfigStore` (tests) and `PrismaAgentConfigStore` (Postgres). `store.contract.ts` holds the tests both must pass. `versioning.ts` is the placeholder for rollback / A/B logic. |
+| `packages/orchestrator/` | The "glue": agent use cases (create, list, save a version) and sessions (load the agent's config, build its providers). Later it drives the conversation and saves call logs. Has no HTTP code.                                                                                                   |
+| `packages/db/`           | Database access with **Prisma 7** and PostgreSQL. `prisma/schema.prisma` (tables: businesses, agents, agent_config_versions, calls, transcript_turns), `prisma/migrations/`, and an idempotent `prisma/seed.ts`.                                                                                  |
+| `.ddev/`                 | DDEV config: the Docker-based development environment (Node 22 + PostgreSQL 17). Our settings live in `config.voice-agent.yaml`, because `ddev config` rewrites `config.yaml`.                                                                                                                    |
 
 ## How "swap a vendor without code changes" works
 
@@ -105,8 +106,17 @@ switching an agent from one vendor to another is a config change, not a code cha
 ## How versioned configs work
 
 - An agent's whole design (flow + provider choices) is one JSON document, `AgentConfig`.
-- `AgentConfigSchema` (Zod) validates it before it is saved, so broken configs never get stored.
-- Saving never overwrites. Every save creates version 1, 2, 3, and so on.
+- `AgentConfigSchema` (Zod) validates it before it is saved, so broken configs never get stored,
+  and again when it is read back, so the rest of the code can trust its type.
+- Saving never overwrites. Every save creates version 1, 2, 3, and so on: one row in
+  `agent_config_versions`, with the JSON in a JSONB column.
+- Two saves at the same moment must not get the same number. Each save locks the agent's row
+  (`SELECT ... FOR UPDATE`), so saves for one agent run one after another. A unique index on
+  `(agent_id, version)` is the safety net, and a short retry covers two saves creating the
+  same new agent at once.
+- Every query is scoped by `businessId`. A store instance belongs to one business, so one
+  business can never read or overwrite another's agents. Until login exists, everything uses the
+  seeded `demo-business`.
 - `schemaVersion` records the version of the JSON _format_ itself, so old configs can be
   upgraded if the format changes.
 - **Rollback** = make an old version live again. **A/B test** = send some calls to version A
@@ -116,16 +126,22 @@ switching an agent from one vendor to another is a config change, not a code cha
 
 `ddev start` creates two Docker containers:
 
-- **web**: Node 22. Runs `npm install` and then the Next.js dev server, served at
-  https://voice-agent.ddev.site.
+- **web**: Node 22. Runs `npm install`, applies database migrations, seeds demo data (a
+  `demo-business` and a `demo` agent), then starts the Next.js dev server at
+  https://voice-agent.ddev.site. Every step is safe to repeat, so this happens on every start.
 - **db**: PostgreSQL 17 (user/password/database are all `db`). Data survives `ddev stop`.
 
 All npm commands run inside the container (`ddev npm test`), so every developer gets the same
 Node version and the same Linux binaries, and nobody needs Postgres installed locally.
 `DATABASE_URL` is set for you inside the container.
 
-Tests never need the database: they use the in-memory mocks. So `npm test`, `npm run lint`
-and `npm run build` work without Postgres running.
+There are two kinds of tests:
+
+- **Unit tests** (`npm test`) never need the database. They use the in-memory mocks, so they
+  also run without Postgres, like `npm run lint` and `npm run build`.
+- **Integration tests** (`npm run test:db`, files named `*.db.test.ts`) run against the real
+  Postgres. Each test creates its own throwaway business and deletes it afterwards, so your dev
+  data is never touched.
 
 ## Tools
 
@@ -154,11 +170,12 @@ and `npm run build` work without Postgres running.
 
 ## Where future features will live
 
-| Feature                                                 | Where                                                                                                                                                                                                                                                 |
-| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Agent builder** (drag-and-drop canvas)                | UI: `apps/web/src/features/builder/` (planned library: React Flow). Page: `apps/web/src/app/agents/[agentId]/builder/`. Saves through `apps/web/src/app/api/agents/[agentId]/versions/`. Node and edge shapes: `packages/shared/src/agent-config.ts`. |
-| **Monitoring dashboard** (logs, transcripts, sentiment) | UI: `apps/web/src/features/dashboard/`. Pages: `apps/web/src/app/dashboard/calls/`. Data: `apps/web/src/app/api/calls/`. Types: `packages/shared/src/call.ts`. Tables: `Call` and `TranscriptTurn` in `packages/db/prisma/schema.prisma`.             |
-| **Voice pipeline** (STT → LLM → TTS)                    | `packages/pipeline/`. Real vendors go in `providers/<step>/<vendor>.ts` and get registered in `registry.ts`. Streaming and interruptions go in `pipeline.ts`.                                                                                         |
-| **Versioned configs** (rollback, A/B)                   | Schema: `packages/shared/src/agent-config.ts`. Storage: a Postgres `AgentConfigStore` in `packages/agent-config/`, using the `AgentConfigVersion` table in `packages/db`. Rollback / A/B logic: `packages/agent-config/src/versioning.ts`.            |
-| **Orchestration**                                       | `packages/orchestrator/` holds the logic. `apps/web/src/app/api/` is its HTTP door today. A future `apps/voice-gateway/` (WebSocket server for phone calls) would be a second door into the same package.                                             |
-| **Sentiment analysis**                                  | A new provider interface in `packages/pipeline/src/providers/sentiment/` when it is needed. The `Sentiment` type already exists in `shared`.                                                                                                          |
+| Feature                                                               | Where                                                                                                                                                                                                                                                 |
+| --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Agent builder** (drag-and-drop canvas)                              | UI: `apps/web/src/features/builder/` (planned library: React Flow). Page: `apps/web/src/app/agents/[agentId]/builder/`. Saves through `apps/web/src/app/api/agents/[agentId]/versions/`. Node and edge shapes: `packages/shared/src/agent-config.ts`. |
+| **Monitoring dashboard** (logs, transcripts, sentiment)               | UI: `apps/web/src/features/dashboard/`. Pages: `apps/web/src/app/dashboard/calls/`. Data: `apps/web/src/app/api/calls/`. Types: `packages/shared/src/call.ts`. Tables: `Call` and `TranscriptTurn` in `packages/db/prisma/schema.prisma`.             |
+| **Voice pipeline** (STT → LLM → TTS)                                  | `packages/pipeline/`. Real vendors go in `providers/<step>/<vendor>.ts` and get registered in `registry.ts`. Streaming and interruptions go in `pipeline.ts`.                                                                                         |
+| **Versioned configs** (rollback, A/B)                                 | Schema: `packages/shared/src/agent-config.ts`. Storage (done): `PrismaAgentConfigStore` in `packages/agent-config/`, using the `agent_config_versions` table. Rollback / A/B logic: `packages/agent-config/src/versioning.ts`.                        |
+| **Orchestration**                                                     | `packages/orchestrator/` holds the logic. `apps/web/src/app/api/` is its HTTP door today. A future `apps/voice-gateway/` (WebSocket server for phone calls) would be a second door into the same package.                                             |
+| **Sentiment analysis**                                                | A new provider interface in `packages/pipeline/src/providers/sentiment/` when it is needed. The `Sentiment` type already exists in `shared`.                                                                                                          |
+| **AI features** (prompts, LLM harness, tools, RAG, evals, guardrails) | See [docs/ROADMAP.md](docs/ROADMAP.md). New packages planned: `packages/rag`, `packages/evals`, `packages/tools`. Every LLM feature runs against both a local model (Ollama) and the OpenAI API, so they can be compared.                             |
