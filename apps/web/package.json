@@ -14,6 +14,7 @@
     "@voice-agent/db": "*",
     "@voice-agent/orchestrator": "*",
     "@voice-agent/shared": "*",
+    "@xyflow/react": "^12.12.0",
     "next": "16.4.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",

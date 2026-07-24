@@ -1,27 +1,9 @@
 import { z } from "zod";
+import { AgentFlowSchema } from "./flow";
 
 // The versioned JSON document that describes one agent: its conversation flow
 // (built in the drag-and-drop builder) and which vendor runs each pipeline step.
-// Every config is validated with AgentConfigSchema before it is saved or used.
-// Node types, node settings and A/B test fields will be added when the builder is built.
-
-export const FlowNodeSchema = z.object({
-  id: z.string().min(1),
-  type: z.string().min(1),
-  position: z.object({ x: z.number(), y: z.number() }),
-  data: z.record(z.string(), z.unknown()),
-});
-
-export const FlowEdgeSchema = z.object({
-  id: z.string().min(1),
-  source: z.string().min(1),
-  target: z.string().min(1),
-});
-
-export const AgentFlowSchema = z.object({
-  nodes: z.array(FlowNodeSchema),
-  edges: z.array(FlowEdgeSchema),
-});
+// Every config is validated with AgentConfigSchema when it is saved and when it is read.
 
 // Names of the provider implementations to use, e.g. { stt: "mock" }.
 // Changing a name here swaps the vendor without changing code.
@@ -57,9 +39,6 @@ export interface AgentSummary {
   updatedAt: string;
 }
 
-export type FlowNode = z.infer<typeof FlowNodeSchema>;
-export type FlowEdge = z.infer<typeof FlowEdgeSchema>;
-export type AgentFlow = z.infer<typeof AgentFlowSchema>;
 export type ProviderSelection = z.infer<typeof ProviderSelectionSchema>;
 export type AgentConfig = z.infer<typeof AgentConfigSchema>;
 export type AgentConfigDraft = z.infer<typeof AgentConfigDraftSchema>;
