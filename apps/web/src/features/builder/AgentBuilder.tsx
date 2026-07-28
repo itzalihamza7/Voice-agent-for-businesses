@@ -1,0 +1,341 @@
+"use client";
+
+import "@xyflow/react/dist/style.css";
+import {
+  BRANCH_ELSE_HANDLE,
+  FLOW_NODE_TYPES,
+  validateFlow,
+  type AgentConfig,
+  type AgentFlow,
+  type FlowIssue,
+  type FlowNode,
+  type FlowNodeType,
+} from "@voice-agent/shared";
+import {
+  addEdge,
+  Background,
+  Controls,
+  MarkerType,
+  MiniMap,
+  ReactFlow,
+  ReactFlowProvider,
+  useEdgesState,
+  useNodesState,
+  useReactFlow,
+  type Connection,
+  type NodeTypes,
+} from "@xyflow/react";
+import Link from "next/link";
+import { useEffect, useMemo, useState, type DragEvent } from "react";
+import { FlowNodeCard, NodeIssuesContext } from "./FlowNodeCard";
+import {
+  fromReactFlow,
+  toBuilderNode,
+  toFlowNode,
+  toReactFlow,
+  type BuilderNode,
+} from "./flow-mapping";
+import { createNode, newId } from "./node-catalog";
+import { DRAG_MIME_TYPE, NodePalette } from "./NodePalette";
+import { NodeSettingsPanel } from "./NodeSettingsPanel";
+import { VersionHistory } from "./VersionHistory";
+
+// The drag-and-drop agent builder: palette on the left, canvas in the middle, settings on
+// the right. The canvas state lives in React Flow; "Save version" sends it to the API.
+
+// Every node type is drawn by the same card component. Defined outside the component so
+// React Flow gets a stable object (it warns and re-mounts nodes otherwise).
+const nodeTypes: NodeTypes = Object.fromEntries(
+  FLOW_NODE_TYPES.map((type) => [type, FlowNodeCard]),
+);
+
+interface Props {
+  agentId: string;
+  initial: AgentConfig;
+  versions: AgentConfig[];
+}
+
+export function AgentBuilder(props: Props) {
+  return (
+    <ReactFlowProvider>
+      <Builder {...props} />
+    </ReactFlowProvider>
+  );
+}
+
+type SaveStatus = { kind: "idle" | "saving" | "saved" } | { kind: "error"; message: string };
+
+/** What gets saved, as a string, to detect unsaved changes. */
+function snapshot(name: string, flow: AgentFlow): string {
+  return JSON.stringify({ name, flow });
+}
+
+function Builder({ agentId, initial, versions: initialVersions }: Props) {
+  const [versions, setVersions] = useState(initialVersions);
+  const [openVersion, setOpenVersion] = useState(initial.version);
+  const [name, setName] = useState(initial.name);
+  const [providers, setProviders] = useState(initial.providers);
+  const [initialCanvas] = useState(() => toReactFlow(initial.flow));
+  const [nodes, setNodes, onNodesChange] = useNodesState<BuilderNode>(initialCanvas.nodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialCanvas.edges);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [savedSnapshot, setSavedSnapshot] = useState(() => snapshot(initial.name, initial.flow));
+  const [status, setStatus] = useState<SaveStatus>({ kind: "idle" });
+  const { screenToFlowPosition, fitView, setCenter, getZoom } = useReactFlow();
+
+  const flow = useMemo(() => fromReactFlow(nodes, edges), [nodes, edges]);
+  const issues = useMemo(() => validateFlow(flow), [flow]);
+  const issueNodeIds = useMemo(
+    () => new Set(issues.flatMap((issue) => (issue.nodeId ? [issue.nodeId] : []))),
+    [issues],
+  );
+  const dirty = snapshot(name, flow) !== savedSnapshot;
+  const latestVersion = versions.at(-1)?.version ?? 0;
+  // Saving an unchanged old version is allowed: it restores it as the newest version.
+  const canSave =
+    name.trim() !== "" && (dirty || openVersion !== latestVersion) && status.kind !== "saving";
+
+  const selectedBuilderNode = nodes.find((node) => node.id === selectedId);
+  const selectedNode = selectedBuilderNode ? toFlowNode(selectedBuilderNode) : undefined;
+
+  // Warn before closing the tab with unsaved changes.
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
+
+  function selectNode(id: string) {
+    setNodes((current) => current.map((node) => ({ ...node, selected: node.id === id })));
+    setSelectedId(id);
+    fitView({ nodes: [{ id }], duration: 300, maxZoom: 1 });
+  }
+
+  function addNode(type: FlowNodeType, position: { x: number; y: number }) {
+    const node = toBuilderNode(createNode(type, position));
+    setNodes((current) => [
+      ...current.map((n) => ({ ...n, selected: false })),
+      { ...node, selected: true },
+    ]);
+    setSelectedId(node.id);
+  }
+
+  // Clicking a palette item adds the step below the selected step (or below the lowest
+  // step), so it never covers an existing one, then pans the view to it.
+  function addNodeBelow(type: FlowNodeType) {
+    const anchor =
+      nodes.find((node) => node.id === selectedId) ??
+      nodes.reduce<BuilderNode | undefined>(
+        (lowest, node) => (!lowest || node.position.y > lowest.position.y ? node : lowest),
+        undefined,
+      );
+    const position = anchor
+      ? { x: anchor.position.x, y: anchor.position.y + (anchor.measured?.height ?? 80) + 60 }
+      : { x: 0, y: 0 };
+    addNode(type, position);
+    setCenter(position.x + 112, position.y + 40, { zoom: getZoom(), duration: 300 });
+  }
+
+  function onDrop(event: DragEvent) {
+    event.preventDefault();
+    const type = event.dataTransfer.getData(DRAG_MIME_TYPE);
+    if (!(FLOW_NODE_TYPES as string[]).includes(type)) return;
+    addNode(type as FlowNodeType, screenToFlowPosition({ x: event.clientX, y: event.clientY }));
+  }
+
+  function onConnect(connection: Connection) {
+    // Each output has at most one connection: a new one replaces the old one.
+    setEdges((current) =>
+      addEdge(
+        { ...connection, id: newId("e") },
+        current.filter(
+          (edge) =>
+            edge.source !== connection.source ||
+            (edge.sourceHandle ?? null) !== (connection.sourceHandle ?? null),
+        ),
+      ),
+    );
+  }
+
+  function updateNodeData(id: string, data: FlowNode["data"]) {
+    setNodes((current) => current.map((node) => (node.id === id ? { ...node, data } : node)));
+    if ("conditions" in data) {
+      // A removed Branch path takes its connection with it.
+      const outputs = new Set([...data.conditions.map((c) => c.id), BRANCH_ELSE_HANDLE]);
+      setEdges((current) =>
+        current.filter(
+          (edge) => edge.source !== id || (edge.sourceHandle && outputs.has(edge.sourceHandle)),
+        ),
+      );
+    }
+  }
+
+  function deleteNode(id: string) {
+    setNodes((current) => current.filter((node) => node.id !== id));
+    setEdges((current) => current.filter((edge) => edge.source !== id && edge.target !== id));
+    setSelectedId(null);
+  }
+
+  function openOldVersion(version: AgentConfig) {
+    if (dirty && !window.confirm("Discard your unsaved changes?")) return;
+    const loaded = toReactFlow(version.flow);
+    setNodes(loaded.nodes);
+    setEdges(loaded.edges);
+    setName(version.name);
+    setProviders(version.providers);
+    setOpenVersion(version.version);
+    setSavedSnapshot(snapshot(version.name, version.flow));
+    setSelectedId(null);
+    setStatus({ kind: "idle" });
+    // Wait for React Flow to render the loaded nodes before fitting them in view.
+    requestAnimationFrame(() => fitView({ duration: 300 }));
+  }
+
+  async function save() {
+    setStatus({ kind: "saving" });
+    const sent = snapshot(name, flow);
+    const response = await fetch(`/api/agents/${encodeURIComponent(agentId)}/versions`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ schemaVersion: 1, name, providers, flow }),
+    });
+    if (!response.ok) {
+      const body = (await response.json().catch(() => null)) as { error?: string } | null;
+      setStatus({ kind: "error", message: body?.error ?? `Save failed (HTTP ${response.status})` });
+      return;
+    }
+    const { version } = (await response.json()) as { version: AgentConfig };
+    setVersions((current) => [...current, version]);
+    setOpenVersion(version.version);
+    setSavedSnapshot(sent);
+    setStatus({ kind: "saved" });
+  }
+
+  return (
+    <div className="flex h-screen flex-col">
+      <header className="flex flex-wrap items-center gap-3 border-b border-gray-200 px-4 py-2">
+        <Link href="/" className="text-sm text-blue-600 underline">
+          ← Agents
+        </Link>
+        <input
+          aria-label="Agent name"
+          className="rounded border border-gray-300 px-2 py-1 font-semibold"
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+        />
+        <span data-testid="save-state" className="text-sm text-gray-500">
+          {dirty ? "Unsaved changes" : `v${openVersion}`}
+          {!dirty && openVersion !== latestVersion && ` (latest is v${latestVersion})`}
+        </span>
+        <span
+          data-testid="issue-count"
+          className={`text-sm ${issues.length ? "text-red-600" : "text-emerald-600"}`}
+        >
+          {issues.length ? `${issues.length} issue(s)` : "Ready to run ✓"}
+        </span>
+        <div className="ml-auto flex items-center gap-3">
+          {status.kind === "error" && (
+            <span className="text-sm text-red-600">{status.message}</span>
+          )}
+          {status.kind === "saved" && !dirty && (
+            <span className="text-sm text-emerald-600">Saved as v{openVersion}</span>
+          )}
+          <button
+            type="button"
+            onClick={save}
+            disabled={!canSave}
+            className="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
+          >
+            {status.kind === "saving" ? "Saving…" : "Save version"}
+          </button>
+        </div>
+      </header>
+
+      <div className="flex min-h-0 flex-1">
+        <aside className="w-60 overflow-y-auto border-r border-gray-200 p-3">
+          <NodePalette onAdd={addNodeBelow} />
+        </aside>
+
+        <div
+          className="flex-1"
+          onDrop={onDrop}
+          onDragOver={(event) => {
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "move";
+          }}
+        >
+          <NodeIssuesContext.Provider value={issueNodeIds}>
+            <ReactFlow
+              nodes={nodes}
+              edges={edges}
+              nodeTypes={nodeTypes}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onConnect={onConnect}
+              isValidConnection={(connection) => connection.source !== connection.target}
+              onNodeClick={(_event, node) => setSelectedId(node.id)}
+              onPaneClick={() => setSelectedId(null)}
+              defaultEdgeOptions={{ markerEnd: { type: MarkerType.ArrowClosed } }}
+              deleteKeyCode={["Backspace", "Delete"]}
+              fitView
+              fitViewOptions={{ maxZoom: 1 }}
+            >
+              <Background />
+              <Controls />
+              <MiniMap pannable zoomable />
+            </ReactFlow>
+          </NodeIssuesContext.Provider>
+        </div>
+
+        <aside className="w-80 space-y-6 overflow-y-auto border-l border-gray-200 p-4">
+          {selectedNode ? (
+            <NodeSettingsPanel
+              key={selectedNode.id}
+              node={selectedNode}
+              issues={issues.filter((issue) => issue.nodeId === selectedNode.id)}
+              onChange={(data) => updateNodeData(selectedNode.id, data)}
+              onDelete={() => deleteNode(selectedNode.id)}
+            />
+          ) : (
+            <>
+              <IssueList issues={issues} onSelect={selectNode} />
+              <VersionHistory
+                versions={versions}
+                openVersion={openVersion}
+                onOpen={openOldVersion}
+              />
+            </>
+          )}
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+function IssueList({ issues, onSelect }: { issues: FlowIssue[]; onSelect: (id: string) => void }) {
+  return (
+    <div className="space-y-1">
+      <h2 className="text-sm font-semibold text-gray-700">Checks</h2>
+      {issues.length === 0 ? (
+        <p className="text-sm text-emerald-700">Every step is set up and connected.</p>
+      ) : (
+        <ul className="space-y-1">
+          {issues.map((issue, index) => (
+            <li key={`${index}-${issue.message}`}>
+              <button
+                type="button"
+                disabled={!issue.nodeId}
+                onClick={() => issue.nodeId && onSelect(issue.nodeId)}
+                className="w-full rounded bg-red-50 px-2 py-1 text-left text-sm text-red-700 enabled:hover:bg-red-100"
+              >
+                {issue.message}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="text-xs text-gray-500">Drafts with issues can still be saved.</p>
+    </div>
+  );
+}
