@@ -31,7 +31,8 @@ DDEV syncs files with Mutagen: if the container doesn't see a change yet, run `d
 
 ## Layout
 
-- `apps/web`: Next.js App Router frontend (builder, dashboard) + thin API routes in `src/app/api`.
+- `apps/web`: Next.js App Router frontend + thin API routes in `src/app/api`.
+  `src/features/builder/` is the React Flow agent builder; `src/features/agents/` the agent list.
   Server-only wiring (Prisma client, store per business, HTTP helpers) lives in `src/server/`.
 - `packages/shared`: types + Zod schemas used by both the UI and the pipeline.
 - `packages/pipeline`: STT -> LLM -> TTS behind provider interfaces; `registry.ts` maps names to implementations.
@@ -54,6 +55,12 @@ DDEV syncs files with Mutagen: if the container doesn't see a change yet, run `d
 - Every external vendor sits behind an interface in `packages/pipeline/src/providers/<step>/types.ts`.
   A new vendor = a new file implementing the interface + one line in `registry.ts`.
   Each interface keeps a `mock.ts` for tests.
+- Flow checks have two levels. Zod schemas (`packages/shared/src/flow.ts`) check *shape* only and accept
+  unfinished drafts, so work in progress can always be saved. `validateFlow()` (`flow-validation.ts`)
+  checks the flow is *complete enough to run*; the builder shows its issues live.
+- Adding a node type touches four places: schema in `flow.ts`, rules in `flow-validation.ts`,
+  catalog entry in `apps/web/src/features/builder/node-catalog.ts`, form in `NodeSettingsPanel.tsx`.
+  Exhaustive `switch`es and the catalog's mapped type make TypeScript point at any you miss.
 - Agent configs are validated with `AgentConfigSchema` (Zod) on save and on read. Versions are
   never edited in place: every save creates a new version.
 - Every database query is scoped by `businessId` (`PrismaAgentConfigStore` is created per business).

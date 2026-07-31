@@ -71,11 +71,11 @@ through the API. Only `apps/web/src/server/` creates the database client and the
 | Folder                   | Purpose                                                                                                                                                                                                                                                                                           |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `apps/web/`              | The **frontend**: a Next.js (App Router) app with React and Tailwind CSS.                                                                                                                                                                                                                         |
-| `apps/web/src/app/`      | Pages, one folder per URL. `agents/[agentId]/builder` is the builder, `dashboard/calls` is the dashboard.                                                                                                                                                                                         |
+| `apps/web/src/app/`      | Pages, one folder per URL. `/` lists agents and creates new ones, `agents/[agentId]/builder` is the builder, `dashboard/calls` is the dashboard.                                                                                                                                                  |
 | `apps/web/src/app/api/`  | **Server-side** route handlers: the HTTP edge of the orchestration layer. They validate the request with a shared Zod schema and call the orchestrator. `/api/agents` and `/api/agents/:agentId/versions` work; `/api/calls` and `/api/sessions` still return `501`.                              |
 | `apps/web/src/server/`   | Server-only wiring: one shared Prisma client, the business-scoped config store, and HTTP helpers (body validation, error → status code).                                                                                                                                                          |
-| `apps/web/src/features/` | React components grouped by feature (`builder/`, `dashboard/`). Pages stay small and import from here.                                                                                                                                                                                            |
-| `packages/shared/`       | Types and **Zod** schemas used everywhere: `AgentConfig` (the versioned JSON), `CallLog`, `TranscriptTurn`, `Sentiment`.                                                                                                                                                                          |
+| `apps/web/src/features/` | React components grouped by feature: `builder/` (the React Flow agent builder), `agents/` (create-agent form), `dashboard/`. Pages stay small and import from here.                                                                                                                               |
+| `packages/shared/`       | Types and **Zod** schemas used everywhere: `AgentConfig` (the versioned JSON), the flow's node and edge types (`flow.ts`), `validateFlow()` (`flow-validation.ts`), and `CallLog`, `TranscriptTurn`, `Sentiment`.                                                                                 |
 | `packages/pipeline/`     | The voice pipeline. One folder per step (`providers/stt`, `llm`, `tts`), each with an interface (`types.ts`) and a fake implementation (`mock.ts`). `registry.ts` picks implementations by name. `pipeline.ts` runs one turn.                                                                     |
 | `packages/agent-config/` | Storing and versioning agent configs. `AgentConfigStore` is the interface, with two implementations: `InMemoryAgentConfigStore` (tests) and `PrismaAgentConfigStore` (Postgres). `store.contract.ts` holds the tests both must pass. `versioning.ts` is the placeholder for rollback / A/B logic. |
 | `packages/orchestrator/` | The "glue": agent use cases (create, list, save a version) and sessions (load the agent's config, build its providers). Later it drives the conversation and saves call logs. Has no HTTP code.                                                                                                   |
@@ -122,6 +122,51 @@ switching an agent from one vendor to another is a config change, not a code cha
 - **Rollback** = make an old version live again. **A/B test** = send some calls to version A
   and some to version B, and record on each `CallLog` which `agentVersion` handled it.
 
+## How the agent builder works
+
+The builder (`/agents/:agentId/builder`) has three columns: a **palette** of steps on the left,
+the **canvas** (React Flow) in the middle, and **settings** for the selected step on the right.
+With nothing selected, the right column shows the flow's issues and the version history.
+
+**Node types.** Each step is a node with its own settings, defined once in
+`packages/shared/src/flow.ts`:
+
+| Node             | Settings                               | Outputs                          |
+| ---------------- | -------------------------------------- | -------------------------------- |
+| Start            | none                                   | 1                                |
+| Say              | text                                   | 1                                |
+| Ask              | question, variable to store the answer | 1                                |
+| AI response      | instructions for the LLM               | 1                                |
+| Branch           | a list of paths ("when the caller...") | one per path + "Otherwise"       |
+| Tool             | tool name                              | 1                                |
+| Knowledge lookup | what to look up                        | 1                                |
+| Transfer         | phone number, message                  | none (the call leaves the agent) |
+| End              | goodbye message                        | none                             |
+
+Tool, Knowledge lookup and AI response are only _designed_ here. Running them comes in later
+phases (see the roadmap).
+
+**Two levels of checking.**
+
+1. **Shape** (Zod schemas in `flow.ts`): is it a known node type with the right field types?
+   Checked when saving. Unfinished drafts pass, so work in progress can always be saved.
+2. **Completeness** (`validateFlow()` in `flow-validation.ts`): is every step filled in,
+   connected and reachable from Start? Does every Branch path lead somewhere? Checked live in
+   the browser: problem steps get a red outline and the issues are listed. Because it lives in
+   `shared`, the server can later use the same function to refuse to put an incomplete flow live.
+
+**Canvas rules.** Start can't be deleted and has no input. End and Transfer have no output.
+Each output has at most one connection: drawing a new one replaces the old one. Removing a
+Branch path also removes its connection.
+
+**Saving.** "Save version" sends the flow to `POST /api/agents/:agentId/versions` and creates
+the next version. Opening an old version from the history loads it into the canvas, and saving
+it then creates a new version with that content (old versions are never changed).
+
+**Adding a node type** touches four files: `flow.ts` (schema), `flow-validation.ts` (rules),
+`node-catalog.ts` (label, colour, defaults) and `NodeSettingsPanel.tsx` (form). TypeScript points
+at any of them you forget.
+
 ## Development environment: DDEV + Docker + PostgreSQL
 
 `ddev start` creates two Docker containers:
@@ -149,6 +194,7 @@ There are two kinds of tests:
 | --------------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | TypeScript 6.0, strict mode       | Catch mistakes at compile time. Pinned to 6.0 because typescript-eslint does not support 7 yet.                |
 | Next.js 16 (App Router), React 19 | Pages and API routes in one app.                                                                               |
+| React Flow 12 (`@xyflow/react`)   | The drag-and-drop canvas: nodes, connections, zoom, minimap.                                                   |
 | Tailwind CSS 4                    | Styling without writing separate CSS files.                                                                    |
 | Zod 4                             | One schema gives both runtime validation and TypeScript types.                                                 |
 | Prisma 7                          | Typed database access and migrations for PostgreSQL.                                                           |
@@ -170,12 +216,12 @@ There are two kinds of tests:
 
 ## Where future features will live
 
-| Feature                                                               | Where                                                                                                                                                                                                                                                 |
-| --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Agent builder** (drag-and-drop canvas)                              | UI: `apps/web/src/features/builder/` (planned library: React Flow). Page: `apps/web/src/app/agents/[agentId]/builder/`. Saves through `apps/web/src/app/api/agents/[agentId]/versions/`. Node and edge shapes: `packages/shared/src/agent-config.ts`. |
-| **Monitoring dashboard** (logs, transcripts, sentiment)               | UI: `apps/web/src/features/dashboard/`. Pages: `apps/web/src/app/dashboard/calls/`. Data: `apps/web/src/app/api/calls/`. Types: `packages/shared/src/call.ts`. Tables: `Call` and `TranscriptTurn` in `packages/db/prisma/schema.prisma`.             |
-| **Voice pipeline** (STT → LLM → TTS)                                  | `packages/pipeline/`. Real vendors go in `providers/<step>/<vendor>.ts` and get registered in `registry.ts`. Streaming and interruptions go in `pipeline.ts`.                                                                                         |
-| **Versioned configs** (rollback, A/B)                                 | Schema: `packages/shared/src/agent-config.ts`. Storage (done): `PrismaAgentConfigStore` in `packages/agent-config/`, using the `agent_config_versions` table. Rollback / A/B logic: `packages/agent-config/src/versioning.ts`.                        |
-| **Orchestration**                                                     | `packages/orchestrator/` holds the logic. `apps/web/src/app/api/` is its HTTP door today. A future `apps/voice-gateway/` (WebSocket server for phone calls) would be a second door into the same package.                                             |
-| **Sentiment analysis**                                                | A new provider interface in `packages/pipeline/src/providers/sentiment/` when it is needed. The `Sentiment` type already exists in `shared`.                                                                                                          |
-| **AI features** (prompts, LLM harness, tools, RAG, evals, guardrails) | See [docs/ROADMAP.md](docs/ROADMAP.md). New packages planned: `packages/rag`, `packages/evals`, `packages/tools`. Every LLM feature runs against both a local model (Ollama) and the OpenAI API, so they can be compared.                             |
+| Feature                                                               | Where                                                                                                                                                                                                                                     |
+| --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Agent builder** (drag-and-drop canvas)                              | Done (MVP): `apps/web/src/features/builder/`, page `apps/web/src/app/agents/[agentId]/builder/`. Node types: `packages/shared/src/flow.ts`. See "How the agent builder works".                                                            |
+| **Monitoring dashboard** (logs, transcripts, sentiment)               | UI: `apps/web/src/features/dashboard/`. Pages: `apps/web/src/app/dashboard/calls/`. Data: `apps/web/src/app/api/calls/`. Types: `packages/shared/src/call.ts`. Tables: `Call` and `TranscriptTurn` in `packages/db/prisma/schema.prisma`. |
+| **Voice pipeline** (STT → LLM → TTS)                                  | `packages/pipeline/`. Real vendors go in `providers/<step>/<vendor>.ts` and get registered in `registry.ts`. Streaming and interruptions go in `pipeline.ts`.                                                                             |
+| **Versioned configs** (rollback, A/B)                                 | Schema: `packages/shared/src/agent-config.ts`. Storage (done): `PrismaAgentConfigStore` in `packages/agent-config/`, using the `agent_config_versions` table. Rollback / A/B logic: `packages/agent-config/src/versioning.ts`.            |
+| **Orchestration**                                                     | `packages/orchestrator/` holds the logic. `apps/web/src/app/api/` is its HTTP door today. A future `apps/voice-gateway/` (WebSocket server for phone calls) would be a second door into the same package.                                 |
+| **Sentiment analysis**                                                | A new provider interface in `packages/pipeline/src/providers/sentiment/` when it is needed. The `Sentiment` type already exists in `shared`.                                                                                              |
+| **AI features** (prompts, LLM harness, tools, RAG, evals, guardrails) | See [docs/ROADMAP.md](docs/ROADMAP.md). New packages planned: `packages/rag`, `packages/evals`, `packages/tools`. Every LLM feature runs against both a local model (Ollama) and the OpenAI API, so they can be compared.                 |
