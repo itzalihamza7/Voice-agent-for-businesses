@@ -16,10 +16,12 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<BuilderNode
   const node = toFlowNode({ id, type, data, position: { x: 0, y: 0 } });
   const kind = NODE_CATALOG[node.type];
   const hasIssues = useContext(NodeIssuesContext).has(id);
+  // Branch outputs are labelled 1, 2, 3… (the full path descriptions are listed in the card
+  // body, numbered the same way): long descriptions would be cut off under the handles.
   const branchOutputs =
     node.type === "branch"
       ? [
-          ...node.data.conditions.map((c) => ({ id: c.id, label: c.label || "…" })),
+          ...node.data.conditions.map((c, index) => ({ id: c.id, label: String(index + 1) })),
           { id: BRANCH_ELSE_HANDLE, label: "Otherwise" },
         ]
       : [];
@@ -40,9 +42,20 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<BuilderNode
       <div className="text-xs font-semibold tracking-wide text-gray-600 uppercase">
         {kind.label}
       </div>
-      <div className="mt-1 line-clamp-2 min-h-5 text-sm text-gray-900">
-        {nodeSummary(node) || <span className="text-gray-400 italic">Not set up yet</span>}
-      </div>
+      {node.type === "branch" ? (
+        <ol className="mt-1 space-y-0.5 text-xs text-gray-900">
+          {node.data.conditions.map((condition, index) => (
+            <li key={condition.id} className="truncate">
+              {index + 1}.{" "}
+              {condition.label || <span className="text-gray-400 italic">no description</span>}
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <div className="mt-1 line-clamp-2 min-h-5 text-sm text-gray-900">
+          {nodeSummary(node) || <span className="text-gray-400 italic">Not set up yet</span>}
+        </div>
+      )}
 
       {branchOutputs.length > 0 ? (
         <div className="mt-2 -mb-2 flex gap-1 text-[10px] text-gray-600">

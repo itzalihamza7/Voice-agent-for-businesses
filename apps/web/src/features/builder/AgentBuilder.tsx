@@ -20,13 +20,14 @@ import {
   ReactFlow,
   ReactFlowProvider,
   useEdgesState,
+  useNodesInitialized,
   useNodesState,
   useReactFlow,
   type Connection,
   type NodeTypes,
 } from "@xyflow/react";
 import Link from "next/link";
-import { useEffect, useMemo, useState, type DragEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { FlowNodeCard, NodeIssuesContext } from "./FlowNodeCard";
 import {
   fromReactFlow,
@@ -97,6 +98,16 @@ function Builder({ agentId, initial, versions: initialVersions }: Props) {
 
   const selectedBuilderNode = nodes.find((node) => node.id === selectedId);
   const selectedNode = selectedBuilderNode ? toFlowNode(selectedBuilderNode) : undefined;
+
+  // Fit the whole flow in view once every node has been measured. (React Flow's own
+  // `fitView` prop can run before all nodes are measured and then fits only some of them.)
+  const nodesInitialized = useNodesInitialized();
+  const fittedOnLoad = useRef(false);
+  useEffect(() => {
+    if (!nodesInitialized || fittedOnLoad.current) return;
+    fittedOnLoad.current = true;
+    void fitView({ maxZoom: 1 });
+  }, [nodesInitialized, fitView]);
 
   // Warn before closing the tab with unsaved changes.
   useEffect(() => {
@@ -278,8 +289,6 @@ function Builder({ agentId, initial, versions: initialVersions }: Props) {
               onPaneClick={() => setSelectedId(null)}
               defaultEdgeOptions={{ markerEnd: { type: MarkerType.ArrowClosed } }}
               deleteKeyCode={["Backspace", "Delete"]}
-              fitView
-              fitViewOptions={{ maxZoom: 1 }}
             >
               <Background />
               <Controls />

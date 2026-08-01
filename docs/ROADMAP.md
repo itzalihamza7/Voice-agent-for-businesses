@@ -45,7 +45,7 @@ feature support when building each phase. It changes often.
 | --- | ------------------------------- | ------------------------------------------------------------------------------ | --- | ------- |
 | 0   | Boilerplate                     | Monorepo, provider interfaces, mocks, DDEV                                     | 10  | ✅ Done |
 | 1   | Data foundation                 | Prisma models, Postgres config store, real API routes                          | 4   | ✅ Done |
-| 2   | Agent builder MVP               | React Flow canvas, typed node settings, versions                               | 9   |         |
+| 2   | Agent builder MVP               | React Flow canvas, typed node settings, versions                               | 9   | ✅ Done |
 | 3   | Prompt engineering studio       | System prompts, templates, few-shot, voice style, playground                   | 6   |         |
 | 4   | LLM harness + text simulator    | Streaming, retries, fallbacks, routing, caching, cost, tracing                 | 8   |         |
 | 5   | Structured outputs & tools      | JSON schema output, intents, function calling, agentic loop, MCP               | 6   |         |
