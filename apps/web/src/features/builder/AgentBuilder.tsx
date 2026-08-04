@@ -28,7 +28,7 @@ import {
 } from "@xyflow/react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
-import { FlowNodeCard, NodeIssuesContext } from "./FlowNodeCard";
+import { CanvasHighlightContext, FlowNodeCard } from "./FlowNodeCard";
 import {
   fromReactFlow,
   toBuilderNode,
@@ -39,6 +39,7 @@ import {
 import { createNode, newId } from "./node-catalog";
 import { DRAG_MIME_TYPE, NodePalette } from "./NodePalette";
 import { NodeSettingsPanel } from "./NodeSettingsPanel";
+import { TestChat } from "./TestChat";
 import { VersionHistory } from "./VersionHistory";
 
 // The drag-and-drop agent builder: palette on the left, canvas in the middle, settings on
@@ -82,13 +83,19 @@ function Builder({ agentId, initial, versions: initialVersions }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [savedSnapshot, setSavedSnapshot] = useState(() => snapshot(initial.name, initial.flow));
   const [status, setStatus] = useState<SaveStatus>({ kind: "idle" });
+  // While testing, the right column shows the test chat instead of step settings.
+  const [testing, setTesting] = useState(false);
+  const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
   const { screenToFlowPosition, fitView, setCenter, getZoom } = useReactFlow();
 
   const flow = useMemo(() => fromReactFlow(nodes, edges), [nodes, edges]);
   const issues = useMemo(() => validateFlow(flow), [flow]);
-  const issueNodeIds = useMemo(
-    () => new Set(issues.flatMap((issue) => (issue.nodeId ? [issue.nodeId] : []))),
-    [issues],
+  const highlights = useMemo(
+    () => ({
+      issueNodeIds: new Set(issues.flatMap((issue) => (issue.nodeId ? [issue.nodeId] : []))),
+      activeNodeId: testing ? activeNodeId : null,
+    }),
+    [issues, testing, activeNodeId],
   );
   const dirty = snapshot(name, flow) !== savedSnapshot;
   const latestVersion = versions.at(-1)?.version ?? 0;
@@ -246,6 +253,17 @@ function Builder({ agentId, initial, versions: initialVersions }: Props) {
           {issues.length ? `${issues.length} issue(s)` : "Ready to run ✓"}
         </span>
         <div className="ml-auto flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setTesting((on) => !on)}
+            className={`rounded border px-3 py-1.5 text-sm font-medium ${
+              testing
+                ? "border-emerald-600 bg-emerald-600 text-white"
+                : "border-emerald-600 text-emerald-700 hover:bg-emerald-50"
+            }`}
+          >
+            {testing ? "Close test" : "Test"}
+          </button>
           {status.kind === "error" && (
             <span className="text-sm text-red-600">{status.message}</span>
           )}
@@ -276,7 +294,7 @@ function Builder({ agentId, initial, versions: initialVersions }: Props) {
             event.dataTransfer.dropEffect = "move";
           }}
         >
-          <NodeIssuesContext.Provider value={issueNodeIds}>
+          <CanvasHighlightContext.Provider value={highlights}>
             <ReactFlow
               nodes={nodes}
               edges={edges}
@@ -294,11 +312,13 @@ function Builder({ agentId, initial, versions: initialVersions }: Props) {
               <Controls />
               <MiniMap pannable zoomable />
             </ReactFlow>
-          </NodeIssuesContext.Provider>
+          </CanvasHighlightContext.Provider>
         </div>
 
         <aside className="w-80 space-y-6 overflow-y-auto border-l border-gray-200 p-4">
-          {selectedNode ? (
+          {testing ? (
+            <TestChat flow={flow} onActiveNodeChange={setActiveNodeId} />
+          ) : selectedNode ? (
             <NodeSettingsPanel
               key={selectedNode.id}
               node={selectedNode}

@@ -9,13 +9,23 @@ import { NODE_CATALOG, nodeSummary } from "./node-catalog";
 // How every node looks on the canvas. Inputs are on top, outputs at the bottom.
 // Start has no input; End and Transfer have no output; Branch has one output per path.
 
-/** Ids of nodes that currently have validation issues (highlighted in red). */
-export const NodeIssuesContext = createContext<ReadonlySet<string>>(new Set());
+/** What to highlight on the canvas: steps with issues (red) and the test call's current step (green). */
+export interface CanvasHighlights {
+  issueNodeIds: ReadonlySet<string>;
+  activeNodeId: string | null;
+}
+
+export const CanvasHighlightContext = createContext<CanvasHighlights>({
+  issueNodeIds: new Set(),
+  activeNodeId: null,
+});
 
 export function FlowNodeCard({ id, type, data, selected }: NodeProps<BuilderNode>) {
   const node = toFlowNode({ id, type, data, position: { x: 0, y: 0 } });
   const kind = NODE_CATALOG[node.type];
-  const hasIssues = useContext(NodeIssuesContext).has(id);
+  const highlights = useContext(CanvasHighlightContext);
+  const hasIssues = highlights.issueNodeIds.has(id);
+  const isActive = highlights.activeNodeId === id;
   // Branch outputs are labelled 1, 2, 3… (the full path descriptions are listed in the card
   // body, numbered the same way): long descriptions would be cut off under the handles.
   const branchOutputs =
@@ -29,13 +39,16 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<BuilderNode
   // React Flow caches handle positions; refresh them when a Branch gains or loses paths.
   const updateNodeInternals = useUpdateNodeInternals();
   const outputKey = branchOutputs.map((output) => output.id).join(",");
-  useEffect(() => updateNodeInternals(id), [outputKey, id, updateNodeInternals]);
+  // Block body on purpose: an effect may only return a cleanup function.
+  useEffect(() => {
+    updateNodeInternals(id);
+  }, [outputKey, id, updateNodeInternals]);
 
   return (
     <div
       data-testid={`node-${node.type}`}
       className={`w-56 rounded-md border-2 px-3 py-2 text-left shadow-sm ${kind.accent} ${
-        selected ? "ring-2 ring-blue-400" : ""
+        isActive ? "ring-4 ring-emerald-400" : selected ? "ring-2 ring-blue-400" : ""
       } ${hasIssues ? "outline-2 outline-offset-2 outline-red-500" : ""}`}
     >
       {node.type !== "start" && <Handle type="target" position={Position.Top} />}

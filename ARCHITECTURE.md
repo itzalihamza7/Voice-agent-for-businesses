@@ -68,19 +68,19 @@ through the API. Only `apps/web/src/server/` creates the database client and the
 
 ## What each folder is for
 
-| Folder                   | Purpose                                                                                                                                                                                                                                                                                           |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/web/`              | The **frontend**: a Next.js (App Router) app with React and Tailwind CSS.                                                                                                                                                                                                                         |
-| `apps/web/src/app/`      | Pages, one folder per URL. `/` lists agents and creates new ones, `agents/[agentId]/builder` is the builder, `dashboard/calls` is the dashboard.                                                                                                                                                  |
-| `apps/web/src/app/api/`  | **Server-side** route handlers: the HTTP edge of the orchestration layer. They validate the request with a shared Zod schema and call the orchestrator. `/api/agents` and `/api/agents/:agentId/versions` work; `/api/calls` and `/api/sessions` still return `501`.                              |
-| `apps/web/src/server/`   | Server-only wiring: one shared Prisma client, the business-scoped config store, and HTTP helpers (body validation, error → status code).                                                                                                                                                          |
-| `apps/web/src/features/` | React components grouped by feature: `builder/` (the React Flow agent builder), `agents/` (create-agent form), `dashboard/`. Pages stay small and import from here.                                                                                                                               |
-| `packages/shared/`       | Types and **Zod** schemas used everywhere: `AgentConfig` (the versioned JSON), the flow's node and edge types (`flow.ts`), `validateFlow()` (`flow-validation.ts`), and `CallLog`, `TranscriptTurn`, `Sentiment`.                                                                                 |
-| `packages/pipeline/`     | The voice pipeline. One folder per step (`providers/stt`, `llm`, `tts`), each with an interface (`types.ts`) and a fake implementation (`mock.ts`). `registry.ts` picks implementations by name. `pipeline.ts` runs one turn.                                                                     |
-| `packages/agent-config/` | Storing and versioning agent configs. `AgentConfigStore` is the interface, with two implementations: `InMemoryAgentConfigStore` (tests) and `PrismaAgentConfigStore` (Postgres). `store.contract.ts` holds the tests both must pass. `versioning.ts` is the placeholder for rollback / A/B logic. |
-| `packages/orchestrator/` | The "glue": agent use cases (create, list, save a version) and sessions (load the agent's config, build its providers). Later it drives the conversation and saves call logs. Has no HTTP code.                                                                                                   |
-| `packages/db/`           | Database access with **Prisma 7** and PostgreSQL. `prisma/schema.prisma` (tables: businesses, agents, agent_config_versions, calls, transcript_turns), `prisma/migrations/`, and an idempotent `prisma/seed.ts`.                                                                                  |
-| `.ddev/`                 | DDEV config: the Docker-based development environment (Node 22 + PostgreSQL 17). Our settings live in `config.voice-agent.yaml`, because `ddev config` rewrites `config.yaml`.                                                                                                                    |
+| Folder                   | Purpose                                                                                                                                                                                                                                                                                            |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web/`              | The **frontend**: a Next.js (App Router) app with React and Tailwind CSS.                                                                                                                                                                                                                          |
+| `apps/web/src/app/`      | Pages, one folder per URL. `/` lists agents and creates new ones, `agents/[agentId]/builder` is the builder, `dashboard/calls` is the dashboard.                                                                                                                                                   |
+| `apps/web/src/app/api/`  | **Server-side** route handlers: the HTTP edge of the orchestration layer. They validate the request with a shared Zod schema and call the orchestrator. `/api/agents`, `/api/agents/:agentId/versions` and `/api/simulate` (test calls) work; `/api/calls` and `/api/sessions` still return `501`. |
+| `apps/web/src/server/`   | Server-only wiring: one shared Prisma client, the business-scoped config store, and HTTP helpers (body validation, error → status code).                                                                                                                                                           |
+| `apps/web/src/features/` | React components grouped by feature: `builder/` (the React Flow agent builder), `agents/` (create-agent form), `dashboard/`. Pages stay small and import from here.                                                                                                                                |
+| `packages/shared/`       | Types and **Zod** schemas used everywhere: `AgentConfig` (the versioned JSON), the flow's node and edge types (`flow.ts`), `validateFlow()` (`flow-validation.ts`), and `CallLog`, `TranscriptTurn`, `Sentiment`.                                                                                  |
+| `packages/pipeline/`     | The voice pipeline. One folder per step (`providers/stt`, `llm`, `tts`), each with an interface (`types.ts`) and a fake implementation (`mock.ts`). `registry.ts` picks implementations by name. `pipeline.ts` runs one turn.                                                                      |
+| `packages/agent-config/` | Storing and versioning agent configs. `AgentConfigStore` is the interface, with two implementations: `InMemoryAgentConfigStore` (tests) and `PrismaAgentConfigStore` (Postgres). `store.contract.ts` holds the tests both must pass. `versioning.ts` is the placeholder for rollback / A/B logic.  |
+| `packages/orchestrator/` | The "glue": agent use cases (create, list, save a version) and sessions (load the agent's config, build its providers). Later it drives the conversation and saves call logs. Has no HTTP code.                                                                                                    |
+| `packages/db/`           | Database access with **Prisma 7** and PostgreSQL. `prisma/schema.prisma` (tables: businesses, agents, agent_config_versions, calls, transcript_turns), `prisma/migrations/`, and an idempotent `prisma/seed.ts`.                                                                                   |
+| `.ddev/`                 | DDEV config: the Docker-based development environment (Node 22 + PostgreSQL 17). Our settings live in `config.voice-agent.yaml`, because `ddev config` rewrites `config.yaml`.                                                                                                                     |
 
 ## How "swap a vendor without code changes" works
 
@@ -166,6 +166,34 @@ it then creates a new version with that content (old versions are never changed)
 **Adding a node type** touches four files: `flow.ts` (schema), `flow-validation.ts` (rules),
 `node-catalog.ts` (label, colour, defaults) and `NodeSettingsPanel.tsx` (form). TypeScript points
 at any of them you forget.
+
+## How a test call works
+
+The builder's **Test** button opens a chat where you play the caller. It lets you check a flow's
+logic before any speech or phone line exists.
+
+```
+Browser (TestChat)                        Server
+  flow + state + action  ── POST /api/simulate ──▶  runTurn()  (packages/orchestrator)
+  new state + events     ◀─────────────────────────  walks the flow until it needs the caller
+```
+
+- **The conversation engine** (`packages/orchestrator/src/conversation.ts`) is a set of pure
+  functions. Each turn runs steps one after another until the flow needs the caller: an **Ask**
+  step (waits for an answer, stores it in its variable) or a **Branch** (waits for a path).
+  Say, Tool, Knowledge lookup and AI response steps don't wait.
+- **Nothing is stored on the server.** The browser sends the flow, the current state (which
+  step it is waiting at, plus the answers so far) and the action (start / answer / choose a
+  path). The server answers with the new state and a list of events ("said X", "asked Y",
+  "called tool Z"), which the chat turns into messages.
+- **It runs on the server on purpose.** The next step lets an LLM choose Branch paths and write AI
+  replies, and LLM API keys must never reach the browser.
+- `{{variable}}` placeholders in messages are filled with the answers collected so far
+  (`renderTemplate` in `packages/shared`).
+- Safety: a loop of steps that never waits for the caller stops after 200 steps, and a step with
+  nothing connected after it ends the call with an explanation.
+- Right now Branch paths are **picked by hand**, and AI response, Tool and Knowledge lookup steps
+  are only reported. Later roadmap phases make them run for real.
 
 ## Development environment: DDEV + Docker + PostgreSQL
 

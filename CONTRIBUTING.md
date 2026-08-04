@@ -38,7 +38,8 @@ DDEV syncs files with Mutagen: if the container doesn't see a change yet, run `d
 - `packages/pipeline`: STT -> LLM -> TTS behind provider interfaces; `registry.ts` maps names to implementations.
 - `packages/agent-config`: versioned agent config storage. `AgentConfigStore` interface, in-memory and
   Prisma implementations, and `store.contract.ts` (tests every implementation must pass).
-- `packages/orchestrator`: use cases between the web app and the rest (agents, sessions). No HTTP code.
+- `packages/orchestrator`: use cases between the web app and the rest (agents, sessions) and the
+  conversation engine (`conversation.ts`: walks a flow turn by turn, pure functions). No HTTP code.
 - `packages/db`: Prisma 7 + PostgreSQL. Schema, migrations and seed in `prisma/`.
   Generated client goes to `src/generated/` (gitignored).
 - `.ddev/config.voice-agent.yaml`: our DDEV settings. Don't put them in `config.yaml`: `ddev config` rewrites it.
