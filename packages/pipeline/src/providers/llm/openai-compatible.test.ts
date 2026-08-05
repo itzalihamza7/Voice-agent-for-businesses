@@ -1,0 +1,104 @@
+import { describe, expect, it, vi } from "vitest";
+import { OpenAICompatibleProvider } from "./openai-compatible";
+import { LanguageModelError } from "./types";
+
+const okBody = {
+  model: "test-model-1",
+  choices: [{ message: { content: "  Hello there.  " } }],
+  usage: { prompt_tokens: 12, completion_tokens: 3 },
+};
+
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+function provider(fetchMock: typeof fetch, apiKey?: string) {
+  return new OpenAICompatibleProvider({
+    name: "test",
+    baseUrl: "https://llm.example/v1",
+    model: "test-model",
+    apiKey,
+    maxRetries: 2,
+    fetch: fetchMock,
+  });
+}
+
+describe("OpenAICompatibleProvider", () => {
+  it("sends a Chat Completions request and reads text, model and token usage", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(json(okBody));
+    const result = await provider(fetchMock, "secret").complete([{ role: "user", content: "Hi" }], {
+      temperature: 0,
+    });
+
+    expect(result).toMatchObject({
+      text: "Hello there.",
+      model: "test-model-1",
+      usage: { inputTokens: 12, outputTokens: 3 },
+    });
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe("https://llm.example/v1/chat/completions");
+    expect(new Headers(init?.headers).get("authorization")).toBe("Bearer secret");
+    expect(JSON.parse(String(init?.body))).toEqual({
+      model: "test-model",
+      messages: [{ role: "user", content: "Hi" }],
+      temperature: 0,
+    });
+  });
+
+  it("sends no authorization header without an API key (Ollama)", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(json(okBody));
+    await provider(fetchMock).complete([{ role: "user", content: "Hi" }]);
+    expect(new Headers(fetchMock.mock.calls[0]![1]?.headers).has("authorization")).toBe(false);
+  });
+
+  it("retries temporary failures (5xx, 429, network) and then succeeds", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchMock = vi
+        .fn<typeof fetch>()
+        .mockResolvedValueOnce(json({ error: "busy" }, 503))
+        .mockRejectedValueOnce(new TypeError("fetch failed"))
+        .mockResolvedValueOnce(json(okBody));
+      const promise = provider(fetchMock).complete([{ role: "user", content: "Hi" }]);
+      await vi.runAllTimersAsync();
+      expect((await promise).text).toBe("Hello there.");
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("gives up after the last retry", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchMock = vi
+        .fn<typeof fetch>()
+        // A new Response per call: a response body can only be read once.
+        .mockImplementation(async () => json({ error: "rate limited" }, 429));
+      const promise = provider(fetchMock).complete([{ role: "user", content: "Hi" }]);
+      const assertion = expect(promise).rejects.toThrow("failed after 3 attempts (HTTP 429");
+      await vi.runAllTimersAsync();
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not retry a request the server rejects (4xx)", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(json({ error: "bad key" }, 401));
+    await expect(provider(fetchMock).complete([{ role: "user", content: "Hi" }])).rejects.toThrow(
+      LanguageModelError,
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects a response without choices", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(json({ model: "m", choices: [] }));
+    await expect(provider(fetchMock).complete([{ role: "user", content: "Hi" }])).rejects.toThrow(
+      "unexpected response shape",
+    );
+  });
+});

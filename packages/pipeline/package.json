@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@voice-agent/shared": "*"
+    "@voice-agent/shared": "*",
+    "zod": "^4.6.7"
   }
 }
