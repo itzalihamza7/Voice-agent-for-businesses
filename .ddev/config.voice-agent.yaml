@@ -2,8 +2,13 @@
 # Kept separate because `ddev config` rewrites config.yaml and drops comments.
 
 # Database connection for Prisma. These are DDEV's default credentials (local only, not secrets).
+# Language models: Ollama runs on the Mac (host.docker.internal from inside the container).
+# Secrets such as OPENAI_API_KEY go in .ddev/.env.web, which git ignores.
 web_environment:
     - DATABASE_URL=postgresql://db:db@db:5432/db
+    - OLLAMA_BASE_URL=http://host.docker.internal:11434/v1
+    - OLLAMA_MODEL=llama3.1:8b
+    - OPENAI_MODEL=gpt-4.1-mini
 
 # Runs the Next.js dev server inside the web container. On every `ddev start` it first
 # installs dependencies, applies database migrations and seeds demo data (all idempotent),
