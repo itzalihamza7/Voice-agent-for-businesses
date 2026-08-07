@@ -41,25 +41,25 @@ feature support when building each phase. It changes often.
 
 ## Phases
 
-| #   | Phase                           | Concepts                                                                       | %   | Status                      |
-| --- | ------------------------------- | ------------------------------------------------------------------------------ | --- | --------------------------- |
-| 0   | Boilerplate                     | Monorepo, provider interfaces, mocks, DDEV                                     | 10  | ✅ Done                     |
-| 1   | Data foundation                 | Prisma models, Postgres config store, real API routes                          | 4   | ✅ Done                     |
-| 2   | Agent builder MVP               | React Flow canvas, typed node settings, versions                               | 9   | ✅ Done                     |
-| 3   | Prompt engineering studio       | System prompts, templates, few-shot, voice style, playground                   | 6   |                             |
-| 4   | LLM harness + text simulator    | Streaming, retries, fallbacks, routing, caching, cost, tracing                 | 8   | In progress: test chat done |
-| 5   | Structured outputs & tools      | JSON schema output, intents, function calling, agentic loop, MCP               | 6   |                             |
-| 6   | RAG knowledge base              | Ingestion, chunking, embeddings, pgvector, hybrid search, reranking, citations | 9   |                             |
-| 7   | Memory & context                | Context budgets, rolling summaries, long-term caller memory                    | 3   |                             |
-| 8   | Evals                           | Golden sets, simulated callers, LLM-as-judge, RAG metrics, regression gate     | 7   |                             |
-| 9   | Guardrails & safety             | Prompt injection, PII redaction, output checks, grounding, escalation          | 5   |                             |
-| 10  | Voice in the browser            | Streaming STT → LLM → TTS, VAD, barge-in, latency budgets                      | 8   |                             |
-| 11  | Phone calls                     | Twilio media streams, routing, human transfer                                  | 5   |                             |
-| 12  | Dashboard & LLM analytics       | Traces, summaries, sentiment, topic clustering, failure analysis               | 6   |                             |
-| 13  | Multi-agent & AI flow generator | Router + specialists, handoffs, reasoning, LLM-generated flows                 | 4   |                             |
-| 14  | Rollback & A/B experiments      | Rollback, traffic splits, comparing versions                                   | 3   |                             |
-| 15  | Businesses & auth               | Login, roles, tenant isolation, encrypted vendor keys                          | 3   |                             |
-| 16  | Production hardening            | CI, Playwright, deploy, error tracking, rate limits, cost per call             | 4   |                             |
+| #   | Phase                           | Concepts                                                                       | %   | Status                                           |
+| --- | ------------------------------- | ------------------------------------------------------------------------------ | --- | ------------------------------------------------ |
+| 0   | Boilerplate                     | Monorepo, provider interfaces, mocks, DDEV                                     | 10  | ✅ Done                                          |
+| 1   | Data foundation                 | Prisma models, Postgres config store, real API routes                          | 4   | ✅ Done                                          |
+| 2   | Agent builder MVP               | React Flow canvas, typed node settings, versions                               | 9   | ✅ Done                                          |
+| 3   | Prompt engineering studio       | System prompts, templates, few-shot, voice style, playground                   | 6   |                                                  |
+| 4   | LLM harness + text simulator    | Streaming, retries, fallbacks, routing, caching, cost, tracing                 | 8   | In progress: test chat + AI routing/replies done |
+| 5   | Structured outputs & tools      | JSON schema output, intents, function calling, agentic loop, MCP               | 6   |                                                  |
+| 6   | RAG knowledge base              | Ingestion, chunking, embeddings, pgvector, hybrid search, reranking, citations | 9   |                                                  |
+| 7   | Memory & context                | Context budgets, rolling summaries, long-term caller memory                    | 3   |                                                  |
+| 8   | Evals                           | Golden sets, simulated callers, LLM-as-judge, RAG metrics, regression gate     | 7   |                                                  |
+| 9   | Guardrails & safety             | Prompt injection, PII redaction, output checks, grounding, escalation          | 5   |                                                  |
+| 10  | Voice in the browser            | Streaming STT → LLM → TTS, VAD, barge-in, latency budgets                      | 8   |                                                  |
+| 11  | Phone calls                     | Twilio media streams, routing, human transfer                                  | 5   |                                                  |
+| 12  | Dashboard & LLM analytics       | Traces, summaries, sentiment, topic clustering, failure analysis               | 6   |                                                  |
+| 13  | Multi-agent & AI flow generator | Router + specialists, handoffs, reasoning, LLM-generated flows                 | 4   |                                                  |
+| 14  | Rollback & A/B experiments      | Rollback, traffic splits, comparing versions                                   | 3   |                                                  |
+| 15  | Businesses & auth               | Login, roles, tenant isolation, encrypted vendor keys                          | 3   |                                                  |
+| 16  | Production hardening            | CI, Playwright, deploy, error tracking, rate limits, cost per call             | 4   |                                                  |
 
 ## Phase details
 
@@ -91,8 +91,24 @@ feature support when building each phase. It changes often.
 - Timeouts, retries with backoff, fallback model, model routing (small vs. large).
 - Prompt caching, token / cost / latency accounting, a trace of every LLM call.
 - Text simulator: chat as the caller, with the active node highlighted on the canvas.
-  ✅ First part done: a conversation engine walks the flow, Branch paths are picked by hand,
-  AI/Tool/Knowledge steps are only reported. Next: the LLM chooses Branch paths and writes AI replies.
+  ✅ Done: a conversation engine walks the flow; with a model chosen, the AI picks Branch paths
+  and writes AI response steps; OpenAI-compatible provider (OpenAI + Ollama) with timeouts and
+  retries; model, time and tokens shown per AI request.
+  Still to do: streaming, fallback model, model routing, prompt caching, cost, stored traces.
+
+  **Findings so far** (booking agent, `llama3.1:8b` on an M3 / 16 GB vs `gpt-4.1-mini`):
+
+  |                                              | Ollama `llama3.1:8b`                       | OpenAI `gpt-4.1-mini`                     |
+  | -------------------------------------------- | ------------------------------------------ | ----------------------------------------- |
+  | Branch routing (3 test callers)              | 3/3 correct                                | 3/3 correct                               |
+  | Branch decision time                         | ~15 s cold (model loading), then 0.7–0.9 s | 0.9–2.3 s                                 |
+  | Reply time                                   | 2.5–12 s                                   | 0.7–1.6 s                                 |
+  | Invents times when the tool returned nothing | 2 of 3 runs, even after prompt fixes       | 0 of 3 after prompt fixes (1 of 3 before) |
+  | Honest about missing opening hours           | 3/3                                        | 3/3                                       |
+
+  Lesson: prompt wording alone can't stop a small model from inventing facts when a step's
+  instructions ask for data it doesn't have. Real tool results (phase 5) and a grounding check
+  (phase 9) are the proper fix.
 
 ### 5. Structured outputs & tools
 

@@ -178,22 +178,47 @@ Browser (TestChat)                        Server
   new state + events     ◀─────────────────────────  walks the flow until it needs the caller
 ```
 
-- **The conversation engine** (`packages/orchestrator/src/conversation.ts`) is a set of pure
-  functions. Each turn runs steps one after another until the flow needs the caller: an **Ask**
-  step (waits for an answer, stores it in its variable) or a **Branch** (waits for a path).
-  Say, Tool, Knowledge lookup and AI response steps don't wait.
-- **Nothing is stored on the server.** The browser sends the flow, the current state (which
-  step it is waiting at, plus the answers so far) and the action (start / answer / choose a
-  path). The server answers with the new state and a list of events ("said X", "asked Y",
-  "called tool Z"), which the chat turns into messages.
-- **It runs on the server on purpose.** The next step lets an LLM choose Branch paths and write AI
-  replies, and LLM API keys must never reach the browser.
-- `{{variable}}` placeholders in messages are filled with the answers collected so far
-  (`renderTemplate` in `packages/shared`).
+- **The conversation engine** (`packages/orchestrator/src/conversation.ts`) runs each turn step
+  after step until the flow needs the caller: an **Ask** step (waits for an answer, stores it in
+  its variable) or a **Branch**. Say, Tool, Knowledge lookup and AI response steps don't wait.
+- **Nothing is stored on the server.** The browser sends the flow, the current state (the step
+  it is waiting at, the answers so far, and the transcript) and the action (start / reply /
+  choose a path). The server answers with the new state and a list of events ("said X", "AI
+  chose path Y in 0.8 s"), which the chat turns into messages.
+- **The AI model is picked in the chat:** Ollama (local), OpenAI, or none. With a model:
+  - at a **Branch**, the engine waits for what the caller says, then asks the model which path
+    fits (it answers with a path number; anything unreadable means "Otherwise");
+  - **AI response** steps are written by the model, following the step's instructions;
+  - right after a **Tool** step the path is still picked by hand, because tools don't return
+    results yet (roadmap phase 5).
+    Every AI request shows its model, time and tokens, so local and hosted models can be compared.
+    If the model fails, the call goes on: Branches fall back to picking by hand.
+- **It runs on the server on purpose:** the OpenAI API key must never reach the browser.
+- **Prompts** live in `packages/orchestrator/src/prompts.ts`. The conversation is sent as one
+  transcript in a single message, not as separate chat turns, because chat templates differ
+  between models (Llama mis-handled a conversation ending in a system note and leaked an
+  "assistant" header into its reply).
+- `{{variable}}` placeholders are filled with the answers collected so far (`renderTemplate`).
 - Safety: a loop of steps that never waits for the caller stops after 200 steps, and a step with
   nothing connected after it ends the call with an explanation.
-- Right now Branch paths are **picked by hand**, and AI response, Tool and Knowledge lookup steps
-  are only reported. Later roadmap phases make them run for real.
+
+### Language models
+
+`packages/pipeline/src/providers/llm/openai-compatible.ts` talks to any server that speaks
+OpenAI's Chat Completions API, so **one class covers OpenAI and Ollama**. It uses plain `fetch`
+(no SDK), with a timeout per attempt and up to 2 retries with exponential backoff for temporary
+failures (network, timeout, HTTP 429/5xx). Requests the server rejects (other 4xx) fail at once.
+`registry.ts` creates a provider from its name (`"ollama"`, `"openai"`, `"mock"`) and settings
+from environment variables:
+
+| Variable          | Where it is set                                     | Default                                                          |
+| ----------------- | --------------------------------------------------- | ---------------------------------------------------------------- |
+| `OLLAMA_BASE_URL` | `.ddev/config.voice-agent.yaml`                     | `http://host.docker.internal:11434/v1` (the Mac, seen from DDEV) |
+| `OLLAMA_MODEL`    | `.ddev/config.voice-agent.yaml`                     | `llama3.1:8b`                                                    |
+| `OPENAI_MODEL`    | `.ddev/config.voice-agent.yaml`                     | `gpt-4.1-mini` (fast, no hidden reasoning step)                  |
+| `OPENAI_API_KEY`  | `.ddev/.env.web` (**git-ignored**, never committed) | none                                                             |
+
+Ollama runs directly on macOS, not in DDEV: Docker on a Mac has no access to the GPU.
 
 ## Development environment: DDEV + Docker + PostgreSQL
 
@@ -229,6 +254,8 @@ There are two kinds of tests:
 | Vitest 5                          | Fast tests that run TypeScript directly; one config for all workspaces.                                        |
 | ESLint 9 + Prettier               | Code-quality rules and automatic formatting. ESLint 9 because some Next.js lint plugins do not support 10 yet. |
 | DDEV (on Docker)                  | One-command dev environment with Node and PostgreSQL.                                                          |
+| Ollama + `llama3.1:8b`            | Free local language model for development and comparison.                                                      |
+| OpenAI API (`gpt-4.1-mini`)       | Hosted language model, the quality and speed reference.                                                        |
 
 ## Alternatives we considered
 

@@ -20,6 +20,8 @@ container, so plain `npm ...` on macOS will fail on native binaries.
 | Production build (type-check + `next build`) | `ddev npm run build` |
 | Format / check formatting (Prettier) | `ddev npm run format` / `ddev npm run format:check` |
 | Regenerate Prisma client | `ddev npm run db:generate` |
+| Start Ollama (runs on the Mac, not in DDEV) | `brew services start ollama` |
+| Download the local model | `ollama pull llama3.1:8b` |
 | Create + apply a DB migration after editing `schema.prisma` | `ddev npm run db:migrate -- --name <change>` |
 | Apply migrations + seed demo data (idempotent) | `ddev npm run db:setup` |
 | Postgres shell | `ddev psql` |
@@ -73,6 +75,11 @@ DDEV syncs files with Mutagen: if the container doesn't see a change yet, run `d
   Tests that need Postgres are named `*.db.test.ts`, create their own throwaway business, and delete it afterwards.
 - A new `AgentConfigStore` implementation must pass `describeAgentConfigStore` (the contract tests).
 - Prefix intentionally unused parameters with `_`. Dropping fields with `const { id, ...rest } = obj` is allowed.
-- Secrets never go in the repo. `.env.example` lists variable names only.
+- Secrets never go in the repo. They go in `.ddev/.env.web` (git-ignored, loaded into the web
+  container); `.env.example` lists variable names only. Never print a key in logs or output.
+- Language models are created by name through `packages/pipeline/src/registry.ts`
+  (`"ollama"`, `"openai"`, `"mock"`). Prompts live in `packages/orchestrator/src/prompts.ts`.
+- Unit tests never call a real language model: use a scripted fake (see `conversation.test.ts`).
+  Model behaviour is checked by hand or with live runs against both Ollama and OpenAI.
 - Pinned on purpose: TypeScript 6.0 (typescript-eslint does not support 7 yet), ESLint 9
   (some eslint-config-next plugins do not support 10 yet), Prisma 7 (8 is still a release candidate).

@@ -5,19 +5,26 @@ import type {
   ConversationAction,
   ConversationEvent,
   ConversationState,
+  LlmCallInfo,
   TurnResult,
 } from "@voice-agent/shared";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
 // Test chat: you play the caller, the server walks the flow (POST /api/simulate).
 // The test uses the flow as it was when "Start test call" was pressed; restart after edits.
-// Branch paths are picked by hand for now: an LLM will choose them in the next step.
+// With an AI model chosen, the AI picks Branch paths and writes AI response steps; every AI
+// request shows its model, time and tokens so local and hosted models can be compared.
+
+const MODEL_OPTIONS = [
+  { value: "ollama", label: "Ollama (local, free)" },
+  { value: "openai", label: "OpenAI" },
+  { value: "", label: "No AI (pick paths by hand)" },
+];
 
 type Message =
-  | { kind: "agent" | "caller"; text: string }
-  | { kind: "note"; text: string; tone: "info" | "data" | "error" };
-
-type Waiting = { kind: "answer" } | { kind: "path"; paths: { handle: string; label: string }[] };
+  | { kind: "agent"; text: string; llm?: LlmCallInfo }
+  | { kind: "caller"; text: string }
+  | { kind: "note"; text: string; tone: "info" | "data" | "error"; llm?: LlmCallInfo };
 
 interface Props {
   flow: AgentFlow;
@@ -25,10 +32,11 @@ interface Props {
 }
 
 export function TestChat({ flow, onActiveNodeChange }: Props) {
+  const [model, setModel] = useState("ollama");
   const [testedFlow, setTestedFlow] = useState<AgentFlow | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [state, setState] = useState<ConversationState | null>(null);
-  const [waiting, setWaiting] = useState<Waiting | null>(null);
+  const [paths, setPaths] = useState<{ handle: string; label: string }[]>([]);
   const [input, setInput] = useState("");
   const [pending, setPending] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
@@ -46,7 +54,7 @@ export function TestChat({ flow, onActiveNodeChange }: Props) {
     const response = await fetch("/api/simulate", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ flow: useFlow, state: from, action }),
+      body: JSON.stringify({ flow: useFlow, state: from, action, llm: model || null }),
     });
     setPending(false);
     if (!response.ok) {
@@ -58,7 +66,8 @@ export function TestChat({ flow, onActiveNodeChange }: Props) {
     const result = (await response.json()) as TurnResult;
     setMessages((current) => [...current, ...result.events.flatMap(toMessages)]);
     setState(result.state);
-    setWaiting(waitingFor(result));
+    const lastBranch = result.events.findLast((event) => event.type === "branch");
+    if (lastBranch?.type === "branch") setPaths(lastBranch.paths);
     // Highlight the step we're waiting at, or the step the call ended on.
     onActiveNodeChange(result.state.nodeId ?? lastNodeId(result.events));
   }
@@ -66,27 +75,36 @@ export function TestChat({ flow, onActiveNodeChange }: Props) {
   function start() {
     setTestedFlow(flow);
     setMessages([]);
+    setState(null);
     setInput("");
     void send({ type: "start" }, flow, null);
   }
 
-  function sendAnswer(event: FormEvent) {
+  function sendReply(event: FormEvent) {
     event.preventDefault();
     const text = input.trim();
     if (!testedFlow || !text) return;
     setMessages((current) => [...current, { kind: "caller", text }]);
     setInput("");
-    void send({ type: "answer", text }, testedFlow, state);
+    void send({ type: "reply", text }, testedFlow, state);
   }
 
   function choosePath(handle: string) {
     if (!testedFlow) return;
-    // What the caller said is optional here: without an LLM it doesn't affect the path yet.
     const text = input.trim();
     if (text) setMessages((current) => [...current, { kind: "caller", text }]);
     setInput("");
-    void send({ type: "choosePath", handle }, testedFlow, state);
+    void send(
+      { type: "choosePath", handle, ...(text ? { callerText: text } : {}) },
+      testedFlow,
+      state,
+    );
   }
+
+  const waitingFor = state?.waitingFor ?? null;
+  const aiCalls = messages.flatMap((message) =>
+    "llm" in message && message.llm ? [message.llm] : [],
+  );
 
   return (
     <div className="flex h-full flex-col gap-3" data-testid="test-chat">
@@ -101,8 +119,24 @@ export function TestChat({ flow, onActiveNodeChange }: Props) {
           {testedFlow ? "Restart" : "Start test call"}
         </button>
       </div>
+      <label className="flex items-center gap-2 text-sm">
+        <span className="text-gray-600">AI model</span>
+        <select
+          aria-label="AI model"
+          value={model}
+          onChange={(event) => setModel(event.target.value)}
+          className="flex-1 rounded border border-gray-300 px-1 py-0.5"
+        >
+          {MODEL_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </label>
       <p className="text-xs text-gray-500">
-        You play the caller. Uses the flow on the canvas, saved or not.
+        You play the caller. Uses the flow on the canvas, saved or not. The model can be changed
+        mid-call.
       </p>
 
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto">
@@ -113,15 +147,40 @@ export function TestChat({ flow, onActiveNodeChange }: Props) {
         <div ref={endRef} />
       </div>
 
-      {waiting && !pending && (
+      {waitingFor && !pending && (
         <div className="space-y-2 border-t border-gray-200 pt-3">
-          {waiting.kind === "answer" ? (
-            <form onSubmit={sendAnswer} className="flex gap-2">
+          {waitingFor === "path" ? (
+            <>
+              <input
+                aria-label="What the caller says (optional)"
+                className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+                placeholder="What the caller says (optional)…"
+                value={input}
+                onChange={(event) => setInput(event.target.value)}
+              />
+              <p className="text-xs font-medium text-gray-600">Which path does the call take?</p>
+              {paths.map((path, index) => (
+                <button
+                  key={path.handle}
+                  type="button"
+                  onClick={() => choosePath(path.handle)}
+                  className="block w-full rounded border border-amber-300 bg-amber-50 px-2 py-1 text-left text-sm hover:bg-amber-100"
+                >
+                  {path.label === "Otherwise" ? "Otherwise" : `${index + 1}. ${path.label}`}
+                </button>
+              ))}
+            </>
+          ) : (
+            <form onSubmit={sendReply} className="flex gap-2">
               <input
                 aria-label="Caller's answer"
                 autoFocus
                 className="flex-1 rounded border border-gray-300 px-2 py-1 text-sm"
-                placeholder="Type what the caller says…"
+                placeholder={
+                  waitingFor === "callerMessage"
+                    ? "What does the caller say? The AI picks the path…"
+                    : "Type the caller's answer…"
+                }
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
               />
@@ -133,29 +192,20 @@ export function TestChat({ flow, onActiveNodeChange }: Props) {
                 Send
               </button>
             </form>
-          ) : (
-            <>
-              <input
-                aria-label="What the caller says (optional)"
-                className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
-                placeholder="What the caller says (optional)…"
-                value={input}
-                onChange={(event) => setInput(event.target.value)}
-              />
-              <p className="text-xs font-medium text-gray-600">Which path does the call take?</p>
-              {waiting.paths.map((path, index) => (
-                <button
-                  key={path.handle}
-                  type="button"
-                  onClick={() => choosePath(path.handle)}
-                  className="block w-full rounded border border-amber-300 bg-amber-50 px-2 py-1 text-left text-sm hover:bg-amber-100"
-                >
-                  {path.label === "Otherwise" ? "Otherwise" : `${index + 1}. ${path.label}`}
-                </button>
-              ))}
-            </>
           )}
         </div>
+      )}
+
+      {aiCalls.length > 0 && (
+        <p className="text-xs text-gray-500" data-testid="ai-totals">
+          AI: {aiCalls.length} request(s) ·{" "}
+          {(aiCalls.reduce((sum, call) => sum + call.latencyMs, 0) / 1000).toFixed(1)} s ·{" "}
+          {aiCalls.reduce(
+            (sum, call) => sum + (call.inputTokens ?? 0) + (call.outputTokens ?? 0),
+            0,
+          )}{" "}
+          tokens
+        </p>
       )}
 
       {state && Object.keys(state.variables).length > 0 && (
@@ -175,26 +225,40 @@ export function TestChat({ flow, onActiveNodeChange }: Props) {
   );
 }
 
+function LlmMeta({ llm }: { llm: LlmCallInfo }) {
+  const tokens =
+    llm.inputTokens !== null ? ` · ${llm.inputTokens}→${llm.outputTokens ?? 0} tokens` : "";
+  return (
+    <span className="block text-[10px] text-gray-400 not-italic" data-testid="llm-meta">
+      {llm.model} · {(llm.latencyMs / 1000).toFixed(1)} s{tokens}
+    </span>
+  );
+}
+
 function MessageBubble({ message }: { message: Message }) {
   if (message.kind === "note") {
-    const tone = {
-      info: "text-gray-500",
-      data: "text-indigo-600",
-      error: "text-red-600",
-    }[message.tone];
-    return <p className={`text-xs italic ${tone}`}>{message.text}</p>;
+    const tone = { info: "text-gray-500", data: "text-indigo-600", error: "text-red-600" }[
+      message.tone
+    ];
+    return (
+      <p className={`text-xs italic ${tone}`}>
+        {message.text}
+        {message.llm && <LlmMeta llm={message.llm} />}
+      </p>
+    );
   }
   const isAgent = message.kind === "agent";
   return (
     <div className={`flex ${isAgent ? "justify-start" : "justify-end"}`}>
-      <p
+      <div
         data-testid={`${message.kind}-message`}
         className={`max-w-[85%] rounded-lg px-3 py-1.5 text-sm ${
           isAgent ? "bg-gray-100 text-gray-900" : "bg-blue-600 text-white"
         }`}
       >
         {message.text}
-      </p>
+        {message.kind === "agent" && message.llm && <LlmMeta llm={message.llm} />}
+      </div>
     </div>
   );
 }
@@ -213,19 +277,34 @@ function toMessages(event: ConversationEvent): Message[] {
     case "answer":
       return [note(`Saved ${event.variable} = "${event.value}"`, "data")];
     case "aiResponse":
-      return [
-        note(
-          `AI response: an LLM will write this reply (next step). Instructions: "${event.instructions}"`,
-        ),
-      ];
+      return event.text !== null
+        ? [{ kind: "agent", text: event.text, ...(event.llm ? { llm: event.llm } : {}) }]
+        : [
+            note(
+              `AI response (choose an AI model to hear it). Instructions: "${event.instructions}"`,
+            ),
+          ];
     case "tool":
       return [note(`Tool call: ${event.toolName} (tools are connected in roadmap phase 5)`)];
     case "knowledgeLookup":
       return [note(`Knowledge lookup: "${event.query}" (knowledge base comes in phase 6)`)];
     case "branch":
-      return [note("Branch: pick the path the call takes below.")];
+      return [];
     case "pathChosen":
-      return [note(`→ ${event.label}`)];
+      return event.by === "ai"
+        ? [
+            {
+              kind: "note",
+              tone: "info",
+              text: `→ AI chose: ${event.label} (answered "${event.aiAnswer ?? ""}")`,
+              ...(event.llm ? { llm: event.llm } : {}),
+            },
+          ]
+        : [note(`→ ${event.label}`)];
+    case "note":
+      return [note(event.message)];
+    case "llmError":
+      return [note(`AI error: ${event.message}`, "error")];
     case "transfer":
       return [
         ...(event.message ? [{ kind: "agent" as const, text: event.message }] : []),
@@ -239,13 +318,6 @@ function toMessages(event: ConversationEvent): Message[] {
     case "stuck":
       return [note(event.message, "error")];
   }
-}
-
-function waitingFor(result: TurnResult): Waiting | null {
-  const last = result.events.at(-1);
-  if (result.state.nodeId === null || !last) return null;
-  if (last.type === "branch") return { kind: "path", paths: last.paths };
-  return { kind: "answer" };
 }
 
 function lastNodeId(events: ConversationEvent[]): string | null {
