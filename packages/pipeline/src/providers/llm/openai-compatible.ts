@@ -5,6 +5,7 @@ import {
   type CompletionOptions,
   type CompletionResult,
   type LanguageModelProvider,
+  type TokenUsage,
 } from "./types";
 
 // Talks to any server that speaks OpenAI's Chat Completions API. That covers OpenAI itself and
@@ -23,6 +24,13 @@ export interface OpenAICompatibleConfig {
   timeoutMs?: number;
   /** Extra attempts after a failure that might be temporary (network, timeout, 429, 5xx). */
   maxRetries?: number;
+  /**
+   * Sent as `reasoning_effort` when set. "none" switches off the hidden "thinking" step of
+   * reasoning models such as Qwen 3, which otherwise adds seconds to every reply.
+   */
+  reasoningEffort?: string;
+  /** Price of one request from its token usage. Without it the cost is unknown (null). */
+  estimateCost?: (usage: TokenUsage | null) => number | null;
   /** Injectable for tests. */
   fetch?: typeof fetch;
 }
@@ -31,15 +39,23 @@ export interface OpenAICompatibleConfig {
 const ResponseSchema = z.object({
   model: z.string(),
   choices: z.array(z.object({ message: z.object({ content: z.string().nullable() }) })).min(1),
-  usage: z.object({ prompt_tokens: z.number(), completion_tokens: z.number() }).nullish(),
+  usage: z
+    .object({
+      prompt_tokens: z.number(),
+      completion_tokens: z.number(),
+      prompt_tokens_details: z.object({ cached_tokens: z.number().optional() }).nullish(),
+    })
+    .nullish(),
 });
 
 export class OpenAICompatibleProvider implements LanguageModelProvider {
   readonly name: string;
+  readonly model: string;
   private readonly fetch: typeof fetch;
 
   constructor(private readonly config: OpenAICompatibleConfig) {
     this.name = config.name;
+    this.model = config.model;
     this.fetch = config.fetch ?? globalThis.fetch;
   }
 
@@ -47,7 +63,14 @@ export class OpenAICompatibleProvider implements LanguageModelProvider {
     messages: ChatMessage[],
     options: CompletionOptions = {},
   ): Promise<CompletionResult> {
-    const { baseUrl, model, apiKey, timeoutMs = 60_000, maxRetries = 2 } = this.config;
+    const {
+      baseUrl,
+      model,
+      apiKey,
+      reasoningEffort,
+      timeoutMs = 60_000,
+      maxRetries = 2,
+    } = this.config;
     const started = performance.now();
 
     for (let attempt = 0; ; attempt++) {
@@ -59,7 +82,12 @@ export class OpenAICompatibleProvider implements LanguageModelProvider {
             "content-type": "application/json",
             ...(apiKey ? { authorization: `Bearer ${apiKey}` } : {}),
           },
-          body: JSON.stringify({ model, messages, temperature: options.temperature }),
+          body: JSON.stringify({
+            model,
+            messages,
+            temperature: options.temperature,
+            reasoning_effort: reasoningEffort,
+          }),
           signal: AbortSignal.timeout(timeoutMs),
         });
 
@@ -68,16 +96,19 @@ export class OpenAICompatibleProvider implements LanguageModelProvider {
           if (!parsed.success)
             throw new LanguageModelError(`${this.name}: unexpected response shape`);
           const body = parsed.data;
+          const usage: TokenUsage | null = body.usage
+            ? {
+                inputTokens: body.usage.prompt_tokens,
+                outputTokens: body.usage.completion_tokens,
+                cachedInputTokens: body.usage.prompt_tokens_details?.cached_tokens ?? 0,
+              }
+            : null;
           return {
             text: (body.choices[0]?.message.content ?? "").trim(),
             model: body.model,
             latencyMs: Math.round(performance.now() - started),
-            usage: body.usage
-              ? {
-                  inputTokens: body.usage.prompt_tokens,
-                  outputTokens: body.usage.completion_tokens,
-                }
-              : null,
+            usage,
+            costUsd: this.config.estimateCost?.(usage) ?? null,
           };
         }
 

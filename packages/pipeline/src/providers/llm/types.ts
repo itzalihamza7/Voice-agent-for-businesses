@@ -1,6 +1,7 @@
 // Language model: decides what the agent says next, based on the conversation so far.
-// Implementations: mock.ts (tests) and openai-compatible.ts (OpenAI and Ollama).
-// Streaming tokens and tool calls will be added here later.
+// Implementations: mock.ts (tests), openai-compatible.ts (OpenAI and Ollama) and
+// fallback.ts (tries a backup model when the main one fails).
+// Streaming tokens (roadmap phase 10) and tool calls (phase 5) will be added here later.
 
 export interface ChatMessage {
   role: "system" | "user" | "assistant";
@@ -12,18 +13,31 @@ export interface CompletionOptions {
   temperature?: number;
 }
 
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+  /** Input tokens served from the provider's prompt cache (cheaper). Included in inputTokens. */
+  cachedInputTokens: number;
+}
+
 export interface CompletionResult {
   text: string;
-  /** The exact model that answered, e.g. "gpt-4.1-mini" or "llama3.1:8b". */
+  /** The exact model that answered, e.g. "gpt-4.1-mini-2025-04-14" or "qwen3:8b". */
   model: string;
   /** Wall-clock time of the whole request, including retries. */
   latencyMs: number;
   /** Token counts, when the provider reports them. */
-  usage: { inputTokens: number; outputTokens: number } | null;
+  usage: TokenUsage | null;
+  /** Estimated price in US dollars. 0 for local models, null when the price is unknown. */
+  costUsd: number | null;
+  /** Set when the main model failed and a fallback model answered instead. */
+  fellBackFrom?: { model: string; error: string };
 }
 
 export interface LanguageModelProvider {
   readonly name: string;
+  /** The model this provider asks for, e.g. "gpt-4.1-mini". */
+  readonly model: string;
   complete(messages: ChatMessage[], options?: CompletionOptions): Promise<CompletionResult>;
 }
 

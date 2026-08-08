@@ -36,7 +36,8 @@ describe("OpenAICompatibleProvider", () => {
     expect(result).toMatchObject({
       text: "Hello there.",
       model: "test-model-1",
-      usage: { inputTokens: 12, outputTokens: 3 },
+      usage: { inputTokens: 12, outputTokens: 3, cachedInputTokens: 0 },
+      costUsd: null,
     });
     const [url, init] = fetchMock.mock.calls[0]!;
     expect(url).toBe("https://llm.example/v1/chat/completions");
@@ -46,6 +47,30 @@ describe("OpenAICompatibleProvider", () => {
       messages: [{ role: "user", content: "Hi" }],
       temperature: 0,
     });
+  });
+
+  it("sends reasoning_effort when set, and reports cached tokens and cost", async () => {
+    const body = {
+      ...okBody,
+      usage: {
+        prompt_tokens: 100,
+        completion_tokens: 10,
+        prompt_tokens_details: { cached_tokens: 40 },
+      },
+    };
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(json(body));
+    const llm = new OpenAICompatibleProvider({
+      name: "test",
+      baseUrl: "https://llm.example/v1",
+      model: "test-model",
+      reasoningEffort: "none",
+      estimateCost: (usage) => (usage ? usage.inputTokens / 1000 : null),
+      fetch: fetchMock,
+    });
+    const result = await llm.complete([{ role: "user", content: "Hi" }]);
+    expect(JSON.parse(String(fetchMock.mock.calls[0]![1]?.body)).reasoning_effort).toBe("none");
+    expect(result.usage).toEqual({ inputTokens: 100, outputTokens: 10, cachedInputTokens: 40 });
+    expect(result.costUsd).toBe(0.1);
   });
 
   it("sends no authorization header without an API key (Ollama)", async () => {
