@@ -18,10 +18,10 @@ import { aiResponsePrompt, branchDecisionPrompt, parseBranchAnswer } from "./pro
 //
 // Each turn runs steps automatically until the flow needs the caller:
 //   - Ask: waits for the caller's answer, then stores it in the step's variable.
-//   - Branch: with a language model, waits for what the caller says and lets the model pick
+//   - Branch: with a decisions model, waits for what the caller says and lets the model pick
 //     the path. Without one (or right after a Tool, whose result doesn't exist yet), the path
 //     is picked by hand.
-// AI response steps are written by the language model when there is one. Tool and Knowledge
+// AI response steps are written by the replies model when there is one. Tool and Knowledge
 // lookup steps are only reported for now (roadmap phases 5 and 6).
 
 // A loop of steps that never wait for the caller would otherwise run forever.
@@ -36,8 +36,10 @@ export class ConversationError extends Error {
 }
 
 export interface ConversationDeps {
-  /** null = run without AI: Branch paths are picked by hand and AI steps are only reported. */
-  llm: LanguageModelProvider | null;
+  /** Picks Branch paths. null = paths are picked by hand. */
+  decisions: LanguageModelProvider | null;
+  /** Writes AI response steps. null = they are only reported. */
+  replies: LanguageModelProvider | null;
 }
 
 type BranchNode = Extract<FlowNode, { type: "branch" }>;
@@ -45,7 +47,8 @@ type BranchNode = Extract<FlowNode, { type: "branch" }>;
 /** Everything one turn reads and changes. */
 interface Turn {
   flow: AgentFlow;
-  llm: LanguageModelProvider | null;
+  decisions: LanguageModelProvider | null;
+  replies: LanguageModelProvider | null;
   variables: Record<string, string>;
   transcript: TranscriptEntry[];
   events: ConversationEvent[];
@@ -58,7 +61,7 @@ export async function runTurn(
   deps: ConversationDeps,
 ): Promise<TurnResult> {
   if (action.type === "start") {
-    const turn: Turn = { flow, llm: deps.llm, variables: {}, transcript: [], events: [] };
+    const turn: Turn = { flow, ...deps, variables: {}, transcript: [], events: [] };
     const start = flow.nodes.find((node) => node.type === "start");
     if (!start) {
       turn.events.push({ type: "stuck", message: "The flow has no Start step." });
@@ -70,7 +73,7 @@ export async function runTurn(
   if (!state || state.nodeId === null) throw new ConversationError("The call is already over.");
   const turn: Turn = {
     flow,
-    llm: deps.llm,
+    ...deps,
     variables: { ...state.variables },
     transcript: [...state.transcript],
     events: [],
@@ -168,7 +171,7 @@ async function continueAfter(
         break;
       case "branch":
         turn.events.push({ type: "branch", nodeId: current.id, paths: branchPaths(current) });
-        if (!turn.llm) return waiting(turn, current.id, "path");
+        if (!turn.decisions) return waiting(turn, current.id, "path");
         if (previous.type === "tool") {
           turn.events.push({
             type: "note",
@@ -210,14 +213,17 @@ async function continueAfter(
 
 /** Lets the language model pick a Branch path from the conversation, then continues. */
 async function decideBranch(turn: Turn, node: BranchNode): Promise<TurnResult> {
-  if (!turn.llm) return waiting(turn, node.id, "path");
+  if (!turn.decisions) return waiting(turn, node.id, "path");
   const paths = branchPaths(node);
   const conditions = paths.filter((path) => path.handle !== BRANCH_ELSE_HANDLE);
 
   try {
-    const result = await turn.llm.complete(branchDecisionPrompt(conditions, turn.transcript), {
-      temperature: 0,
-    });
+    const result = await turn.decisions.complete(
+      branchDecisionPrompt(conditions, turn.transcript),
+      {
+        temperature: 0,
+      },
+    );
     const number = parseBranchAnswer(result.text, conditions.length);
     const path = (number ? conditions[number - 1] : undefined) ?? OTHERWISE;
     turn.events.push({
@@ -242,12 +248,12 @@ async function decideBranch(turn: Turn, node: BranchNode): Promise<TurnResult> {
 
 async function writeAiResponse(turn: Turn, node: Extract<FlowNode, { type: "aiResponse" }>) {
   const instructions = node.data.instructions;
-  if (!turn.llm) {
+  if (!turn.replies) {
     turn.events.push({ type: "aiResponse", nodeId: node.id, instructions, text: null });
     return;
   }
   try {
-    const result = await turn.llm.complete(
+    const result = await turn.replies.complete(
       aiResponsePrompt(instructions, turn.variables, turn.transcript),
       { temperature: 0.4 },
     );
@@ -302,6 +308,9 @@ function callInfo(result: Awaited<ReturnType<LanguageModelProvider["complete"]>>
     latencyMs: result.latencyMs,
     inputTokens: result.usage?.inputTokens ?? null,
     outputTokens: result.usage?.outputTokens ?? null,
+    cachedInputTokens: result.usage?.cachedInputTokens ?? null,
+    costUsd: result.costUsd,
+    ...(result.fellBackFrom ? { fellBackFrom: result.fellBackFrom } : {}),
   };
 }
 

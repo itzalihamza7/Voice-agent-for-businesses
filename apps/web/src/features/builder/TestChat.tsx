@@ -9,17 +9,19 @@ import type {
   TurnResult,
 } from "@voice-agent/shared";
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import {
+  defaultModelChoice,
+  ModelPicker,
+  toModelSpec,
+  useModelOptions,
+  type ModelChoice,
+} from "./ModelPicker";
 
 // Test chat: you play the caller, the server walks the flow (POST /api/simulate).
 // The test uses the flow as it was when "Start test call" was pressed; restart after edits.
-// With an AI model chosen, the AI picks Branch paths and writes AI response steps; every AI
-// request shows its model, time and tokens so local and hosted models can be compared.
-
-const MODEL_OPTIONS = [
-  { value: "ollama", label: "Ollama (local, free)" },
-  { value: "openai", label: "OpenAI" },
-  { value: "", label: "No AI (pick paths by hand)" },
-];
+// One model can pick Branch paths and another write AI replies (model routing), with a
+// fallback for when a model fails. Every AI request shows its model, time, tokens and cost,
+// so local and hosted models can be compared.
 
 type Message =
   | { kind: "agent"; text: string; llm?: LlmCallInfo }
@@ -32,7 +34,10 @@ interface Props {
 }
 
 export function TestChat({ flow, onActiveNodeChange }: Props) {
-  const [model, setModel] = useState("ollama");
+  const { options, problems } = useModelOptions();
+  // Until the user changes it, the default follows the loaded model list.
+  const [userChoice, setUserChoice] = useState<ModelChoice | null>(null);
+  const choice = userChoice ?? defaultModelChoice(options);
   const [testedFlow, setTestedFlow] = useState<AgentFlow | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [state, setState] = useState<ConversationState | null>(null);
@@ -54,7 +59,16 @@ export function TestChat({ flow, onActiveNodeChange }: Props) {
     const response = await fetch("/api/simulate", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ flow: useFlow, state: from, action, llm: model || null }),
+      body: JSON.stringify({
+        flow: useFlow,
+        state: from,
+        action,
+        models: {
+          decisions: toModelSpec(choice.decisions),
+          replies: toModelSpec(choice.replies),
+          fallback: toModelSpec(choice.fallback),
+        },
+      }),
     });
     setPending(false);
     if (!response.ok) {
@@ -119,23 +133,9 @@ export function TestChat({ flow, onActiveNodeChange }: Props) {
           {testedFlow ? "Restart" : "Start test call"}
         </button>
       </div>
-      <label className="flex items-center gap-2 text-sm">
-        <span className="text-gray-600">AI model</span>
-        <select
-          aria-label="AI model"
-          value={model}
-          onChange={(event) => setModel(event.target.value)}
-          className="flex-1 rounded border border-gray-300 px-1 py-0.5"
-        >
-          {MODEL_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </label>
+      <ModelPicker options={options} problems={problems} choice={choice} onChange={setUserChoice} />
       <p className="text-xs text-gray-500">
-        You play the caller. Uses the flow on the canvas, saved or not. The model can be changed
+        You play the caller. Uses the flow on the canvas, saved or not. Models can be changed
         mid-call.
       </p>
 
@@ -204,7 +204,7 @@ export function TestChat({ flow, onActiveNodeChange }: Props) {
             (sum, call) => sum + (call.inputTokens ?? 0) + (call.outputTokens ?? 0),
             0,
           )}{" "}
-          tokens
+          tokens · {formatCost(aiCalls.reduce((sum, call) => sum + (call.costUsd ?? 0), 0))}
         </p>
       )}
 
@@ -226,13 +226,28 @@ export function TestChat({ flow, onActiveNodeChange }: Props) {
 }
 
 function LlmMeta({ llm }: { llm: LlmCallInfo }) {
-  const tokens =
-    llm.inputTokens !== null ? ` · ${llm.inputTokens}→${llm.outputTokens ?? 0} tokens` : "";
+  const parts = [llm.model, `${(llm.latencyMs / 1000).toFixed(1)} s`];
+  if (llm.inputTokens !== null) {
+    const cached = llm.cachedInputTokens ? ` (${llm.cachedInputTokens} cached)` : "";
+    parts.push(`${llm.inputTokens}→${llm.outputTokens ?? 0} tokens${cached}`);
+  }
+  parts.push(llm.costUsd === null ? "cost unknown" : formatCost(llm.costUsd));
   return (
     <span className="block text-[10px] text-gray-400 not-italic" data-testid="llm-meta">
-      {llm.model} · {(llm.latencyMs / 1000).toFixed(1)} s{tokens}
+      {parts.join(" · ")}
+      {llm.fellBackFrom && (
+        <span className="block text-amber-600" data-testid="fallback-note">
+          Fallback: {llm.fellBackFrom.model} failed ({llm.fellBackFrom.error})
+        </span>
+      )}
     </span>
   );
+}
+
+/** Tiny amounts need more digits: one reply often costs a fraction of a cent. */
+function formatCost(usd: number): string {
+  if (usd === 0) return "$0 (local)";
+  return usd < 0.01 ? `$${usd.toFixed(5)}` : `$${usd.toFixed(2)}`;
 }
 
 function MessageBubble({ message }: { message: Message }) {

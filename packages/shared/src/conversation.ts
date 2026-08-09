@@ -36,14 +36,34 @@ export const ConversationActionSchema = z.discriminatedUnion("type", [
   }),
 ]);
 
+/** A language model: provider name plus, optionally, a specific model, e.g. ollama + "qwen3:8b". */
+export const ModelSpecSchema = z.object({
+  provider: z.string().min(1),
+  model: z.string().min(1).optional(),
+});
+
 export const SimulateRequestSchema = z.object({
   flow: AgentFlowSchema,
   // null only together with a "start" action.
   state: ConversationStateSchema.nullable(),
   action: ConversationActionSchema,
-  // Language model provider name ("ollama", "openai", ...), or null to run without AI.
-  llm: z.string().min(1).nullable(),
+  // Which language models to use. null = no AI for that job.
+  // Routing: Branch decisions are short and easy, so a small fast model can make them,
+  // while a stronger model writes the replies.
+  models: z.object({
+    decisions: ModelSpecSchema.nullable(),
+    replies: ModelSpecSchema.nullable(),
+    // Answers instead when a model fails, e.g. OpenAI when Ollama isn't running.
+    fallback: ModelSpecSchema.nullable(),
+  }),
 });
+
+/** One entry in the model picker. */
+export interface ModelOption {
+  provider: string;
+  model: string;
+  label: string;
+}
 
 /** One request to a language model: which model, how long it took, how many tokens. */
 export interface LlmCallInfo {
@@ -51,6 +71,12 @@ export interface LlmCallInfo {
   latencyMs: number;
   inputTokens: number | null;
   outputTokens: number | null;
+  /** Input tokens served from the provider's prompt cache. */
+  cachedInputTokens: number | null;
+  /** Estimated US dollars. 0 for local models, null when unknown. */
+  costUsd: number | null;
+  /** Set when the chosen model failed and the fallback model answered. */
+  fellBackFrom?: { model: string; error: string };
 }
 
 /** What happened during one turn, in order. The test chat turns these into messages. */
@@ -96,3 +122,4 @@ export type TranscriptEntry = z.infer<typeof TranscriptEntrySchema>;
 export type ConversationState = z.infer<typeof ConversationStateSchema>;
 export type ConversationAction = z.infer<typeof ConversationActionSchema>;
 export type SimulateRequest = z.infer<typeof SimulateRequestSchema>;
+export type ModelSpec = z.infer<typeof ModelSpecSchema>;

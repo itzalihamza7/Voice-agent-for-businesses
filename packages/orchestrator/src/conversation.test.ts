@@ -44,6 +44,7 @@ function scriptedLlm(answers: (string | Error)[]) {
   const prompts: ChatMessage[][] = [];
   const llm: LanguageModelProvider = {
     name: "scripted",
+    model: "fake-1",
     async complete(messages): Promise<CompletionResult> {
       prompts.push(messages);
       const answer = answers.shift();
@@ -53,14 +54,15 @@ function scriptedLlm(answers: (string | Error)[]) {
         text: answer,
         model: "fake-1",
         latencyMs: 5,
-        usage: { inputTokens: 10, outputTokens: 2 },
+        usage: { inputTokens: 10, outputTokens: 2, cachedInputTokens: 0 },
+        costUsd: 0.0001,
       };
     },
   };
   return { llm, prompts };
 }
 
-const noAi = { llm: null };
+const noAi = { decisions: null, replies: null };
 
 describe("runTurn without AI", () => {
   it("runs the booking path, with Branch paths picked by hand", async () => {
@@ -128,14 +130,14 @@ describe("runTurn without AI", () => {
 describe("runTurn with AI", () => {
   it("waits for the caller at a Branch, then lets the AI choose the path", async () => {
     const { llm, prompts } = scriptedLlm(["1"]);
-    const first = await runTurn(flow, null, { type: "start" }, { llm });
+    const first = await runTurn(flow, null, { type: "start" }, { decisions: llm, replies: llm });
     expect(first.state).toMatchObject({ nodeId: "intent", waitingFor: "callerMessage" });
 
     const second = await runTurn(
       flow,
       first.state,
       { type: "reply", text: "I'd like an appointment" },
-      { llm },
+      { decisions: llm, replies: llm },
     );
     expect(second.events[0]).toEqual({
       type: "pathChosen",
@@ -143,7 +145,14 @@ describe("runTurn with AI", () => {
       label: "Wants to book",
       by: "ai",
       aiAnswer: "1",
-      llm: { model: "fake-1", latencyMs: 5, inputTokens: 10, outputTokens: 2 },
+      llm: {
+        model: "fake-1",
+        latencyMs: 5,
+        inputTokens: 10,
+        outputTokens: 2,
+        cachedInputTokens: 0,
+        costUsd: 0.0001,
+      },
     });
     expect(second.state.nodeId).toBe("ask-name");
     // The AI saw the paths and the caller's words.
@@ -154,12 +163,12 @@ describe("runTurn with AI", () => {
   it("takes Otherwise when the AI answers 0 or something unreadable", async () => {
     for (const answer of ["0", "I am not sure"]) {
       const { llm } = scriptedLlm([answer]);
-      const first = await runTurn(flow, null, { type: "start" }, { llm });
+      const first = await runTurn(flow, null, { type: "start" }, { decisions: llm, replies: llm });
       const result = await runTurn(
         flow,
         first.state,
         { type: "reply", text: "What's the weather?" },
-        { llm },
+        { decisions: llm, replies: llm },
       );
       expect(result.events[0]).toMatchObject({ type: "pathChosen", label: "Otherwise", by: "ai" });
       expect(result.events.at(-1)?.type).toBe("transfer");
@@ -168,23 +177,43 @@ describe("runTurn with AI", () => {
 
   it("asks for a hand-picked path after a Tool, because tool results don't exist yet", async () => {
     const { llm } = scriptedLlm(["1"]);
-    const first = await runTurn(flow, null, { type: "start" }, { llm });
-    const asked = await runTurn(flow, first.state, { type: "reply", text: "Book please" }, { llm });
-    const atSlot = await runTurn(flow, asked.state, { type: "reply", text: "Ali" }, { llm });
+    const first = await runTurn(flow, null, { type: "start" }, { decisions: llm, replies: llm });
+    const asked = await runTurn(
+      flow,
+      first.state,
+      { type: "reply", text: "Book please" },
+      { decisions: llm, replies: llm },
+    );
+    const atSlot = await runTurn(
+      flow,
+      asked.state,
+      { type: "reply", text: "Ali" },
+      { decisions: llm, replies: llm },
+    );
     expect(atSlot.state).toMatchObject({ nodeId: "slot", waitingFor: "path" });
     expect(atSlot.events.at(-1)?.type).toBe("note");
   });
 
   it("writes AI response steps with the language model and adds them to the transcript", async () => {
     const { llm, prompts } = scriptedLlm(["1", "Sorry, that time is taken. How about Monday?"]);
-    const first = await runTurn(flow, null, { type: "start" }, { llm });
-    const asked = await runTurn(flow, first.state, { type: "reply", text: "Book please" }, { llm });
-    const atSlot = await runTurn(flow, asked.state, { type: "reply", text: "Ali" }, { llm });
+    const first = await runTurn(flow, null, { type: "start" }, { decisions: llm, replies: llm });
+    const asked = await runTurn(
+      flow,
+      first.state,
+      { type: "reply", text: "Book please" },
+      { decisions: llm, replies: llm },
+    );
+    const atSlot = await runTurn(
+      flow,
+      asked.state,
+      { type: "reply", text: "Ali" },
+      { decisions: llm, replies: llm },
+    );
     const result = await runTurn(
       flow,
       atSlot.state,
       { type: "choosePath", handle: "else" },
-      { llm },
+      { decisions: llm, replies: llm },
     );
 
     expect(result.events[1]).toMatchObject({
@@ -207,15 +236,43 @@ describe("runTurn with AI", () => {
 
   it("falls back to picking by hand when the AI fails at a Branch", async () => {
     const { llm } = scriptedLlm([new LanguageModelError("ollama failed after 3 attempts")]);
-    const first = await runTurn(flow, null, { type: "start" }, { llm });
+    const first = await runTurn(flow, null, { type: "start" }, { decisions: llm, replies: llm });
     const result = await runTurn(
       flow,
       first.state,
       { type: "reply", text: "Book please" },
-      { llm },
+      { decisions: llm, replies: llm },
     );
     expect(result.events.map((e) => e.type)).toEqual(["llmError", "note"]);
     expect(result.state).toMatchObject({ nodeId: "intent", waitingFor: "path" });
+  });
+});
+
+describe("runTurn model routing", () => {
+  it("sends Branch decisions and AI replies to their own models", async () => {
+    const decider = scriptedLlm(["1"]);
+    const writer = scriptedLlm(["Sorry, that time is taken."]);
+    const deps = { decisions: decider.llm, replies: writer.llm };
+    const first = await runTurn(flow, null, { type: "start" }, deps);
+    const asked = await runTurn(flow, first.state, { type: "reply", text: "Book please" }, deps);
+    const atSlot = await runTurn(flow, asked.state, { type: "reply", text: "Ali" }, deps);
+    await runTurn(flow, atSlot.state, { type: "choosePath", handle: "else" }, deps);
+
+    expect(decider.prompts).toHaveLength(1);
+    expect(decider.prompts[0]![0]!.content).toContain("You route a phone call");
+    expect(writer.prompts).toHaveLength(1);
+    expect(writer.prompts[0]![0]!.content).toContain("Your task for this step");
+  });
+
+  it("can write AI replies while Branch paths are still picked by hand", async () => {
+    const writer = scriptedLlm([]);
+    const first = await runTurn(
+      flow,
+      null,
+      { type: "start" },
+      { decisions: null, replies: writer.llm },
+    );
+    expect(first.state.waitingFor).toBe("path");
   });
 });
 

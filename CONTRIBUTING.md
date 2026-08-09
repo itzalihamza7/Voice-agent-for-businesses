@@ -77,8 +77,11 @@ DDEV syncs files with Mutagen: if the container doesn't see a change yet, run `d
 - Prefix intentionally unused parameters with `_`. Dropping fields with `const { id, ...rest } = obj` is allowed.
 - Secrets never go in the repo. They go in `.ddev/.env.web` (git-ignored, loaded into the web
   container); `.env.example` lists variable names only. Never print a key in logs or output.
-- Language models are created by name through `packages/pipeline/src/registry.ts`
-  (`"ollama"`, `"openai"`, `"mock"`). Prompts live in `packages/orchestrator/src/prompts.ts`.
+- Language models are created through `packages/pipeline/src/registry.ts` from a provider plus an
+  optional model (`{ provider: "ollama", model: "qwen3:8b" }`). OpenAI models must be in the
+  `OPENAI_MODELS` allow-list; when adding one, also add its price to `pricing.ts` (with the date
+  checked). Prompts live in `packages/orchestrator/src/prompts.ts`.
+- Any model pulled with `ollama pull ...` shows up in the test chat's pickers without a restart.
 - Unit tests never call a real language model: use a scripted fake (see `conversation.test.ts`).
   Model behaviour is checked by hand or with live runs against both Ollama and OpenAI.
 - Pinned on purpose: TypeScript 6.0 (typescript-eslint does not support 7 yet), ESLint 9

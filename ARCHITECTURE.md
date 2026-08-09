@@ -185,14 +185,17 @@ Browser (TestChat)                        Server
   it is waiting at, the answers so far, and the transcript) and the action (start / reply /
   choose a path). The server answers with the new state and a list of events ("said X", "AI
   chose path Y in 0.8 s"), which the chat turns into messages.
-- **The AI model is picked in the chat:** Ollama (local), OpenAI, or none. With a model:
-  - at a **Branch**, the engine waits for what the caller says, then asks the model which path
-    fits (it answers with a path number; anything unreadable means "Otherwise");
-  - **AI response** steps are written by the model, following the step's instructions;
-  - right after a **Tool** step the path is still picked by hand, because tools don't return
+- **Models are picked in the chat**, one per job (**model routing**): a model for **Branch
+  decisions**, a model for **AI replies**, and an optional **fallback**. The list comes from
+  `GET /api/models`: every model installed in Ollama (asked live) plus the allowed OpenAI models.
+  - At a **Branch**, the engine waits for what the caller says, then asks the decisions model
+    which path fits (it answers with a path number; anything unreadable means "Otherwise").
+  - **AI response** steps are written by the replies model, following the step's instructions.
+  - Right after a **Tool** step the path is still picked by hand, because tools don't return
     results yet (roadmap phase 5).
-    Every AI request shows its model, time and tokens, so local and hosted models can be compared.
-    If the model fails, the call goes on: Branches fall back to picking by hand.
+  - If a model fails, the fallback model answers and the chat says so. Without a fallback,
+    Branches fall back to picking by hand.
+  - Every AI request shows its model, time, tokens (and cached tokens) and estimated cost.
 - **It runs on the server on purpose:** the OpenAI API key must never reach the browser.
 - **Prompts** live in `packages/orchestrator/src/prompts.ts`. The conversation is sent as one
   transcript in a single message, not as separate chat turns, because chat templates differ
@@ -204,19 +207,35 @@ Browser (TestChat)                        Server
 
 ### Language models
 
-`packages/pipeline/src/providers/llm/openai-compatible.ts` talks to any server that speaks
-OpenAI's Chat Completions API, so **one class covers OpenAI and Ollama**. It uses plain `fetch`
-(no SDK), with a timeout per attempt and up to 2 retries with exponential backoff for temporary
-failures (network, timeout, HTTP 429/5xx). Requests the server rejects (other 4xx) fail at once.
-`registry.ts` creates a provider from its name (`"ollama"`, `"openai"`, `"mock"`) and settings
-from environment variables:
+`packages/pipeline/src/providers/llm/` holds the language model code:
 
-| Variable          | Where it is set                                     | Default                                                          |
-| ----------------- | --------------------------------------------------- | ---------------------------------------------------------------- |
-| `OLLAMA_BASE_URL` | `.ddev/config.voice-agent.yaml`                     | `http://host.docker.internal:11434/v1` (the Mac, seen from DDEV) |
-| `OLLAMA_MODEL`    | `.ddev/config.voice-agent.yaml`                     | `llama3.1:8b`                                                    |
-| `OPENAI_MODEL`    | `.ddev/config.voice-agent.yaml`                     | `gpt-4.1-mini` (fast, no hidden reasoning step)                  |
-| `OPENAI_API_KEY`  | `.ddev/.env.web` (**git-ignored**, never committed) | none                                                             |
+- `openai-compatible.ts` talks to any server that speaks OpenAI's Chat Completions API, so **one
+  class covers OpenAI and Ollama**. Plain `fetch` (no SDK), a timeout per attempt, and up to 2
+  retries with exponential backoff for temporary failures (network, timeout, HTTP 429/5xx).
+  Requests the server rejects (other 4xx) fail at once. It reports token usage, cached input
+  tokens and an estimated cost, and can send `reasoning_effort`.
+- `fallback.ts` wraps a main model and a backup: the backup answers when the main one fails,
+  and the result records `fellBackFrom` so a fallback is never silent.
+- `pricing.ts` has OpenAI's per-token prices (with the date they were checked). Local models
+  cost $0.
+
+**Reasoning ("thinking") models.** Qwen 3 writes hidden reasoning before answering. Through
+Ollama's OpenAI-compatible API that took 10–18 s for one Branch decision; with
+`reasoning_effort: "none"` it took 0.3–0.6 s with the same answer. Ollama models therefore get
+`OLLAMA_REASONING_EFFORT=none` (models without a thinking mode, like Llama, ignore it).
+
+`registry.ts` creates a model from a provider name plus an optional model name
+(`{ provider: "ollama", model: "qwen3:8b" }`) and lists what can be picked. Settings come from
+environment variables:
+
+| Variable                  | Where it is set                                     | Default                                                                                                               |
+| ------------------------- | --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `OLLAMA_BASE_URL`         | `.ddev/config.voice-agent.yaml`                     | `http://host.docker.internal:11434/v1` (the Mac, seen from DDEV)                                                      |
+| `OLLAMA_MODEL`            | `.ddev/config.voice-agent.yaml`                     | `llama3.1:8b` (default when no model is named)                                                                        |
+| `OLLAMA_REASONING_EFFORT` | `.ddev/config.voice-agent.yaml`                     | not sent (we set `none`)                                                                                              |
+| `OPENAI_MODEL`            | `.ddev/config.voice-agent.yaml`                     | `gpt-4.1-mini`                                                                                                        |
+| `OPENAI_MODELS`           | `.ddev/config.voice-agent.yaml`                     | `OPENAI_MODEL` only. **Allow-list**: other OpenAI models are refused, so an expensive one can't be picked by accident |
+| `OPENAI_API_KEY`          | `.ddev/.env.web` (**git-ignored**, never committed) | none                                                                                                                  |
 
 Ollama runs directly on macOS, not in DDEV: Docker on a Mac has no access to the GPU.
 

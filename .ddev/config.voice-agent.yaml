@@ -7,8 +7,12 @@
 web_environment:
     - DATABASE_URL=postgresql://db:db@db:5432/db
     - OLLAMA_BASE_URL=http://host.docker.internal:11434/v1
-    - OLLAMA_MODEL=llama3.1:8b
+    - OLLAMA_MODEL=qwen3:8b
+    # Switches off the hidden "thinking" step of reasoning models like Qwen 3 (30x slower with it).
+    - OLLAMA_REASONING_EFFORT=none
     - OPENAI_MODEL=gpt-4.1-mini
+    # OpenAI models that may be picked (non-reasoning models; prices in pipeline/pricing.ts).
+    - OPENAI_MODELS=gpt-4.1-mini,gpt-4.1-nano,gpt-4o-mini
 
 # Runs the Next.js dev server inside the web container. On every `ddev start` it first
 # installs dependencies, applies database migrations and seeds demo data (all idempotent),
