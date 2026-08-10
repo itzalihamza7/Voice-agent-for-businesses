@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { AgentFlowSchema } from "./flow";
+import { DEFAULT_PROMPT_SETTINGS, PromptSettingsSchema } from "./prompt";
 
 // The versioned JSON document that describes one agent: its conversation flow
 // (built in the drag-and-drop builder) and which vendor runs each pipeline step.
@@ -22,6 +23,9 @@ export const AgentConfigSchema = z.object({
   name: z.string().min(1),
   providers: ProviderSelectionSchema,
   flow: AgentFlowSchema,
+  // Added after the first versions were saved: older versions get the defaults when read,
+  // so no data migration is needed.
+  prompt: PromptSettingsSchema.default(() => structuredClone(DEFAULT_PROMPT_SETTINGS)),
 });
 
 // What a client sends to save a new version. The server adds agentId (from the URL) and version.

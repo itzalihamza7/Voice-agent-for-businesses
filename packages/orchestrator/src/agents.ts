@@ -1,9 +1,10 @@
 import type { AgentConfigStore } from "@voice-agent/agent-config";
-import type {
-  AgentConfig,
-  AgentConfigDraft,
-  AgentSummary,
-  CreateAgentRequest,
+import {
+  DEFAULT_PROMPT_SETTINGS,
+  type AgentConfig,
+  type AgentConfigDraft,
+  type AgentSummary,
+  type CreateAgentRequest,
 } from "@voice-agent/shared";
 
 // Agent management use cases. API routes call these instead of the store directly,
@@ -34,6 +35,7 @@ export function createAgent(
       nodes: [{ id: "start", type: "start", position: { x: 0, y: 0 }, data: {} }],
       edges: [],
     },
+    prompt: structuredClone(DEFAULT_PROMPT_SETTINGS),
   });
 }
 
