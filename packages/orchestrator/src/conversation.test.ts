@@ -1,6 +1,11 @@
 import type { ChatMessage, CompletionResult, LanguageModelProvider } from "@voice-agent/pipeline";
 import { LanguageModelError } from "@voice-agent/pipeline";
-import type { AgentFlow, ConversationState, FlowNode } from "@voice-agent/shared";
+import {
+  DEFAULT_PROMPT_SETTINGS,
+  type AgentFlow,
+  type ConversationState,
+  type FlowNode,
+} from "@voice-agent/shared";
 import { describe, expect, it } from "vitest";
 import { ConversationError, runTurn } from "./conversation";
 import { parseBranchAnswer } from "./prompts";
@@ -273,6 +278,49 @@ describe("runTurn model routing", () => {
       { decisions: null, replies: writer.llm },
     );
     expect(first.state.waitingFor).toBe("path");
+  });
+});
+
+describe("runTurn prompt settings", () => {
+  it("fills {{business_name}} and {{today}} in steps and uses the prompt in AI replies", async () => {
+    const welcome: AgentFlow = {
+      nodes: [
+        node("start", "start", {}),
+        node("hi", "say", { text: "Welcome to {{business_name}}! Today is {{today}}." }),
+        node("ai", "aiResponse", { instructions: "Ask how you can help." }),
+        node("bye", "end", { message: "" }),
+      ],
+      edges: [
+        { id: "e1", source: "start", target: "hi" },
+        { id: "e2", source: "hi", target: "ai" },
+        { id: "e3", source: "ai", target: "bye" },
+      ],
+    };
+    const writer = scriptedLlm(["How can I help you today?"]);
+    const prompt = {
+      ...DEFAULT_PROMPT_SETTINGS,
+      businessName: "Shine Salon",
+      rules: "Never promise refunds.",
+    };
+    const result = await runTurn(
+      welcome,
+      null,
+      { type: "start" },
+      {
+        decisions: null,
+        replies: writer.llm,
+        prompt,
+        now: new Date(2026, 7, 10),
+      },
+    );
+
+    expect(result.events[0]).toMatchObject({
+      text: "Welcome to Shine Salon! Today is Monday, August 10, 2026.",
+    });
+    const system = writer.prompts[0]![0]!.content;
+    expect(system).toContain("You are the friendly phone receptionist for Shine Salon.");
+    expect(system).toContain("Business rules:\nNever promise refunds.");
+    expect(system).toContain("- business_name: Shine Salon");
   });
 });
 

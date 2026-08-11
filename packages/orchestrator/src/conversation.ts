@@ -1,16 +1,19 @@
 import type { LanguageModelProvider } from "@voice-agent/pipeline";
 import {
   BRANCH_ELSE_HANDLE,
+  builtInVariables,
+  DEFAULT_PROMPT_SETTINGS,
   renderTemplate,
+  type PromptSettings,
   type AgentFlow,
   type ConversationAction,
   type ConversationEvent,
   type ConversationState,
   type FlowNode,
-  type LlmCallInfo,
   type TranscriptEntry,
   type TurnResult,
 } from "@voice-agent/shared";
+import { llmCallInfo } from "./llm-info";
 import { aiResponsePrompt, branchDecisionPrompt, parseBranchAnswer } from "./prompts";
 
 // Walks a conversation through a flow. The caller keeps the state between turns (the test
@@ -40,6 +43,10 @@ export interface ConversationDeps {
   decisions: LanguageModelProvider | null;
   /** Writes AI response steps. null = they are only reported. */
   replies: LanguageModelProvider | null;
+  /** The agent's prompt settings (prompt studio). Defaults when missing. */
+  prompt?: PromptSettings;
+  /** The current time, for {{today}}. Injectable so tests are repeatable. */
+  now?: Date;
 }
 
 type BranchNode = Extract<FlowNode, { type: "branch" }>;
@@ -49,9 +56,36 @@ interface Turn {
   flow: AgentFlow;
   decisions: LanguageModelProvider | null;
   replies: LanguageModelProvider | null;
+  prompt: PromptSettings;
+  /** {{business_name}}, {{today}}: usable everywhere, next to the collected answers. */
+  builtIns: Record<string, string>;
   variables: Record<string, string>;
   transcript: TranscriptEntry[];
   events: ConversationEvent[];
+}
+
+function newTurn(
+  flow: AgentFlow,
+  deps: ConversationDeps,
+  variables: Record<string, string>,
+  transcript: TranscriptEntry[],
+): Turn {
+  const prompt = deps.prompt ?? DEFAULT_PROMPT_SETTINGS;
+  return {
+    flow,
+    decisions: deps.decisions,
+    replies: deps.replies,
+    prompt,
+    builtIns: builtInVariables(prompt, deps.now ?? new Date()),
+    variables,
+    transcript,
+    events: [],
+  };
+}
+
+/** Built-in variables plus the collected answers (answers win if a name is used twice). */
+function templateVariables(turn: Turn): Record<string, string> {
+  return { ...turn.builtIns, ...turn.variables };
 }
 
 export async function runTurn(
@@ -61,7 +95,7 @@ export async function runTurn(
   deps: ConversationDeps,
 ): Promise<TurnResult> {
   if (action.type === "start") {
-    const turn: Turn = { flow, ...deps, variables: {}, transcript: [], events: [] };
+    const turn = newTurn(flow, deps, {}, []);
     const start = flow.nodes.find((node) => node.type === "start");
     if (!start) {
       turn.events.push({ type: "stuck", message: "The flow has no Start step." });
@@ -71,13 +105,7 @@ export async function runTurn(
   }
 
   if (!state || state.nodeId === null) throw new ConversationError("The call is already over.");
-  const turn: Turn = {
-    flow,
-    ...deps,
-    variables: { ...state.variables },
-    transcript: [...state.transcript],
-    events: [],
-  };
+  const turn = newTurn(flow, deps, { ...state.variables }, [...state.transcript]);
   const node = flow.nodes.find((n) => n.id === state.nodeId);
 
   if (action.type === "reply") {
@@ -127,7 +155,7 @@ async function continueAfter(
       return finished(turn);
     }
 
-    const fill = (template: string) => renderTemplate(template, turn.variables);
+    const fill = (template: string) => renderTemplate(template, templateVariables(turn));
     switch (current.type) {
       case "start":
         break;
@@ -231,7 +259,7 @@ async function decideBranch(turn: Turn, node: BranchNode): Promise<TurnResult> {
       nodeId: node.id,
       label: path.label,
       by: "ai",
-      llm: callInfo(result),
+      llm: llmCallInfo(result),
       aiAnswer: result.text,
     });
     return continueAfter(turn, node, path.handle);
@@ -254,7 +282,7 @@ async function writeAiResponse(turn: Turn, node: Extract<FlowNode, { type: "aiRe
   }
   try {
     const result = await turn.replies.complete(
-      aiResponsePrompt(instructions, turn.variables, turn.transcript),
+      aiResponsePrompt(turn.prompt, instructions, templateVariables(turn), turn.transcript),
       { temperature: 0.4 },
     );
     agentSays(turn, result.text);
@@ -263,7 +291,7 @@ async function writeAiResponse(turn: Turn, node: Extract<FlowNode, { type: "aiRe
       nodeId: node.id,
       instructions,
       text: result.text,
-      llm: callInfo(result),
+      llm: llmCallInfo(result),
     });
   } catch (error) {
     turn.events.push({ type: "llmError", nodeId: node.id, message: errorMessage(error) });
@@ -300,18 +328,6 @@ function branchPaths(node: BranchNode) {
 
 function agentSays(turn: Turn, text: string) {
   turn.transcript.push({ role: "agent", text });
-}
-
-function callInfo(result: Awaited<ReturnType<LanguageModelProvider["complete"]>>): LlmCallInfo {
-  return {
-    model: result.model,
-    latencyMs: result.latencyMs,
-    inputTokens: result.usage?.inputTokens ?? null,
-    outputTokens: result.usage?.outputTokens ?? null,
-    cachedInputTokens: result.usage?.cachedInputTokens ?? null,
-    costUsd: result.costUsd,
-    ...(result.fellBackFrom ? { fellBackFrom: result.fellBackFrom } : {}),
-  };
 }
 
 function errorMessage(error: unknown): string {

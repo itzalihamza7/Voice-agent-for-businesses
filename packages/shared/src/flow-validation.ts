@@ -1,4 +1,6 @@
 import { BRANCH_ELSE_HANDLE, type AgentFlow, type FlowEdge, type FlowNode } from "./flow";
+import { BUILT_IN_VARIABLES } from "./prompt";
+import { unknownVariables } from "./template";
 
 // Checks whether a flow is complete enough to run: every step filled in, connected and
 // reachable. Drafts with issues can still be saved; the builder shows the issues on the
@@ -42,6 +44,8 @@ export function validateFlow(flow: AgentFlow): FlowIssue[] {
     issues.push(...checkConnections(node, validEdges));
   }
 
+  issues.push(...checkVariables(flow));
+
   const start = starts[0];
   if (start) {
     const reachable = reachableFrom(start.id, validEdges);
@@ -55,6 +59,39 @@ export function validateFlow(flow: AgentFlow): FlowIssue[] {
     }
   }
   return issues;
+}
+
+/** {{variables}} must be an Ask step's variable or a built-in one ({{business_name}}, {{today}}). */
+function checkVariables(flow: AgentFlow): FlowIssue[] {
+  const known = new Set<string>(BUILT_IN_VARIABLES);
+  for (const node of flow.nodes) {
+    if (node.type === "ask" && node.data.variable) known.add(node.data.variable);
+  }
+  return flow.nodes.flatMap((node) =>
+    unknownVariables(templateText(node), known).map((name) => ({
+      nodeId: node.id,
+      message: `{{${name}}} isn't a known variable: check the spelling, or add an Ask step that saves it.`,
+    })),
+  );
+}
+
+/** All text of a step that is filled with {{variables}}. */
+function templateText(node: FlowNode): string {
+  switch (node.type) {
+    case "say":
+      return node.data.text;
+    case "ask":
+      return node.data.question;
+    case "aiResponse":
+      return node.data.instructions;
+    case "knowledgeLookup":
+      return node.data.query;
+    case "transfer":
+    case "end":
+      return node.data.message;
+    default:
+      return "";
+  }
 }
 
 function checkSettings(node: FlowNode, askVariables: Map<string, string>): FlowIssue[] {

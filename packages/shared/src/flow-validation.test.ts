@@ -124,4 +124,26 @@ describe("validateFlow", () => {
     const flow = { nodes: [start, end], edges: [edge("start", "end"), edge("end", "ghost")] };
     expect(messages(flow)).toEqual(["end--ghost: Connection points to a step that doesn't exist."]);
   });
+
+  it("reports {{variables}} that no Ask step saves, but accepts built-in ones", () => {
+    const ask: FlowNode = {
+      id: "a",
+      type: "ask",
+      position: at,
+      data: { question: "Name?", variable: "caller_name" },
+    };
+    const greet: FlowNode = {
+      id: "g",
+      type: "say",
+      position: at,
+      data: { text: "Thanks {{caller_name}}, welcome to {{business_name}}! {{caller_nam}}" },
+    };
+    const flow = {
+      nodes: [start, ask, greet, end],
+      edges: [edge("start", "a"), edge("a", "g"), edge("g", "end")],
+    };
+    expect(messages(flow)).toEqual([
+      "g: {{caller_nam}} isn't a known variable: check the spelling, or add an Ask step that saves it.",
+    ]);
+  });
 });

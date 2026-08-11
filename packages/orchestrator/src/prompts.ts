@@ -1,5 +1,5 @@
 import type { ChatMessage } from "@voice-agent/pipeline";
-import type { TranscriptEntry } from "@voice-agent/shared";
+import { buildSystemPrompt, type PromptSettings, type TranscriptEntry } from "@voice-agent/shared";
 
 // The prompts the conversation engine sends to the language model. Kept in one file so they
 // are easy to read and change. (Roadmap phase 3, the prompt studio, makes them editable per agent.)
@@ -30,7 +30,8 @@ export function branchDecisionPrompt(
 }
 
 /**
- * Asks the model to write the agent's next spoken reply for an AI response step.
+ * Asks the model to write the agent's next spoken reply for an AI response step. The system
+ * prompt is built from the agent's prompt settings (see buildSystemPrompt in @voice-agent/shared).
  *
  * The conversation goes in as one transcript inside a single user message, not as separate
  * chat turns. Chat templates differ between models: Llama, for example, mis-handles a
@@ -38,33 +39,13 @@ export function branchDecisionPrompt(
  * "assistant" header into the reply. One transcript behaves the same on every model.
  */
 export function aiResponsePrompt(
+  settings: PromptSettings,
   instructions: string,
   variables: Readonly<Record<string, string>>,
   transcript: TranscriptEntry[],
 ): ChatMessage[] {
-  const known = Object.entries(variables)
-    .map(([name, value]) => `- ${name}: ${value}`)
-    .join("\n");
   return [
-    {
-      role: "system",
-      content: [
-        "You are a friendly, professional phone agent for a business. You are on a live phone",
-        "call, so everything you write will be spoken aloud.",
-        "- Reply in one to three short sentences.",
-        "- No lists, markdown, emojis or links.",
-        "- Only state facts that appear in the conversation or in what you know about the",
-        "  caller. Never invent available times, prices, opening hours or booking details.",
-        "- If your task needs information you don't have (for example a tool or the knowledge",
-        "  base returned nothing), don't make it up: say briefly that you can't confirm it right",
-        "  now, then help another way, such as noting the caller's preference for the team.",
-        "",
-        `Your task for this step: ${instructions}`,
-        "",
-        "What you know about the caller:",
-        known || "- nothing yet",
-      ].join("\n"),
-    },
+    { role: "system", content: buildSystemPrompt(settings, { instructions, variables }) },
     {
       role: "user",
       content: `${formatTranscript(transcript)}\n\nWrite only the agent's next reply.`,
