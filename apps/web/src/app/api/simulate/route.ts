@@ -1,4 +1,4 @@
-// POST /api/simulate { flow, state, action, models }: runs one turn of a test conversation.
+// POST /api/simulate { flow, state, action, models, prompt }: runs one turn of a test conversation.
 // The browser keeps the state between turns; nothing is stored. Used by the builder's test chat.
 // Language models run here on the server, so API keys never reach the browser.
 import { ConversationError, runTurn } from "@voice-agent/orchestrator";
@@ -15,7 +15,7 @@ export async function POST(request: Request) {
   const parsed = await parseJsonBody(request, SimulateRequestSchema);
   if ("response" in parsed) return parsed.response;
 
-  const { flow, state, action, models } = parsed.data;
+  const { flow, state, action, models, prompt } = parsed.data;
   try {
     const fallback = models.fallback ? createLanguageModel(models.fallback) : null;
     const build = (spec: ModelSpec | null): LanguageModelProvider | null => {
@@ -23,7 +23,11 @@ export async function POST(request: Request) {
       const model = createLanguageModel(spec);
       return fallback ? new FallbackLanguageModel(model, fallback) : model;
     };
-    const deps = { decisions: build(models.decisions), replies: build(models.replies) };
+    const deps = {
+      decisions: build(models.decisions),
+      replies: build(models.replies),
+      ...(prompt ? { prompt } : {}),
+    };
     return Response.json(await runTurn(flow, state, action, deps));
   } catch (error) {
     if (error instanceof ConversationError || error instanceof ProviderConfigError) {

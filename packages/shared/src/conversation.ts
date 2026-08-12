@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { AgentFlowSchema } from "./flow";
+import { PromptSettingsSchema } from "./prompt";
 
 // Types for running a conversation through a flow (the test chat today, real calls later).
 // The engine itself lives in @voice-agent/orchestrator.
@@ -56,6 +57,20 @@ export const SimulateRequestSchema = z.object({
     // Answers instead when a model fails, e.g. OpenAI when Ollama isn't running.
     fallback: ModelSpecSchema.nullable(),
   }),
+  // The agent's prompt settings, possibly unsaved edits. Defaults when missing.
+  prompt: PromptSettingsSchema.optional(),
+});
+
+/** Prompt playground: one AI reply with the given prompt settings, to compare two versions. */
+export const PromptPlaygroundRequestSchema = z.object({
+  prompt: PromptSettingsSchema,
+  model: ModelSpecSchema,
+  // The AI response step's instructions.
+  instructions: z.string().trim().min(1).max(4000),
+  // What the caller just said.
+  callerMessage: z.string().trim().min(1).max(2000),
+  // Answers collected earlier in the call, e.g. { caller_name: "Ali" }.
+  variables: z.record(z.string(), z.string()).default({}),
 });
 
 /** One entry in the model picker. */
@@ -123,3 +138,4 @@ export type ConversationState = z.infer<typeof ConversationStateSchema>;
 export type ConversationAction = z.infer<typeof ConversationActionSchema>;
 export type SimulateRequest = z.infer<typeof SimulateRequestSchema>;
 export type ModelSpec = z.infer<typeof ModelSpecSchema>;
+export type PromptPlaygroundRequest = z.infer<typeof PromptPlaygroundRequestSchema>;
