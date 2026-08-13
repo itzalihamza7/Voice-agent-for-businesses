@@ -6,6 +6,7 @@ import type {
   ConversationEvent,
   ConversationState,
   LlmCallInfo,
+  PromptSettings,
   TurnResult,
 } from "@voice-agent/shared";
 import { useEffect, useRef, useState, type FormEvent } from "react";
@@ -16,6 +17,7 @@ import {
   useModelOptions,
   type ModelChoice,
 } from "./ModelPicker";
+import { formatCost, LlmMeta } from "./LlmMeta";
 
 // Test chat: you play the caller, the server walks the flow (POST /api/simulate).
 // The test uses the flow as it was when "Start test call" was pressed; restart after edits.
@@ -30,10 +32,12 @@ type Message =
 
 interface Props {
   flow: AgentFlow;
+  /** The prompt settings on screen (possibly unsaved), used for AI replies. */
+  prompt: PromptSettings;
   onActiveNodeChange: (nodeId: string | null) => void;
 }
 
-export function TestChat({ flow, onActiveNodeChange }: Props) {
+export function TestChat({ flow, prompt, onActiveNodeChange }: Props) {
   const { options, problems } = useModelOptions();
   // Until the user changes it, the default follows the loaded model list.
   const [userChoice, setUserChoice] = useState<ModelChoice | null>(null);
@@ -68,6 +72,7 @@ export function TestChat({ flow, onActiveNodeChange }: Props) {
           replies: toModelSpec(choice.replies),
           fallback: toModelSpec(choice.fallback),
         },
+        prompt,
       }),
     });
     setPending(false);
@@ -223,31 +228,6 @@ export function TestChat({ flow, onActiveNodeChange }: Props) {
       )}
     </div>
   );
-}
-
-function LlmMeta({ llm }: { llm: LlmCallInfo }) {
-  const parts = [llm.model, `${(llm.latencyMs / 1000).toFixed(1)} s`];
-  if (llm.inputTokens !== null) {
-    const cached = llm.cachedInputTokens ? ` (${llm.cachedInputTokens} cached)` : "";
-    parts.push(`${llm.inputTokens}→${llm.outputTokens ?? 0} tokens${cached}`);
-  }
-  parts.push(llm.costUsd === null ? "cost unknown" : formatCost(llm.costUsd));
-  return (
-    <span className="block text-[10px] text-gray-400 not-italic" data-testid="llm-meta">
-      {parts.join(" · ")}
-      {llm.fellBackFrom && (
-        <span className="block text-amber-600" data-testid="fallback-note">
-          Fallback: {llm.fellBackFrom.model} failed ({llm.fellBackFrom.error})
-        </span>
-      )}
-    </span>
-  );
-}
-
-/** Tiny amounts need more digits: one reply often costs a fraction of a cent. */
-function formatCost(usd: number): string {
-  if (usd === 0) return "$0 (local)";
-  return usd < 0.01 ? `$${usd.toFixed(5)}` : `$${usd.toFixed(2)}`;
 }
 
 function MessageBubble({ message }: { message: Message }) {
