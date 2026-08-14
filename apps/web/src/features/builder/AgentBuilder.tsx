@@ -10,6 +10,7 @@ import {
   type FlowIssue,
   type FlowNode,
   type FlowNodeType,
+  type PromptSettings,
 } from "@voice-agent/shared";
 import {
   addEdge,
@@ -39,6 +40,7 @@ import {
 import { createNode, newId } from "./node-catalog";
 import { DRAG_MIME_TYPE, NodePalette } from "./NodePalette";
 import { NodeSettingsPanel } from "./NodeSettingsPanel";
+import { PromptStudio } from "./PromptStudio";
 import { TestChat } from "./TestChat";
 import { VersionHistory } from "./VersionHistory";
 
@@ -68,8 +70,8 @@ export function AgentBuilder(props: Props) {
 type SaveStatus = { kind: "idle" | "saving" | "saved" } | { kind: "error"; message: string };
 
 /** What gets saved, as a string, to detect unsaved changes. */
-function snapshot(name: string, flow: AgentFlow): string {
-  return JSON.stringify({ name, flow });
+function snapshot(name: string, flow: AgentFlow, prompt: PromptSettings): string {
+  return JSON.stringify({ name, flow, prompt });
 }
 
 function Builder({ agentId, initial, versions: initialVersions }: Props) {
@@ -77,11 +79,16 @@ function Builder({ agentId, initial, versions: initialVersions }: Props) {
   const [openVersion, setOpenVersion] = useState(initial.version);
   const [name, setName] = useState(initial.name);
   const [providers, setProviders] = useState(initial.providers);
+  const [prompt, setPrompt] = useState(initial.prompt);
+  // "flow" = the canvas; "prompt" = the prompt studio (shown on top of the canvas).
+  const [mode, setMode] = useState<"flow" | "prompt">("flow");
   const [initialCanvas] = useState(() => toReactFlow(initial.flow));
   const [nodes, setNodes, onNodesChange] = useNodesState<BuilderNode>(initialCanvas.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialCanvas.edges);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [savedSnapshot, setSavedSnapshot] = useState(() => snapshot(initial.name, initial.flow));
+  const [savedSnapshot, setSavedSnapshot] = useState(() =>
+    snapshot(initial.name, initial.flow, initial.prompt),
+  );
   const [status, setStatus] = useState<SaveStatus>({ kind: "idle" });
   // While testing, the right column shows the test chat instead of step settings.
   const [testing, setTesting] = useState(false);
@@ -97,7 +104,8 @@ function Builder({ agentId, initial, versions: initialVersions }: Props) {
     }),
     [issues, testing, activeNodeId],
   );
-  const dirty = snapshot(name, flow) !== savedSnapshot;
+  const dirty = snapshot(name, flow, prompt) !== savedSnapshot;
+  const savedPrompt = versions.find((v) => v.version === openVersion)?.prompt ?? initial.prompt;
   const latestVersion = versions.at(-1)?.version ?? 0;
   // Saving an unchanged old version is allowed: it restores it as the newest version.
   const canSave =
@@ -202,8 +210,9 @@ function Builder({ agentId, initial, versions: initialVersions }: Props) {
     setEdges(loaded.edges);
     setName(version.name);
     setProviders(version.providers);
+    setPrompt(version.prompt);
     setOpenVersion(version.version);
-    setSavedSnapshot(snapshot(version.name, version.flow));
+    setSavedSnapshot(snapshot(version.name, version.flow, version.prompt));
     setSelectedId(null);
     setStatus({ kind: "idle" });
     // Wait for React Flow to render the loaded nodes before fitting them in view.
@@ -212,11 +221,11 @@ function Builder({ agentId, initial, versions: initialVersions }: Props) {
 
   async function save() {
     setStatus({ kind: "saving" });
-    const sent = snapshot(name, flow);
+    const sent = snapshot(name, flow, prompt);
     const response = await fetch(`/api/agents/${encodeURIComponent(agentId)}/versions`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ schemaVersion: 1, name, providers, flow }),
+      body: JSON.stringify({ schemaVersion: 1, name, providers, flow, prompt }),
     });
     if (!response.ok) {
       const body = (await response.json().catch(() => null)) as { error?: string } | null;
@@ -252,9 +261,27 @@ function Builder({ agentId, initial, versions: initialVersions }: Props) {
         >
           {issues.length ? `${issues.length} issue(s)` : "Ready to run ✓"}
         </span>
+        <div className="flex overflow-hidden rounded border border-gray-300 text-sm" role="tablist">
+          {(["flow", "prompt"] as const).map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              role="tab"
+              aria-selected={mode === tab}
+              onClick={() => {
+                setMode(tab);
+                setTesting(false);
+              }}
+              className={`px-3 py-1 ${mode === tab ? "bg-gray-800 text-white" : "hover:bg-gray-100"}`}
+            >
+              {tab === "flow" ? "Flow" : "Prompt"}
+            </button>
+          ))}
+        </div>
         <div className="ml-auto flex items-center gap-3">
           <button
             type="button"
+            hidden={mode !== "flow"}
             onClick={() => setTesting((on) => !on)}
             className={`rounded border px-3 py-1.5 text-sm font-medium ${
               testing
@@ -281,7 +308,19 @@ function Builder({ agentId, initial, versions: initialVersions }: Props) {
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1">
+      <div className="relative flex min-h-0 flex-1">
+        {mode === "prompt" && (
+          // On top of the canvas instead of replacing it, so the canvas keeps its zoom and position.
+          <div className="absolute inset-0 z-10 flex bg-white">
+            <PromptStudio
+              prompt={prompt}
+              onChange={setPrompt}
+              savedPrompt={savedPrompt}
+              savedLabel={`v${openVersion}`}
+              flow={flow}
+            />
+          </div>
+        )}
         <aside className="w-60 overflow-y-auto border-r border-gray-200 p-3">
           <NodePalette onAdd={addNodeBelow} />
         </aside>
@@ -317,7 +356,7 @@ function Builder({ agentId, initial, versions: initialVersions }: Props) {
 
         <aside className="w-80 space-y-6 overflow-y-auto border-l border-gray-200 p-4">
           {testing ? (
-            <TestChat flow={flow} onActiveNodeChange={setActiveNodeId} />
+            <TestChat flow={flow} prompt={prompt} onActiveNodeChange={setActiveNodeId} />
           ) : selectedNode ? (
             <NodeSettingsPanel
               key={selectedNode.id}
