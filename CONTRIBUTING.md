@@ -30,6 +30,8 @@ container, so plain `npm ...` on macOS will fail on native binaries.
 
 Before saying a task is done: `test`, `test:db`, `lint` and `build` must all pass.
 DDEV syncs files with Mutagen: if the container doesn't see a change yet, run `ddev mutagen sync`.
+If the dev server reports a new export from a workspace package as `undefined`, its module cache is
+stale: run `ddev restart`.
 
 ## Layout
 
@@ -82,6 +84,11 @@ DDEV syncs files with Mutagen: if the container doesn't see a change yet, run `d
   `OPENAI_MODELS` allow-list; when adding one, also add its price to `pricing.ts` (with the date
   checked). Prompts live in `packages/orchestrator/src/prompts.ts`.
 - Any model pulled with `ollama pull ...` shows up in the test chat's pickers without a restart.
+- Prompt settings and `buildSystemPrompt()` live in `packages/shared/src/prompt.ts`, used by both
+  the editor preview and the server. New built-in variables go in `BUILT_IN_VARIABLES` and
+  `builtInVariables()`. Platform rules (`PLATFORM_RULES`) are not user-editable on purpose.
+- Fields added to `AgentConfig` after versions exist need a Zod `.default(...)` so older stored
+  versions still parse (as done for `prompt`).
 - Unit tests never call a real language model: use a scripted fake (see `conversation.test.ts`).
   Model behaviour is checked by hand or with live runs against both Ollama and OpenAI.
 - Pinned on purpose: TypeScript 6.0 (typescript-eslint does not support 7 yet), ESLint 9

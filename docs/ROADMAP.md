@@ -46,7 +46,7 @@ feature support when building each phase. It changes often.
 | 0   | Boilerplate                     | Monorepo, provider interfaces, mocks, DDEV                                     | 10  | ✅ Done |
 | 1   | Data foundation                 | Prisma models, Postgres config store, real API routes                          | 4   | ✅ Done |
 | 2   | Agent builder MVP               | React Flow canvas, typed node settings, versions                               | 9   | ✅ Done |
-| 3   | Prompt engineering studio       | System prompts, templates, few-shot, voice style, playground                   | 6   |         |
+| 3   | Prompt engineering studio       | System prompts, templates, few-shot, voice style, playground                   | 6   | ✅ Done |
 | 4   | LLM harness + text simulator    | Retries, timeouts, fallback, model routing, thinking control, cost, test chat  | 8   | ✅ Done |
 | 5   | Structured outputs & tools      | JSON schema output, intents, function calling, agentic loop, MCP               | 6   |         |
 | 6   | RAG knowledge base              | Ingestion, chunking, embeddings, pgvector, hybrid search, reranking, citations | 9   |         |
@@ -78,12 +78,18 @@ feature support when building each phase. It changes often.
 - Settings panel per node type, each validated by its own Zod schema.
 - Save = new version; version history list; validation errors shown on the canvas.
 
-### 3. Prompt engineering studio
+### 3. Prompt engineering studio ✅
 
-- System prompt editor (role, persona, goals, rules, examples).
-- Template variables (`{{business_name}}`, `{{caller_name}}`, ...) filled at runtime.
-- Few-shot examples; voice style rules (short sentences, no markdown, spoken numbers).
-- Playground: prompt A vs. prompt B on the same input, side by side, with token counts.
+- Prompt settings per agent version: business name, role, personality, goals, business rules,
+  voice style rules, few-shot examples. Older versions get defaults (no migration).
+- Template variables: `{{business_name}}`, `{{today}}` and every Ask variable; unknown names
+  (typos) are flagged in the flow and the prompt editor.
+- Live preview of the exact system prompt, with a token estimate (≈ 4 characters per token;
+  within 1% of OpenAI's real count in testing).
+- Playground: saved prompt (A) vs. edits (B), same input and model, side by side with tokens
+  and cost. Example: without a price in the prompt, gpt-4.1-nano said it couldn't confirm the
+  price; with "A haircut costs 30 pounds" in the business rules it quoted it.
+- Fixed platform rules (no invented facts) are appended to every prompt and can't be edited.
 
 ### 4. LLM harness + text simulator ✅
 

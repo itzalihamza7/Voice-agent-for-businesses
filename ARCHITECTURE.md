@@ -74,8 +74,8 @@ through the API. Only `apps/web/src/server/` creates the database client and the
 | `apps/web/src/app/`      | Pages, one folder per URL. `/` lists agents and creates new ones, `agents/[agentId]/builder` is the builder, `dashboard/calls` is the dashboard.                                                                                                                                                   |
 | `apps/web/src/app/api/`  | **Server-side** route handlers: the HTTP edge of the orchestration layer. They validate the request with a shared Zod schema and call the orchestrator. `/api/agents`, `/api/agents/:agentId/versions` and `/api/simulate` (test calls) work; `/api/calls` and `/api/sessions` still return `501`. |
 | `apps/web/src/server/`   | Server-only wiring: one shared Prisma client, the business-scoped config store, and HTTP helpers (body validation, error → status code).                                                                                                                                                           |
-| `apps/web/src/features/` | React components grouped by feature: `builder/` (the React Flow agent builder), `agents/` (create-agent form), `dashboard/`. Pages stay small and import from here.                                                                                                                                |
-| `packages/shared/`       | Types and **Zod** schemas used everywhere: `AgentConfig` (the versioned JSON), the flow's node and edge types (`flow.ts`), `validateFlow()` (`flow-validation.ts`), and `CallLog`, `TranscriptTurn`, `Sentiment`.                                                                                  |
+| `apps/web/src/features/` | React components grouped by feature: `builder/` (the React Flow agent builder, prompt studio, test chat), `agents/` (create-agent form), `dashboard/`. Pages stay small and import from here.                                                                                                      |
+| `packages/shared/`       | Types and **Zod** schemas used everywhere: `AgentConfig` (the versioned JSON), the flow's node and edge types (`flow.ts`), `validateFlow()` (`flow-validation.ts`), prompt settings and `buildSystemPrompt()` (`prompt.ts`), and `CallLog`, `TranscriptTurn`, `Sentiment`.                         |
 | `packages/pipeline/`     | The voice pipeline. One folder per step (`providers/stt`, `llm`, `tts`), each with an interface (`types.ts`) and a fake implementation (`mock.ts`). `registry.ts` picks implementations by name. `pipeline.ts` runs one turn.                                                                      |
 | `packages/agent-config/` | Storing and versioning agent configs. `AgentConfigStore` is the interface, with two implementations: `InMemoryAgentConfigStore` (tests) and `PrismaAgentConfigStore` (Postgres). `store.contract.ts` holds the tests both must pass. `versioning.ts` is the placeholder for rollback / A/B logic.  |
 | `packages/orchestrator/` | The "glue": agent use cases (create, list, save a version) and sessions (load the agent's config, build its providers). Later it drives the conversation and saves call logs. Has no HTTP code.                                                                                                    |
@@ -166,6 +166,40 @@ it then creates a new version with that content (old versions are never changed)
 **Adding a node type** touches four files: `flow.ts` (schema), `flow-validation.ts` (rules),
 `node-catalog.ts` (label, colour, defaults) and `NodeSettingsPanel.tsx` (form). TypeScript points
 at any of them you forget.
+
+## How the prompt studio works
+
+The builder has two modes, switched in the header: **Flow** (the canvas) and **Prompt**. The
+Prompt mode edits how the AI talks in AI response steps, and its settings are saved with the
+agent's next version, next to the flow.
+
+**Prompt settings** (`packages/shared/src/prompt.ts`, part of `AgentConfig`):
+
+| Setting                  | Purpose                                                                                |
+| ------------------------ | -------------------------------------------------------------------------------------- |
+| Business name            | Fills `{{business_name}}` everywhere (prompt, Say, Ask, ...)                           |
+| Role, Personality, Goals | Who the agent is, its tone, what a good call achieves                                  |
+| Business rules           | Facts and limits, e.g. prices or "never promise refunds"                               |
+| Voice style              | Switchable rules: short replies, no formatting, spoken numbers, one question at a time |
+| Example exchanges        | Few-shot examples of the wanted style                                                  |
+
+`buildSystemPrompt()` turns the settings into the system prompt, always in the same order:
+role → personality → goals → business rules → voice style → **platform rules** → examples →
+the step's task → what is known (variables). The platform rules (never invent facts; say so when
+information is missing) can't be edited: they protect callers whatever the prompt says. The
+function lives in `shared`, so the editor's live preview shows exactly what the server sends.
+
+**Template variables:** `{{business_name}}` and `{{today}}` are built in; every Ask step adds
+its own (e.g. `{{caller_name}}`). `validateFlow()` and the prompt editor flag unknown names, so
+a typo like `{{caller_nam}}` is caught before a caller hears it.
+
+**Playground:** runs one AI reply twice with the same caller message and model: **A** with the
+saved prompt of the open version and **B** with the edits on screen
+(`POST /api/prompt-playground`). It shows both replies, their system prompts, tokens and cost.
+With no edits, A and B show how much replies vary on their own.
+
+**Older versions** (saved before prompt settings existed) get the default settings when read:
+`AgentConfigSchema` fills them in, so no data migration was needed.
 
 ## How a test call works
 
