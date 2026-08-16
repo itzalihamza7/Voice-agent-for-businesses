@@ -65,7 +65,13 @@ export function validateFlow(flow: AgentFlow): FlowIssue[] {
 function checkVariables(flow: AgentFlow): FlowIssue[] {
   const known = new Set<string>(BUILT_IN_VARIABLES);
   for (const node of flow.nodes) {
-    if (node.type === "ask" && node.data.variable) known.add(node.data.variable);
+    if (node.type === "ask" && node.data.variable) {
+      known.add(node.data.variable);
+      // Dates and times also get an easy-to-say version, e.g. {{preferred_date_spoken}}.
+      if (node.data.answerType === "date" || node.data.answerType === "time") {
+        known.add(`${node.data.variable}_spoken`);
+      }
+    }
   }
   return flow.nodes.flatMap((node) =>
     unknownVariables(templateText(node), known).map((name) => ({

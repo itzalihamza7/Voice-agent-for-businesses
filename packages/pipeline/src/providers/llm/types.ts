@@ -11,6 +11,11 @@ export interface ChatMessage {
 export interface CompletionOptions {
   /** 0 = always the most likely answer (good for decisions); higher = more varied wording. */
   temperature?: number;
+  /**
+   * Structured output: the reply must be JSON matching this JSON Schema. The provider
+   * guarantees the shape, not the content (formats, dates, ...): always validate the result.
+   */
+  jsonSchema?: { name: string; schema: Record<string, unknown> };
 }
 
 export interface TokenUsage {

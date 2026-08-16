@@ -47,19 +47,19 @@ describe("validateFlow", () => {
       id: "a1",
       type: "ask",
       position: at,
-      data: { question: "Q?", variable: "order_no" },
+      data: { question: "Q?", variable: "order_no", answerType: "text" },
     };
     const ask2: FlowNode = {
       id: "a2",
       type: "ask",
       position: at,
-      data: { question: "Q?", variable: "order_no" },
+      data: { question: "Q?", variable: "order_no", answerType: "text" },
     };
     const ask3: FlowNode = {
       id: "a3",
       type: "ask",
       position: at,
-      data: { question: "Q?", variable: "2bad" },
+      data: { question: "Q?", variable: "2bad", answerType: "text" },
     };
     const flow = {
       nodes: [start, ask1, ask2, ask3, end],
@@ -108,7 +108,7 @@ describe("validateFlow", () => {
       id: "b",
       type: "branch",
       position: at,
-      data: { conditions: [{ id: "c1", label: "Wants to book" }] },
+      data: { conditions: [{ id: "c1", label: "Wants to book", keywords: "" }] },
     };
     const connected = {
       nodes: [start, branch, end],
@@ -130,7 +130,7 @@ describe("validateFlow", () => {
       id: "a",
       type: "ask",
       position: at,
-      data: { question: "Name?", variable: "caller_name" },
+      data: { question: "Name?", variable: "caller_name", answerType: "text" },
     };
     const greet: FlowNode = {
       id: "g",

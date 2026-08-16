@@ -87,6 +87,10 @@ export class OpenAICompatibleProvider implements LanguageModelProvider {
             messages,
             temperature: options.temperature,
             reasoning_effort: reasoningEffort,
+            response_format: options.jsonSchema && {
+              type: "json_schema",
+              json_schema: { ...options.jsonSchema, strict: true },
+            },
           }),
           signal: AbortSignal.timeout(timeoutMs),
         });

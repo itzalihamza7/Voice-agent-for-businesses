@@ -9,7 +9,7 @@ const flow: AgentFlow = {
       id: "b",
       type: "branch",
       position: { x: 0, y: 100 },
-      data: { conditions: [{ id: "c1", label: "Wants to book" }] },
+      data: { conditions: [{ id: "c1", label: "Wants to book", keywords: "" }] },
     },
     { id: "end", type: "end", position: { x: 0, y: 200 }, data: { message: "Bye" } },
   ],

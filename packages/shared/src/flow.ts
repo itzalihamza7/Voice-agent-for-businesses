@@ -17,7 +17,25 @@ export const BranchConditionSchema = z.object({
   id: z.string().min(1),
   // Plain-English description of when to take this path, e.g. "Caller wants to book".
   label: z.string(),
+  // Optional comma-separated words, e.g. "book, appointment". Used to choose the path without
+  // AI, and shown next to the AI's choice for comparison. Older flows default to none.
+  keywords: z.string().default(""),
 });
+
+// What kind of answer an Ask step expects. Anything but "text" is turned into a clean value
+// (e.g. "next Friday" → 2026-10-23) and the caller is asked again when it can't be understood.
+export const ANSWER_TYPES = [
+  "text",
+  "name",
+  "phone",
+  "email",
+  "date",
+  "time",
+  "number",
+  "yesNo",
+] as const;
+export const AnswerTypeSchema = z.enum(ANSWER_TYPES);
+export type AnswerType = z.infer<typeof AnswerTypeSchema>;
 
 export const FlowNodeSchema = z.discriminatedUnion("type", [
   // Where every call begins. Exactly one per flow.
@@ -25,7 +43,15 @@ export const FlowNodeSchema = z.discriminatedUnion("type", [
   // The agent says a fixed sentence.
   nodeSchema("say", z.object({ text: z.string() })),
   // The agent asks a question and stores the answer in a variable, e.g. order_number.
-  nodeSchema("ask", z.object({ question: z.string(), variable: z.string() })),
+  nodeSchema(
+    "ask",
+    z.object({
+      question: z.string(),
+      variable: z.string(),
+      // Older flows default to free text.
+      answerType: AnswerTypeSchema.default("text"),
+    }),
+  ),
   // The LLM writes the reply, guided by these instructions (prompt studio: roadmap phase 3).
   nodeSchema("aiResponse", z.object({ instructions: z.string() })),
   // Picks one outgoing path. Each condition has its own output, plus an "else" output.

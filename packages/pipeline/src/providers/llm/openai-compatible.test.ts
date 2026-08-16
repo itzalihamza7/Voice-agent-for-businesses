@@ -73,6 +73,18 @@ describe("OpenAICompatibleProvider", () => {
     expect(result.costUsd).toBe(0.1);
   });
 
+  it("asks for structured output with a strict JSON schema", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(json(okBody));
+    const schema = { type: "object", properties: { found: { type: "boolean" } } };
+    await provider(fetchMock).complete([{ role: "user", content: "Hi" }], {
+      jsonSchema: { name: "extraction", schema },
+    });
+    expect(JSON.parse(String(fetchMock.mock.calls[0]![1]?.body)).response_format).toEqual({
+      type: "json_schema",
+      json_schema: { name: "extraction", schema, strict: true },
+    });
+  });
+
   it("sends no authorization header without an API key (Ollama)", async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(json(okBody));
     await provider(fetchMock).complete([{ role: "user", content: "Hi" }]);

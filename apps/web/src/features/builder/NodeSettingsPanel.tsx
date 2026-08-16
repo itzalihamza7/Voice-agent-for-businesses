@@ -1,10 +1,21 @@
 "use client";
 
-import type { FlowIssue, FlowNode } from "@voice-agent/shared";
+import { ANSWER_TYPES, type AnswerType, type FlowIssue, type FlowNode } from "@voice-agent/shared";
 import type { ReactNode } from "react";
 import { NODE_CATALOG, newId } from "./node-catalog";
 
 // Edits the settings of the selected node. Each node type has its own small form.
+
+const ANSWER_TYPE_LABELS: Record<AnswerType, string> = {
+  text: "Any text",
+  name: "A name",
+  phone: "A phone number",
+  email: "An email address",
+  date: 'A date (e.g. "next Friday")',
+  time: 'A time (e.g. "half past three")',
+  number: "A number",
+  yesNo: "Yes or no",
+};
 
 interface Props {
   node: FlowNode;
@@ -72,6 +83,30 @@ function Form({ node, onChange }: Pick<Props, "node" | "onChange">) {
             value={node.data.variable}
             onChange={(variable) => onChange({ ...node.data, variable })}
           />
+          <label className="block text-sm">
+            <span className="font-medium">Expected answer</span>
+            <select
+              aria-label="Expected answer"
+              className="mt-1 w-full rounded border border-gray-300 px-2 py-1"
+              value={node.data.answerType}
+              onChange={(event) =>
+                onChange({ ...node.data, answerType: event.target.value as AnswerType })
+              }
+            >
+              {ANSWER_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {ANSWER_TYPE_LABELS[type]}
+                </option>
+              ))}
+            </select>
+            <span className="mt-1 block text-xs text-gray-500">
+              {node.data.answerType === "text"
+                ? "Saved exactly as the caller says it."
+                : "Turned into a clean value; the caller is asked again if it isn't understood."}
+              {(node.data.answerType === "date" || node.data.answerType === "time") &&
+                ` Also saves {{${node.data.variable || "variable"}_spoken}}, easy to say aloud.`}
+            </span>
+          </label>
         </>
       );
     case "aiResponse":
@@ -89,18 +124,32 @@ function Form({ node, onChange }: Pick<Props, "node" | "onChange">) {
           <p className="text-sm font-medium">Paths</p>
           {node.data.conditions.map((condition, index) => (
             <div key={condition.id} className="flex gap-2">
-              <TextInput
-                label={`Path ${index + 1}: when…`}
-                placeholder="Caller wants to book"
-                value={condition.label}
-                onChange={(label) =>
-                  onChange({
-                    conditions: node.data.conditions.map((c) =>
-                      c.id === condition.id ? { ...c, label } : c,
-                    ),
-                  })
-                }
-              />
+              <div className="flex-1 space-y-1">
+                <TextInput
+                  label={`Path ${index + 1}: when…`}
+                  placeholder="Caller wants to book"
+                  value={condition.label}
+                  onChange={(label) =>
+                    onChange({
+                      conditions: node.data.conditions.map((c) =>
+                        c.id === condition.id ? { ...c, label } : c,
+                      ),
+                    })
+                  }
+                />
+                <TextInput
+                  label={`Path ${index + 1}: keywords (optional)`}
+                  placeholder="book, appointment"
+                  value={condition.keywords}
+                  onChange={(keywords) =>
+                    onChange({
+                      conditions: node.data.conditions.map((c) =>
+                        c.id === condition.id ? { ...c, keywords } : c,
+                      ),
+                    })
+                  }
+                />
+              </div>
               <button
                 type="button"
                 aria-label={`Remove path ${index + 1}`}
@@ -119,13 +168,17 @@ function Form({ node, onChange }: Pick<Props, "node" | "onChange">) {
             type="button"
             className="text-sm text-blue-600 underline"
             onClick={() =>
-              onChange({ conditions: [...node.data.conditions, { id: newId("c"), label: "" }] })
+              onChange({
+                conditions: [...node.data.conditions, { id: newId("c"), label: "", keywords: "" }],
+              })
             }
           >
             + Add path
           </button>
           <p className="text-xs text-gray-500">
-            &quot;Otherwise&quot; is taken when no path matches.
+            &quot;Otherwise&quot; is taken when no path matches. With an AI model, the AI picks the
+            path from what the caller said; keywords are used without AI, and shown next to the
+            AI&apos;s choice for comparison.
           </p>
         </div>
       );

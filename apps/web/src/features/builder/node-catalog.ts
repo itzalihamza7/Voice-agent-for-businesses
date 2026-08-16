@@ -33,7 +33,7 @@ export const NODE_CATALOG: Catalog = {
     label: "Ask",
     description: "Ask a question and remember the answer.",
     accent: "border-indigo-500 bg-indigo-50",
-    defaultData: () => ({ question: "", variable: "" }),
+    defaultData: () => ({ question: "", variable: "", answerType: "text" }),
     summary: (data) => (data.variable ? `${data.question} → {{${data.variable}}}` : data.question),
   },
   aiResponse: {
@@ -47,7 +47,7 @@ export const NODE_CATALOG: Catalog = {
     label: "Branch",
     description: "Choose a path based on what the caller said.",
     accent: "border-amber-500 bg-amber-50",
-    defaultData: () => ({ conditions: [{ id: newId("c"), label: "" }] }),
+    defaultData: () => ({ conditions: [{ id: newId("c"), label: "", keywords: "" }] }),
     summary: (data) => `${data.conditions.length} path(s) + otherwise`,
   },
   tool: {
