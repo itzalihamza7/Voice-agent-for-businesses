@@ -14,7 +14,14 @@ import {
   type TurnResult,
 } from "@voice-agent/shared";
 import { llmCallInfo } from "./llm-info";
-import { aiResponsePrompt, branchDecisionPrompt, parseBranchAnswer } from "./prompts";
+import { z } from "zod";
+import { extractAnswer } from "./extraction";
+import {
+  aiResponsePrompt,
+  branchDecisionPrompt,
+  branchDecisionSchema,
+  parseBranchAnswer,
+} from "./prompts";
 
 // Walks a conversation through a flow. The caller keeps the state between turns (the test
 // chat keeps it in the browser), so nothing is stored here.
@@ -29,6 +36,8 @@ import { aiResponsePrompt, branchDecisionPrompt, parseBranchAnswer } from "./pro
 
 // A loop of steps that never wait for the caller would otherwise run forever.
 const MAX_STEPS_PER_TURN = 200;
+// How often an Ask step asks again when the answer isn't understood, before moving on.
+const MAX_REASKS = 2;
 
 /** The action doesn't fit the conversation's state, e.g. an answer while waiting at a Branch. */
 export class ConversationError extends Error {
@@ -57,6 +66,7 @@ interface Turn {
   decisions: LanguageModelProvider | null;
   replies: LanguageModelProvider | null;
   prompt: PromptSettings;
+  now: Date;
   /** {{business_name}}, {{today}}: usable everywhere, next to the collected answers. */
   builtIns: Record<string, string>;
   variables: Record<string, string>;
@@ -71,12 +81,14 @@ function newTurn(
   transcript: TranscriptEntry[],
 ): Turn {
   const prompt = deps.prompt ?? DEFAULT_PROMPT_SETTINGS;
+  const now = deps.now ?? new Date();
   return {
     flow,
     decisions: deps.decisions,
     replies: deps.replies,
     prompt,
-    builtIns: builtInVariables(prompt, deps.now ?? new Date()),
+    now,
+    builtIns: builtInVariables(prompt, now),
     variables,
     transcript,
     events: [],
@@ -110,15 +122,7 @@ export async function runTurn(
 
   if (action.type === "reply") {
     if (node?.type === "ask" && state.waitingFor === "answer") {
-      turn.variables[node.data.variable] = action.text;
-      turn.transcript.push({ role: "caller", text: action.text });
-      turn.events.push({
-        type: "answer",
-        nodeId: node.id,
-        variable: node.data.variable,
-        value: action.text,
-      });
-      return continueAfter(turn, node, undefined);
+      return answerAsk(turn, node, action.text, state.retries);
     }
     if (node?.type === "branch" && state.waitingFor === "callerMessage") {
       turn.transcript.push({ role: "caller", text: action.text });
@@ -199,7 +203,8 @@ async function continueAfter(
         break;
       case "branch":
         turn.events.push({ type: "branch", nodeId: current.id, paths: branchPaths(current) });
-        if (!turn.decisions) return waiting(turn, current.id, "path");
+        // Without AI or keywords, a person has to pick the path.
+        if (!turn.decisions && !hasKeywords(current)) return waiting(turn, current.id, "path");
         if (previous.type === "tool") {
           turn.events.push({
             type: "note",
@@ -239,20 +244,106 @@ async function continueAfter(
   return finished(turn);
 }
 
-/** Lets the language model pick a Branch path from the conversation, then continues. */
+/** Saves the answer to an Ask step as a clean value, or asks again if it wasn't understood. */
+async function answerAsk(
+  turn: Turn,
+  node: Extract<FlowNode, { type: "ask" }>,
+  text: string,
+  retries: number,
+): Promise<TurnResult> {
+  const { variable, answerType } = node.data;
+  const question = renderTemplate(node.data.question, templateVariables(turn));
+  turn.transcript.push({ role: "caller", text });
+
+  // The decisions model understands answers: it is the one meant for short, exact jobs.
+  let result: Awaited<ReturnType<typeof extractAnswer>>;
+  try {
+    result = await extractAnswer(answerType, text, {
+      llm: turn.decisions,
+      now: turn.now,
+      question,
+    });
+  } catch (error) {
+    turn.events.push({ type: "llmError", nodeId: node.id, message: errorMessage(error) });
+    result = { ok: false, reason: "The AI couldn't read the answer." };
+  }
+
+  if (result.ok) {
+    turn.variables[variable] = result.value;
+    if (result.spoken) turn.variables[`${variable}_spoken`] = result.spoken;
+    turn.events.push({
+      type: "answer",
+      nodeId: node.id,
+      variable,
+      value: result.value,
+      raw: text,
+      by: result.by,
+      ...(result.llm ? { llm: result.llm } : {}),
+    });
+    return continueAfter(turn, node, undefined);
+  }
+
+  if (retries < MAX_REASKS) {
+    const again = `Sorry, I didn't quite catch that. ${question}`;
+    agentSays(turn, again);
+    turn.events.push({
+      type: "reask",
+      nodeId: node.id,
+      question: again,
+      reason: result.reason,
+      ...(result.llm ? { llm: result.llm } : {}),
+    });
+    return waiting(turn, node.id, "answer", retries + 1);
+  }
+
+  // Still not understood: keep what the caller said rather than trapping them in a loop.
+  turn.variables[variable] = text;
+  turn.events.push({
+    type: "answer",
+    nodeId: node.id,
+    variable,
+    value: text,
+    raw: text,
+    by: "gaveUp",
+  });
+  return continueAfter(turn, node, undefined);
+}
+
+/** Picks a Branch path from what the caller said (AI, or keyword rules without AI), then continues. */
 async function decideBranch(turn: Turn, node: BranchNode): Promise<TurnResult> {
-  if (!turn.decisions) return waiting(turn, node.id, "path");
   const paths = branchPaths(node);
   const conditions = paths.filter((path) => path.handle !== BRANCH_ELSE_HANDLE);
+  const callerSaid =
+    [...turn.transcript].reverse().find((entry) => entry.role === "caller")?.text ?? "";
+  const keywordPath = hasKeywords(node)
+    ? (matchKeywords(node, callerSaid) ?? OTHERWISE)
+    : undefined;
+
+  if (!turn.decisions) {
+    if (!keywordPath) return waiting(turn, node.id, "path");
+    turn.events.push({
+      type: "pathChosen",
+      nodeId: node.id,
+      label: keywordPath.label,
+      by: "keywords",
+    });
+    return continueAfter(turn, node, keywordPath.handle);
+  }
 
   try {
     const result = await turn.decisions.complete(
       branchDecisionPrompt(conditions, turn.transcript),
       {
         temperature: 0,
+        jsonSchema: branchDecisionSchema(conditions.length),
       },
     );
-    const number = parseBranchAnswer(result.text, conditions.length);
+    const decision = BranchDecisionSchema.safeParse(safeJson(result.text));
+    // Structured output should always parse; reading a bare number is a fallback for models
+    // that ignore the schema.
+    const number = decision.success
+      ? decision.data.path
+      : parseBranchAnswer(result.text, conditions.length);
     const path = (number ? conditions[number - 1] : undefined) ?? OTHERWISE;
     turn.events.push({
       type: "pathChosen",
@@ -261,6 +352,8 @@ async function decideBranch(turn: Turn, node: BranchNode): Promise<TurnResult> {
       by: "ai",
       llm: llmCallInfo(result),
       aiAnswer: result.text,
+      ...(decision.success ? { reason: decision.data.reason } : {}),
+      ...(keywordPath ? { keywordGuess: keywordPath.label } : {}),
     });
     return continueAfter(turn, node, path.handle);
   } catch (error) {
@@ -272,6 +365,35 @@ async function decideBranch(turn: Turn, node: BranchNode): Promise<TurnResult> {
     });
     return waiting(turn, node.id, "path");
   }
+}
+
+const BranchDecisionSchema = z.object({ path: z.number().int().min(0), reason: z.string() });
+
+function safeJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+function hasKeywords(node: BranchNode): boolean {
+  return node.data.conditions.some((condition) => condition.keywords.trim() !== "");
+}
+
+/** The first path with a keyword that appears as a whole word in what the caller said. */
+function matchKeywords(node: BranchNode, text: string) {
+  const said = text.toLowerCase();
+  const index = node.data.conditions.findIndex((condition) =>
+    condition.keywords
+      .split(",")
+      .map((word) => word.trim().toLowerCase())
+      .filter(Boolean)
+      .some((word) =>
+        new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(said),
+      ),
+  );
+  return index >= 0 ? branchPaths(node)[index] : undefined;
 }
 
 async function writeAiResponse(turn: Turn, node: Extract<FlowNode, { type: "aiResponse" }>) {
@@ -338,9 +460,10 @@ function waiting(
   turn: Turn,
   nodeId: string,
   waitingFor: NonNullable<ConversationState["waitingFor"]>,
+  retries = 0,
 ): TurnResult {
   return {
-    state: { nodeId, waitingFor, variables: turn.variables, transcript: turn.transcript },
+    state: { nodeId, waitingFor, variables: turn.variables, transcript: turn.transcript, retries },
     events: turn.events,
   };
 }
@@ -352,6 +475,7 @@ function finished(turn: Turn): TurnResult {
       waitingFor: null,
       variables: turn.variables,
       transcript: turn.transcript,
+      retries: 0,
     },
     events: turn.events,
   };

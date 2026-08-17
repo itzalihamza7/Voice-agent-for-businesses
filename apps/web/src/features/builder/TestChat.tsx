@@ -269,8 +269,32 @@ function toMessages(event: ConversationEvent): Message[] {
       return [{ kind: "agent", text: event.text }];
     case "ask":
       return [{ kind: "agent", text: event.question }];
-    case "answer":
-      return [note(`Saved ${event.variable} = "${event.value}"`, "data")];
+    case "answer": {
+      const how = {
+        text: "",
+        rules: " (understood by rules)",
+        ai: " (understood by AI)",
+        gaveUp: " (not understood after 2 tries: kept as said)",
+      }[event.by];
+      return [
+        {
+          kind: "note",
+          tone: event.by === "gaveUp" ? "error" : "data",
+          text: `Saved ${event.variable} = "${event.value}"${how}`,
+          ...(event.llm ? { llm: event.llm } : {}),
+        },
+      ];
+    }
+    case "reask":
+      return [
+        {
+          kind: "note",
+          tone: "error",
+          text: `Not understood: ${event.reason}`,
+          ...(event.llm ? { llm: event.llm } : {}),
+        },
+        { kind: "agent", text: event.question },
+      ];
     case "aiResponse":
       return event.text !== null
         ? [{ kind: "agent", text: event.text, ...(event.llm ? { llm: event.llm } : {}) }]
@@ -285,17 +309,23 @@ function toMessages(event: ConversationEvent): Message[] {
       return [note(`Knowledge lookup: "${event.query}" (knowledge base comes in phase 6)`)];
     case "branch":
       return [];
-    case "pathChosen":
-      return event.by === "ai"
-        ? [
-            {
-              kind: "note",
-              tone: "info",
-              text: `→ AI chose: ${event.label} (answered "${event.aiAnswer ?? ""}")`,
-              ...(event.llm ? { llm: event.llm } : {}),
-            },
-          ]
-        : [note(`→ ${event.label}`)];
+    case "pathChosen": {
+      if (event.by === "you") return [note(`→ ${event.label}`)];
+      if (event.by === "keywords") return [note(`→ Keywords chose: ${event.label}`)];
+      const reason = event.reason ? ` Reason: "${event.reason.trim()}"` : "";
+      const keywords =
+        event.keywordGuess !== undefined
+          ? ` Keywords would have chosen: ${event.keywordGuess}${event.keywordGuess === event.label ? " (same)" : ""}.`
+          : "";
+      return [
+        {
+          kind: "note",
+          tone: "info",
+          text: `→ AI chose: ${event.label}.${reason}${keywords}`,
+          ...(event.llm ? { llm: event.llm } : {}),
+        },
+      ];
+    }
     case "note":
       return [note(event.message)];
     case "llmError":

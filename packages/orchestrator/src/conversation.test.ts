@@ -2,6 +2,7 @@ import type { ChatMessage, CompletionResult, LanguageModelProvider } from "@voic
 import { LanguageModelError } from "@voice-agent/pipeline";
 import {
   DEFAULT_PROMPT_SETTINGS,
+  FlowNodeSchema,
   type AgentFlow,
   type ConversationState,
   type FlowNode,
@@ -11,8 +12,9 @@ import { ConversationError, runTurn } from "./conversation";
 import { parseBranchAnswer } from "./prompts";
 
 const at = { x: 0, y: 0 };
+// Through the schema, like real flows, so defaults (e.g. answerType, keywords) are filled in.
 function node(id: string, type: FlowNode["type"], data: object): FlowNode {
-  return { id, type, position: at, data } as FlowNode;
+  return FlowNodeSchema.parse({ id, type, position: at, data });
 }
 
 // Start → greet → intent (book? / otherwise) ; book: ask name → check tool → slot (free? / otherwise)
@@ -324,9 +326,120 @@ describe("runTurn prompt settings", () => {
   });
 });
 
+describe("runTurn structured answers and decisions", () => {
+  const phoneFlow: AgentFlow = {
+    nodes: [
+      node("start", "start", {}),
+      node("ask-phone", "ask", {
+        question: "Your number?",
+        variable: "phone",
+        answerType: "phone",
+      }),
+      node("bye", "end", { message: "We'll text {{phone}}." }),
+    ],
+    edges: [
+      { id: "e1", source: "start", target: "ask-phone" },
+      { id: "e2", source: "ask-phone", target: "bye" },
+    ],
+  };
+
+  it("saves a clean value, re-asks when the answer isn't understood, and gives up after 2 tries", async () => {
+    const first = await runTurn(phoneFlow, null, { type: "start" }, noAi);
+    const clean = await runTurn(
+      phoneFlow,
+      first.state,
+      { type: "reply", text: "0300 123 4567" },
+      noAi,
+    );
+    expect(clean.events[0]).toMatchObject({ type: "answer", value: "03001234567", by: "rules" });
+    expect(clean.events.at(-1)).toMatchObject({ type: "end", message: "We'll text 03001234567." });
+
+    const again1 = await runTurn(
+      phoneFlow,
+      first.state,
+      { type: "reply", text: "the usual" },
+      noAi,
+    );
+    expect(again1.events[0]).toMatchObject({
+      type: "reask",
+      question: "Sorry, I didn't quite catch that. Your number?",
+    });
+    expect(again1.state).toMatchObject({ nodeId: "ask-phone", waitingFor: "answer", retries: 1 });
+    const again2 = await runTurn(phoneFlow, again1.state, { type: "reply", text: "dunno" }, noAi);
+    expect(again2.state.retries).toBe(2);
+    const gaveUp = await runTurn(
+      phoneFlow,
+      again2.state,
+      { type: "reply", text: "whatever" },
+      noAi,
+    );
+    expect(gaveUp.events[0]).toMatchObject({ type: "answer", value: "whatever", by: "gaveUp" });
+    expect(gaveUp.state).toMatchObject({ nodeId: null, retries: 0 });
+  });
+
+  const keywordFlow: AgentFlow = {
+    nodes: [
+      node("start", "start", {}),
+      node("hi", "say", { text: "How can I help?" }),
+      node("intent", "branch", {
+        conditions: [
+          { id: "c-book", label: "Wants to book", keywords: "book, appointment" },
+          { id: "c-cancel", label: "Wants to cancel", keywords: "cancel" },
+        ],
+      }),
+      node("booking", "end", { message: "Booking" }),
+      node("cancelling", "end", { message: "Cancelling" }),
+      node("other", "end", { message: "Other" }),
+    ],
+    edges: [
+      { id: "e1", source: "start", target: "hi" },
+      { id: "e2", source: "hi", target: "intent" },
+      { id: "e3", source: "intent", target: "booking", sourceHandle: "c-book" },
+      { id: "e4", source: "intent", target: "cancelling", sourceHandle: "c-cancel" },
+      { id: "e5", source: "intent", target: "other", sourceHandle: "else" },
+    ],
+  };
+
+  it("routes with keywords when there is no AI", async () => {
+    const first = await runTurn(keywordFlow, null, { type: "start" }, noAi);
+    expect(first.state.waitingFor).toBe("callerMessage");
+    const cases: [string, string][] = [
+      ["I'd like an Appointment please", "Booking"],
+      ["Please cancel it", "Cancelling"],
+      ["I want to rebook", "Other"], // "book" only as a whole word
+    ];
+    for (const [said, ending] of cases) {
+      const result = await runTurn(keywordFlow, first.state, { type: "reply", text: said }, noAi);
+      expect(result.events.at(-1)).toMatchObject({ type: "end", message: ending });
+    }
+  });
+
+  it("lets the AI decide with structured output, and shows what keywords would have chosen", async () => {
+    const { llm, prompts } = scriptedLlm([
+      JSON.stringify({ path: 2, reason: "they want to call off the visit" }),
+    ]);
+    const deps = { decisions: llm, replies: null };
+    const first = await runTurn(keywordFlow, null, { type: "start" }, deps);
+    const result = await runTurn(
+      keywordFlow,
+      first.state,
+      { type: "reply", text: "I can't make it on Friday any more" },
+      deps,
+    );
+    expect(result.events[0]).toMatchObject({
+      type: "pathChosen",
+      label: "Wants to cancel",
+      by: "ai",
+      reason: "they want to call off the visit",
+      keywordGuess: "Otherwise",
+    });
+    expect(prompts[0]![0]!.content).toContain('first "reason"');
+  });
+});
+
 describe("runTurn errors", () => {
   it("rejects actions that don't fit the current step", async () => {
-    const base = { variables: {}, transcript: [] };
+    const base = { variables: {}, transcript: [], retries: 0 };
     const atBranch: ConversationState = { ...base, nodeId: "intent", waitingFor: "path" };
     const atAsk: ConversationState = { ...base, nodeId: "ask-name", waitingFor: "answer" };
     const over: ConversationState = { ...base, nodeId: null, waitingFor: null };

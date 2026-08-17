@@ -23,6 +23,8 @@ export const ConversationStateSchema = z.object({
   variables: z.record(z.string(), z.string()),
   // Everything said so far. The AI reads it to choose paths and write replies.
   transcript: z.array(TranscriptEntrySchema).max(1000),
+  // How many times the current Ask step has re-asked because the answer wasn't understood.
+  retries: z.number().int().min(0).default(0),
 });
 
 export const ConversationActionSchema = z.discriminatedUnion("type", [
@@ -98,7 +100,20 @@ export interface LlmCallInfo {
 export type ConversationEvent =
   | { type: "say"; nodeId: string; text: string }
   | { type: "ask"; nodeId: string; question: string; variable: string }
-  | { type: "answer"; nodeId: string; variable: string; value: string }
+  | {
+      type: "answer";
+      nodeId: string;
+      variable: string;
+      /** The clean value that was saved, e.g. "2026-10-23". */
+      value: string;
+      /** What the caller actually said. */
+      raw: string;
+      /** "text" = saved as said, "rules" = plain code, "ai" = language model, "gaveUp" = not understood. */
+      by: "text" | "rules" | "ai" | "gaveUp";
+      llm?: LlmCallInfo;
+    }
+  // The answer to an Ask step wasn't understood, so the agent asks again.
+  | { type: "reask"; nodeId: string; question: string; reason: string; llm?: LlmCallInfo }
   // text is null when running without AI.
   | {
       type: "aiResponse";
@@ -114,10 +129,14 @@ export type ConversationEvent =
       type: "pathChosen";
       nodeId: string;
       label: string;
-      by: "you" | "ai";
+      /** "you" = picked by hand, "ai" = language model, "keywords" = keyword rules. */
+      by: "you" | "ai" | "keywords";
       llm?: LlmCallInfo;
-      // The AI's raw answer, to see how it decided.
+      // The AI's raw answer and its short explanation, to see how it decided.
       aiAnswer?: string;
+      reason?: string;
+      /** What the keyword rules would have chosen, for comparison with the AI. */
+      keywordGuess?: string;
     }
   // Explanations for the person testing, e.g. why a path has to be picked by hand.
   | { type: "note"; nodeId: string; message: string }

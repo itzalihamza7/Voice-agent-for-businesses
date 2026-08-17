@@ -4,7 +4,7 @@ import { buildSystemPrompt, type PromptSettings, type TranscriptEntry } from "@v
 // The prompts the conversation engine sends to the language model. Kept in one file so they
 // are easy to read and change. (Roadmap phase 3, the prompt studio, makes them editable per agent.)
 
-/** Asks the model which Branch path fits. It must answer with a number only. */
+/** Asks the model which Branch path fits. It answers with JSON: a path number and a reason. */
 export function branchDecisionPrompt(
   paths: { label: string }[],
   transcript: TranscriptEntry[],
@@ -22,11 +22,31 @@ export function branchDecisionPrompt(
         options,
         "0. None of these paths fit",
         "",
-        "Answer with the number of the best path and nothing else.",
+        'Answer with JSON: first "reason", a short explanation of what the caller wants, then',
+        '"path", the number of the path that fits that reason.',
       ].join("\n"),
     },
     { role: "user", content: formatTranscript(transcript) },
   ];
+}
+
+/** Structured output for Branch decisions: the path number must be one of the offered ones. */
+export function branchDecisionSchema(pathCount: number) {
+  return {
+    name: "branch_decision",
+    schema: {
+      type: "object",
+      additionalProperties: false,
+      // "reason" comes first on purpose: models write JSON in order, so the model explains
+      // before it commits to a path. With "path" first, the reason was written after the
+      // decision and sometimes contradicted it.
+      required: ["reason", "path"],
+      properties: {
+        reason: { type: "string" },
+        path: { type: "integer", enum: Array.from({ length: pathCount + 1 }, (_, i) => i) },
+      },
+    },
+  };
 }
 
 /**
