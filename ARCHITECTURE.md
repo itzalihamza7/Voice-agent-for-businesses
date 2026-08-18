@@ -201,6 +201,35 @@ With no edits, A and B show how much replies vary on their own.
 **Older versions** (saved before prompt settings existed) get the default settings when read:
 `AgentConfigSchema` fills them in, so no data migration was needed.
 
+## How answers and decisions are understood (structured outputs)
+
+The guiding principle: **the AI understands, the code calculates and checks.**
+
+**Ask steps** have an expected answer type: text, name, phone, email, date, time, number or
+yes/no (`packages/orchestrator/src/extraction.ts`):
+
+1. **Plain rules first** (phone, email, number, yes/no, and spoken digits like "oh three
+   hundred" → 0300). Free, instant, predictable.
+2. Otherwise the language model returns a small **JSON object matching a JSON Schema**
+   (structured output, `response_format: json_schema`). For dates it only _classifies_ what
+   was said (`{ kind: "weekday", weekday: "friday" }`); **code computes the actual date**.
+3. **Every value is validated in code.** Invalid JSON gets one retry with the error message.
+   Model claims are checked against the caller's words (e.g. "am"/"pm" only counts if the caller
+   said am, pm, morning, ...).
+4. Still not understood → the agent asks again (up to 2 times), then keeps the answer as said.
+
+Dates and times also save a spoken version (`{{preferred_date_spoken}}` = "Friday, October 23").
+The decisions model does this work: it is the one meant for short, exact jobs.
+
+**Branch decisions** come back as JSON `{ "reason": ..., "path": n }` with `path` limited to the
+offered numbers. **`reason` comes first on purpose**: models write JSON in order, so the model
+explains before it commits. With `path` first, gpt-4.1-nano once wrote "the caller asked about
+services" as the reason for choosing the change/cancel path.
+
+**Keywords** (optional, per Branch path) route calls without AI and are shown next to the AI's
+choice for comparison. They are a baseline: "I need to move my _appointment_" matches a
+booking keyword.
+
 ## How a test call works
 
 The builder's **Test** button opens a chat where you play the caller. It lets you check a flow's

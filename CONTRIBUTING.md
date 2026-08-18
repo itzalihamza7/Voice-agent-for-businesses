@@ -32,6 +32,8 @@ Before saying a task is done: `test`, `test:db`, `lint` and `build` must all pas
 DDEV syncs files with Mutagen: if the container doesn't see a change yet, run `ddev mutagen sync`.
 If the dev server reports a new export from a workspace package as `undefined`, its module cache is
 stale: run `ddev restart`.
+Right after code changes sync in, open pages reload (several times for server code): wait for it to
+settle before testing in the browser.
 
 ## Layout
 
@@ -89,6 +91,11 @@ stale: run `ddev restart`.
   `builtInVariables()`. Platform rules (`PLATFORM_RULES`) are not user-editable on purpose.
 - Fields added to `AgentConfig` after versions exist need a Zod `.default(...)` so older stored
   versions still parse (as done for `prompt`).
+- "The AI understands, the code calculates and checks": ask models for structured JSON
+  (`jsonSchema` option), never trust the content without validating it in code, and do maths
+  (dates, times) in code. Put a `reason` field before the decision field in JSON schemas.
+- Prompt changes are measured, not guessed: run the same cases against Ollama and OpenAI models
+  before and after a change (see the findings in docs/ROADMAP.md).
 - Unit tests never call a real language model: use a scripted fake (see `conversation.test.ts`).
   Model behaviour is checked by hand or with live runs against both Ollama and OpenAI.
 - Pinned on purpose: TypeScript 6.0 (typescript-eslint does not support 7 yet), ESLint 9

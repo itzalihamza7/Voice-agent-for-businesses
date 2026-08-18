@@ -41,25 +41,25 @@ feature support when building each phase. It changes often.
 
 ## Phases
 
-| #   | Phase                           | Concepts                                                                       | %   | Status  |
-| --- | ------------------------------- | ------------------------------------------------------------------------------ | --- | ------- |
-| 0   | Boilerplate                     | Monorepo, provider interfaces, mocks, DDEV                                     | 10  | ✅ Done |
-| 1   | Data foundation                 | Prisma models, Postgres config store, real API routes                          | 4   | ✅ Done |
-| 2   | Agent builder MVP               | React Flow canvas, typed node settings, versions                               | 9   | ✅ Done |
-| 3   | Prompt engineering studio       | System prompts, templates, few-shot, voice style, playground                   | 6   | ✅ Done |
-| 4   | LLM harness + text simulator    | Retries, timeouts, fallback, model routing, thinking control, cost, test chat  | 8   | ✅ Done |
-| 5   | Structured outputs & tools      | JSON schema output, intents, function calling, agentic loop, MCP               | 6   |         |
-| 6   | RAG knowledge base              | Ingestion, chunking, embeddings, pgvector, hybrid search, reranking, citations | 9   |         |
-| 7   | Memory & context                | Context budgets, rolling summaries, long-term caller memory                    | 3   |         |
-| 8   | Evals                           | Golden sets, simulated callers, LLM-as-judge, RAG metrics, regression gate     | 7   |         |
-| 9   | Guardrails & safety             | Prompt injection, PII redaction, output checks, grounding, escalation          | 5   |         |
-| 10  | Voice in the browser            | Streaming STT → LLM → TTS, VAD, barge-in, latency budgets, LLM token streaming | 8   |         |
-| 11  | Phone calls                     | Twilio media streams, routing, human transfer                                  | 5   |         |
-| 12  | Dashboard & LLM analytics       | Stored LLM traces, summaries, sentiment, topic clustering, failure analysis    | 6   |         |
-| 13  | Multi-agent & AI flow generator | Router + specialists, handoffs, reasoning, LLM-generated flows                 | 4   |         |
-| 14  | Rollback & A/B experiments      | Rollback, traffic splits, comparing versions                                   | 3   |         |
-| 15  | Businesses & auth               | Login, roles, tenant isolation, encrypted vendor keys                          | 3   |         |
-| 16  | Production hardening            | CI, Playwright, deploy, error tracking, rate limits, cost per call             | 4   |         |
+| #   | Phase                           | Concepts                                                                       | %   | Status                               |
+| --- | ------------------------------- | ------------------------------------------------------------------------------ | --- | ------------------------------------ |
+| 0   | Boilerplate                     | Monorepo, provider interfaces, mocks, DDEV                                     | 10  | ✅ Done                              |
+| 1   | Data foundation                 | Prisma models, Postgres config store, real API routes                          | 4   | ✅ Done                              |
+| 2   | Agent builder MVP               | React Flow canvas, typed node settings, versions                               | 9   | ✅ Done                              |
+| 3   | Prompt engineering studio       | System prompts, templates, few-shot, voice style, playground                   | 6   | ✅ Done                              |
+| 4   | LLM harness + text simulator    | Retries, timeouts, fallback, model routing, thinking control, cost, test chat  | 8   | ✅ Done                              |
+| 5   | Structured outputs & tools      | JSON schema output, intents, function calling, agentic loop, MCP               | 6   | In progress: structured outputs done |
+| 6   | RAG knowledge base              | Ingestion, chunking, embeddings, pgvector, hybrid search, reranking, citations | 9   |                                      |
+| 7   | Memory & context                | Context budgets, rolling summaries, long-term caller memory                    | 3   |                                      |
+| 8   | Evals                           | Golden sets, simulated callers, LLM-as-judge, RAG metrics, regression gate     | 7   |                                      |
+| 9   | Guardrails & safety             | Prompt injection, PII redaction, output checks, grounding, escalation          | 5   |                                      |
+| 10  | Voice in the browser            | Streaming STT → LLM → TTS, VAD, barge-in, latency budgets, LLM token streaming | 8   |                                      |
+| 11  | Phone calls                     | Twilio media streams, routing, human transfer                                  | 5   |                                      |
+| 12  | Dashboard & LLM analytics       | Stored LLM traces, summaries, sentiment, topic clustering, failure analysis    | 6   |                                      |
+| 13  | Multi-agent & AI flow generator | Router + specialists, handoffs, reasoning, LLM-generated flows                 | 4   |                                      |
+| 14  | Rollback & A/B experiments      | Rollback, traffic splits, comparing versions                                   | 3   |                                      |
+| 15  | Businesses & auth               | Login, roles, tenant isolation, encrypted vendor keys                          | 3   |                                      |
+| 16  | Production hardening            | CI, Playwright, deploy, error tracking, rate limits, cost per call             | 4   |                                      |
 
 ## Phase details
 
@@ -121,10 +121,32 @@ feature support when building each phase. It changes often.
 
 ### 5. Structured outputs & tools
 
-- Ask node extracts fields as Zod-validated JSON and re-asks when the answer is invalid.
-- Intent classification drives Branch nodes (compared against keyword rules).
+- ✅ Ask steps have an answer type (name, phone, email, date, time, number, yes/no): rules
+  first, then the model's JSON (structured output), validated in code; re-ask up to 2 times.
+- ✅ Branch decisions as JSON `{ reason, path }`; keyword rules as a baseline for comparison.
 - Built-in mock tools, webhook tools (URL + JSON schema), agentic loop with iteration limits.
 - MCP client: use tools from any MCP server.
+
+  **Findings: extracting answers** (9 realistic spoken answers, see `live` scripts):
+
+  |                                                       | qwen3:8b | llama3.1:8b | gpt-4.1-nano |
+  | ----------------------------------------------------- | -------- | ----------- | ------------ |
+  | First version of the instructions                     | 6/9      | 8/9         | 6/9          |
+  | After rewriting instructions from the failures        | 8/9      | 8/9         | 8/9          |
+  | Plus code-side checks (spoken digits, verified am/pm) | **9/9**  | **9/9**     | **9/9**      |
+  - A JSON schema guarantees the _shape_, not the _content_: asked for `YYYY-MM-DD`, qwen
+    returned "next Friday" and Llama "October 23, 2026".
+  - Dates: models calculating dates themselves got 1/4 right (a calendar in the prompt that
+    didn't mark "today" made it worse); models only classifying, with code computing: 6/6.
+  - Small models added a "+1" country code nobody said, and invented "am" for "half past three".
+  - An example in the prompt ("ali at gmail dot com") made gpt-4.1-nano drop the dot in
+    "ali dot hamza": examples teach patterns, including the wrong ones.
+
+  **Findings: Branch decisions** (5 callers, booking agent):
+
+  | Keywords only | qwen3:8b | gpt-4.1-nano (path before reason) | gpt-4.1-nano (reason before path) |
+  | ------------- | -------- | --------------------------------- | --------------------------------- |
+  | 2/5           | 5/5      | 4/5                               | 5/5 (three runs)                  |
 
 ### 6. RAG knowledge base
 
