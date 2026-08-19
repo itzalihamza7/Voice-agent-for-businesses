@@ -108,7 +108,9 @@ describe("validateFlow", () => {
       id: "b",
       type: "branch",
       position: at,
-      data: { conditions: [{ id: "c1", label: "Wants to book", keywords: "" }] },
+      data: {
+        conditions: [{ id: "c1", label: "Wants to book", keywords: "", variable: "", equals: "" }],
+      },
     };
     const connected = {
       nodes: [start, branch, end],
@@ -144,6 +146,34 @@ describe("validateFlow", () => {
     };
     expect(messages(flow)).toEqual([
       "g: {{caller_nam}} isn't a known variable: check the spelling, or add an Ask step that saves it.",
+    ]);
+  });
+
+  it("checks that Branch rules use known variables (including tool results)", () => {
+    const tool: FlowNode = {
+      id: "t",
+      type: "tool",
+      position: at,
+      data: { toolName: "x", arguments: {}, saveAs: "slot" },
+    };
+    const rule = (variable: string): FlowNode => ({
+      id: "b",
+      type: "branch",
+      position: at,
+      data: { conditions: [{ id: "c1", label: "Free", keywords: "", variable, equals: "true" }] },
+    });
+    const flowWith = (variable: string) => ({
+      nodes: [start, tool, rule(variable), end],
+      edges: [
+        edge("start", "t"),
+        edge("t", "b"),
+        edge("b", "end", "c1"),
+        edge("b", "end", BRANCH_ELSE_HANDLE),
+      ],
+    });
+    expect(validateFlow(flowWith("slot_requestedTimeFree"))).toEqual([]);
+    expect(messages(flowWith("slott_free"))).toEqual([
+      'b: Branch rule: "slott_free" isn\'t a known variable.',
     ]);
   });
 });

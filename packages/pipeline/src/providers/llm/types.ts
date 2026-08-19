@@ -3,9 +3,24 @@
 // fallback.ts (tries a backup model when the main one fails).
 // Streaming tokens (roadmap phase 10) and tool calls (phase 5) will be added here later.
 
-export interface ChatMessage {
-  role: "system" | "user" | "assistant";
-  content: string;
+/** A function the model asked to call. `arguments` is a JSON string, as the model wrote it. */
+export interface ToolCall {
+  id: string;
+  name: string;
+  arguments: string;
+}
+
+export type ChatMessage =
+  | { role: "system" | "user"; content: string }
+  // toolCalls: the assistant asked for these tools (their results follow as "tool" messages).
+  | { role: "assistant"; content: string; toolCalls?: ToolCall[] }
+  | { role: "tool"; toolCallId: string; content: string };
+
+/** A tool the model may call: name, what it does, and a JSON Schema for its arguments. */
+export interface ToolSpec {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
 }
 
 export interface CompletionOptions {
@@ -16,6 +31,10 @@ export interface CompletionOptions {
    * guarantees the shape, not the content (formats, dates, ...): always validate the result.
    */
   jsonSchema?: { name: string; schema: Record<string, unknown> };
+  /** Tools the model may call. Its reply then has toolCalls instead of (or with) text. */
+  tools?: ToolSpec[];
+  /** "auto" = the model decides, "none" = answer in text, { name } = must call that tool. */
+  toolChoice?: "auto" | "none" | { name: string };
 }
 
 export interface TokenUsage {
@@ -37,6 +56,8 @@ export interface CompletionResult {
   costUsd: number | null;
   /** Set when the main model failed and a fallback model answered instead. */
   fellBackFrom?: { model: string; error: string };
+  /** Tools the model wants called. Run them and send the results back as "tool" messages. */
+  toolCalls?: ToolCall[];
 }
 
 export interface LanguageModelProvider {

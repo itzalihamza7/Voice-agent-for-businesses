@@ -20,6 +20,11 @@ export const BranchConditionSchema = z.object({
   // Optional comma-separated words, e.g. "book, appointment". Used to choose the path without
   // AI, and shown next to the AI's choice for comparison. Older flows default to none.
   keywords: z.string().default(""),
+  // Optional rule, checked in code before any AI: take this path when {{variable}} equals the
+  // value (case-insensitive), e.g. availability_requestedTimeFree = true. Best for tool results:
+  // true/false decisions shouldn't depend on a language model reading JSON correctly.
+  variable: z.string().default(""),
+  equals: z.string().default(""),
 });
 
 // What kind of answer an Ask step expects. Anything but "text" is turned into a clean value
@@ -53,11 +58,27 @@ export const FlowNodeSchema = z.discriminatedUnion("type", [
     }),
   ),
   // The LLM writes the reply, guided by these instructions (prompt studio: roadmap phase 3).
-  nodeSchema("aiResponse", z.object({ instructions: z.string() })),
+  nodeSchema(
+    "aiResponse",
+    z.object({
+      instructions: z.string(),
+      // Tools the AI may call (in a loop) before it answers, e.g. checkAvailability.
+      tools: z.array(z.string()).default([]),
+    }),
+  ),
   // Picks one outgoing path. Each condition has its own output, plus an "else" output.
   nodeSchema("branch", z.object({ conditions: z.array(BranchConditionSchema) })),
-  // Calls a tool, e.g. lookupOrder (tools: roadmap phase 5).
-  nodeSchema("tool", z.object({ toolName: z.string() })),
+  // Calls a tool, e.g. checkAvailability. Arguments are templates such as "{{preferred_date}}";
+  // arguments left empty are filled in by the AI from the conversation (function calling).
+  // With saveAs set, the result's fields become variables, e.g. {{booking_reference}}.
+  nodeSchema(
+    "tool",
+    z.object({
+      toolName: z.string(),
+      arguments: z.record(z.string(), z.string()).default({}),
+      saveAs: z.string().default(""),
+    }),
+  ),
   // Searches the business's knowledge base (RAG: roadmap phase 6).
   nodeSchema("knowledgeLookup", z.object({ query: z.string() })),
   // Hands the call to a human. Ends the agent's part of the call.

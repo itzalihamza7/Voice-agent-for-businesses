@@ -85,6 +85,60 @@ describe("OpenAICompatibleProvider", () => {
     });
   });
 
+  it("offers tools, sends tool calls and results back, and reads the tool calls in a reply", async () => {
+    const reply = {
+      model: "m",
+      choices: [
+        {
+          message: {
+            content: null,
+            tool_calls: [
+              {
+                id: "c1",
+                function: { name: "checkAvailability", arguments: '{"date":"2026-10-23"}' },
+              },
+            ],
+          },
+        },
+      ],
+    };
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(json(reply));
+    const tool = {
+      name: "checkAvailability",
+      description: "Free times",
+      parameters: { type: "object" },
+    };
+    const result = await provider(fetchMock).complete(
+      [
+        { role: "user", content: "Friday?" },
+        {
+          role: "assistant",
+          content: "",
+          toolCalls: [{ id: "c0", name: "checkAvailability", arguments: "{}" }],
+        },
+        { role: "tool", toolCallId: "c0", content: '{"freeTimes":[]}' },
+      ],
+      { tools: [tool], toolChoice: { name: "checkAvailability" } },
+    );
+
+    expect(result.toolCalls).toEqual([
+      { id: "c1", name: "checkAvailability", arguments: '{"date":"2026-10-23"}' },
+    ]);
+    const body = JSON.parse(String(fetchMock.mock.calls[0]![1]?.body));
+    expect(body.tools).toEqual([{ type: "function", function: tool }]);
+    expect(body.tool_choice).toEqual({ type: "function", function: { name: "checkAvailability" } });
+    expect(body.messages[1].tool_calls[0]).toEqual({
+      id: "c0",
+      type: "function",
+      function: { name: "checkAvailability", arguments: "{}" },
+    });
+    expect(body.messages[2]).toEqual({
+      role: "tool",
+      tool_call_id: "c0",
+      content: '{"freeTimes":[]}',
+    });
+  });
+
   it("sends no authorization header without an API key (Ollama)", async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(json(okBody));
     await provider(fetchMock).complete([{ role: "user", content: "Hi" }]);

@@ -40,21 +40,23 @@ export const NODE_CATALOG: Catalog = {
     label: "AI response",
     description: "The AI writes the reply, following your instructions.",
     accent: "border-violet-500 bg-violet-50",
-    defaultData: () => ({ instructions: "" }),
+    defaultData: () => ({ instructions: "", tools: [] }),
     summary: (data) => data.instructions,
   },
   branch: {
     label: "Branch",
     description: "Choose a path based on what the caller said.",
     accent: "border-amber-500 bg-amber-50",
-    defaultData: () => ({ conditions: [{ id: newId("c"), label: "", keywords: "" }] }),
+    defaultData: () => ({
+      conditions: [{ id: newId("c"), label: "", keywords: "", variable: "", equals: "" }],
+    }),
     summary: (data) => `${data.conditions.length} path(s) + otherwise`,
   },
   tool: {
     label: "Tool",
     description: "Call a tool, e.g. look up an order.",
     accent: "border-orange-500 bg-orange-50",
-    defaultData: () => ({ toolName: "" }),
+    defaultData: () => ({ toolName: "", arguments: {}, saveAs: "" }),
     summary: (data) => data.toolName,
   },
   knowledgeLookup: {

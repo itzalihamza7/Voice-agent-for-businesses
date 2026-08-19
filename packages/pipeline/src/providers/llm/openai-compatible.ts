@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   LanguageModelError,
+  type ToolCall,
   type ChatMessage,
   type CompletionOptions,
   type CompletionResult,
@@ -38,7 +39,23 @@ export interface OpenAICompatibleConfig {
 // Only the parts of the response we use. Anything else the server sends is ignored.
 const ResponseSchema = z.object({
   model: z.string(),
-  choices: z.array(z.object({ message: z.object({ content: z.string().nullable() }) })).min(1),
+  choices: z
+    .array(
+      z.object({
+        message: z.object({
+          content: z.string().nullable(),
+          tool_calls: z
+            .array(
+              z.object({
+                id: z.string(),
+                function: z.object({ name: z.string(), arguments: z.string() }),
+              }),
+            )
+            .nullish(),
+        }),
+      }),
+    )
+    .min(1),
   usage: z
     .object({
       prompt_tokens: z.number(),
@@ -84,7 +101,9 @@ export class OpenAICompatibleProvider implements LanguageModelProvider {
           },
           body: JSON.stringify({
             model,
-            messages,
+            messages: messages.map(toWire),
+            tools: options.tools?.map((tool) => ({ type: "function", function: tool })),
+            tool_choice: toolChoice(options),
             temperature: options.temperature,
             reasoning_effort: reasoningEffort,
             response_format: options.jsonSchema && {
@@ -100,6 +119,11 @@ export class OpenAICompatibleProvider implements LanguageModelProvider {
           if (!parsed.success)
             throw new LanguageModelError(`${this.name}: unexpected response shape`);
           const body = parsed.data;
+          const toolCalls = body.choices[0]?.message.tool_calls?.map((call) => ({
+            id: call.id,
+            name: call.function.name,
+            arguments: call.function.arguments,
+          }));
           const usage: TokenUsage | null = body.usage
             ? {
                 inputTokens: body.usage.prompt_tokens,
@@ -113,6 +137,7 @@ export class OpenAICompatibleProvider implements LanguageModelProvider {
             latencyMs: Math.round(performance.now() - started),
             usage,
             costUsd: this.config.estimateCost?.(usage) ?? null,
+            ...(toolCalls?.length ? { toolCalls } : {}),
           };
         }
 
@@ -137,4 +162,31 @@ export class OpenAICompatibleProvider implements LanguageModelProvider {
       await new Promise((resolve) => setTimeout(resolve, 500 * 2 ** attempt));
     }
   }
+}
+
+/** Our chat messages in the OpenAI wire format (tool calls and tool results included). */
+function toWire(message: ChatMessage) {
+  if (message.role === "tool") {
+    return { role: "tool", tool_call_id: message.toolCallId, content: message.content };
+  }
+  if (message.role === "assistant" && message.toolCalls?.length) {
+    return {
+      role: "assistant",
+      content: message.content,
+      tool_calls: message.toolCalls.map((call: ToolCall) => ({
+        id: call.id,
+        type: "function",
+        function: { name: call.name, arguments: call.arguments },
+      })),
+    };
+  }
+  return { role: message.role, content: message.content };
+}
+
+function toolChoice(options: CompletionOptions) {
+  const choice = options.toolChoice;
+  if (!choice || !options.tools?.length) return undefined;
+  return typeof choice === "string"
+    ? choice
+    : { type: "function", function: { name: choice.name } };
 }

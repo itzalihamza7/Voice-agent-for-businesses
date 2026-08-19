@@ -1,5 +1,5 @@
 import { InMemoryAgentConfigStore } from "@voice-agent/agent-config";
-import { DEFAULT_PROMPT_SETTINGS } from "@voice-agent/shared";
+import { DEFAULT_AGENT_TOOLS, DEFAULT_PROMPT_SETTINGS } from "@voice-agent/shared";
 import { describe, expect, it } from "vitest";
 import { startSession } from "./session";
 
@@ -13,6 +13,7 @@ describe("startSession", () => {
       providers: { stt: "mock", llm: "mock", tts: "mock" },
       flow: { nodes: [], edges: [] },
       prompt: DEFAULT_PROMPT_SETTINGS,
+      tools: DEFAULT_AGENT_TOOLS,
     });
 
     const session = await startSession(store, "agent-1");

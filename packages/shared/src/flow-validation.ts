@@ -73,11 +73,35 @@ function checkVariables(flow: AgentFlow): FlowIssue[] {
       }
     }
   }
-  return flow.nodes.flatMap((node) =>
-    unknownVariables(templateText(node), known).map((name) => ({
-      nodeId: node.id,
-      message: `{{${name}}} isn't a known variable: check the spelling, or add an Ask step that saves it.`,
-    })),
+  // A Tool step with saveAs "booking" provides {{booking_...}} variables (its result's fields).
+  const prefixes = flow.nodes.flatMap((node) =>
+    node.type === "tool" && node.data.saveAs ? [`${node.data.saveAs}_`] : [],
+  );
+  // Branch rules name a variable directly (without braces).
+  const ruleIssues = flow.nodes.flatMap((node) =>
+    node.type === "branch"
+      ? node.data.conditions
+          .filter(
+            (c) =>
+              c.variable &&
+              !known.has(c.variable) &&
+              !prefixes.some((p) => c.variable.startsWith(p)),
+          )
+          .map((c) => ({
+            nodeId: node.id,
+            message: `Branch rule: "${c.variable}" isn't a known variable.`,
+          }))
+      : [],
+  );
+  return ruleIssues.concat(
+    flow.nodes.flatMap((node) =>
+      unknownVariables(templateText(node), known)
+        .filter((name) => !prefixes.some((prefix) => name.startsWith(prefix)))
+        .map((name) => ({
+          nodeId: node.id,
+          message: `{{${name}}} isn't a known variable: check the spelling, or add an Ask step that saves it.`,
+        })),
+    ),
   );
 }
 
@@ -90,6 +114,8 @@ function templateText(node: FlowNode): string {
       return node.data.question;
     case "aiResponse":
       return node.data.instructions;
+    case "tool":
+      return Object.values(node.data.arguments).join(" ");
     case "knowledgeLookup":
       return node.data.query;
     case "transfer":
@@ -134,8 +160,12 @@ function checkSettings(node: FlowNode, askVariables: Map<string, string>): FlowI
       return node.data.conditions.some((c) => !c.label.trim())
         ? issue("Branch: every condition needs a description.")
         : [];
-    case "tool":
-      return node.data.toolName.trim() ? [] : issue("Tool: choose which tool to call.");
+    case "tool": {
+      if (!node.data.toolName.trim()) return issue("Tool: choose which tool to call.");
+      return node.data.saveAs && !VARIABLE_NAME.test(node.data.saveAs)
+        ? issue("Tool: the 'save result as' name must use letters, digits or _.")
+        : [];
+    }
     case "knowledgeLookup":
       return node.data.query.trim() ? [] : issue("Knowledge lookup: describe what to look up.");
     case "transfer":

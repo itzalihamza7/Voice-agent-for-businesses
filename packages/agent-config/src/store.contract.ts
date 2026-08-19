@@ -1,4 +1,8 @@
-import { DEFAULT_PROMPT_SETTINGS, type AgentConfig } from "@voice-agent/shared";
+import {
+  DEFAULT_AGENT_TOOLS,
+  DEFAULT_PROMPT_SETTINGS,
+  type AgentConfig,
+} from "@voice-agent/shared";
 import { describe, expect, it } from "vitest";
 import type { AgentConfigStore } from "./store";
 
@@ -13,6 +17,7 @@ export function draftFor(agentId: string, name = "Support bot"): Omit<AgentConfi
     providers: { stt: "mock", llm: "mock", tts: "mock" },
     flow: { nodes: [], edges: [] },
     prompt: DEFAULT_PROMPT_SETTINGS,
+    tools: DEFAULT_AGENT_TOOLS,
   };
 }
 

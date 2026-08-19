@@ -1,5 +1,6 @@
 import type { AgentConfigStore } from "@voice-agent/agent-config";
 import {
+  DEFAULT_AGENT_TOOLS,
   DEFAULT_PROMPT_SETTINGS,
   type AgentConfig,
   type AgentConfigDraft,
@@ -36,6 +37,7 @@ export function createAgent(
       edges: [],
     },
     prompt: structuredClone(DEFAULT_PROMPT_SETTINGS),
+    tools: structuredClone(DEFAULT_AGENT_TOOLS),
   });
 }
 
