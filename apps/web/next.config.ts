@@ -9,6 +9,7 @@ const nextConfig: NextConfig = {
     "@voice-agent/orchestrator",
     "@voice-agent/pipeline",
     "@voice-agent/shared",
+    "@voice-agent/tools",
   ],
   // Allow the dev server (hot reload) to be opened through the DDEV URL.
   allowedDevOrigins: ["*.ddev.site"],

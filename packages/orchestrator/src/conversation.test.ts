@@ -7,6 +7,7 @@ import {
   type ConversationState,
   type FlowNode,
 } from "@voice-agent/shared";
+import type { Tool } from "@voice-agent/tools";
 import { describe, expect, it } from "vitest";
 import { ConversationError, runTurn } from "./conversation";
 import { parseBranchAnswer } from "./prompts";
@@ -71,9 +72,24 @@ function scriptedLlm(answers: (string | Error)[]) {
 
 const noAi = { decisions: null, replies: null };
 
+/** A fake checkAvailability tool that always says the time is free. */
+const tools = new Map<string, Tool>([
+  [
+    "checkAvailability",
+    {
+      name: "checkAvailability",
+      description: "Free times",
+      parameters: { type: "object", properties: {} },
+      source: "builtin",
+      execute: async () => ({ ok: true, data: { free: true } }),
+    },
+  ],
+]);
+
 describe("runTurn without AI", () => {
   it("runs the booking path, with Branch paths picked by hand", async () => {
-    const first = await runTurn(flow, null, { type: "start" }, noAi);
+    const deps = { ...noAi, tools };
+    const first = await runTurn(flow, null, { type: "start" }, deps);
     expect(first.events.map((e) => e.type)).toEqual(["say", "branch"]);
     expect(first.state).toMatchObject({ nodeId: "intent", waitingFor: "path" });
 
@@ -81,18 +97,25 @@ describe("runTurn without AI", () => {
       flow,
       first.state,
       { type: "choosePath", handle: "c-book", callerText: "I want to book" },
-      noAi,
+      deps,
     );
     expect(second.events).toEqual([
       { type: "pathChosen", nodeId: "intent", label: "Wants to book", by: "you" },
       { type: "ask", nodeId: "ask-name", question: "Your name?", variable: "caller_name" },
     ]);
-    expect(second.state.waitingFor).toBe("answer");
 
-    const third = await runTurn(flow, second.state, { type: "reply", text: "Ali" }, noAi);
-    expect(third.events.map((e) => e.type)).toEqual(["answer", "tool", "branch"]);
+    // The tool runs; without AI, the Branch after it is picked by hand.
+    const third = await runTurn(flow, second.state, { type: "reply", text: "Ali" }, deps);
+    expect(third.events.map((e) => e.type)).toEqual(["answer", "toolCall", "branch"]);
+    expect(third.events[1]).toMatchObject({
+      toolName: "checkAvailability",
+      by: "step",
+      ok: true,
+      result: { free: true },
+    });
+    expect(third.state.waitingFor).toBe("path");
 
-    const fourth = await runTurn(flow, third.state, { type: "choosePath", handle: "c-free" }, noAi);
+    const fourth = await runTurn(flow, third.state, { type: "choosePath", handle: "c-free" }, deps);
     expect(fourth.events.slice(1)).toEqual([
       { type: "say", nodeId: "confirm", text: "Booked for Ali." },
       { type: "end", nodeId: "bye", message: "Bye Ali!" },
@@ -107,7 +130,7 @@ describe("runTurn without AI", () => {
       "caller: I want to book",
       "agent: Your name?",
       "caller: Ali",
-      "system: The tool \"checkAvailability\" was called but returned NO RESULT (tools aren't connected yet). Nothing it would have returned is known, so don't state any of it.",
+      'system: The tool "checkAvailability" was called with {} and returned: {"free":true}',
       "agent: Booked for Ali.",
       "agent: Bye Ali!",
     ]);
@@ -163,7 +186,7 @@ describe("runTurn with AI", () => {
     });
     expect(second.state.nodeId).toBe("ask-name");
     // The AI saw the paths and the caller's words.
-    expect(prompts[0]![0]!.content).toContain("1. Wants to book");
+    expect(prompts[0]![0]!.content).toContain("- Wants to book");
     expect(prompts[0]![1]!.content).toContain("Caller: I'd like an appointment");
   });
 
@@ -182,49 +205,41 @@ describe("runTurn with AI", () => {
     }
   });
 
-  it("asks for a hand-picked path after a Tool, because tool results don't exist yet", async () => {
-    const { llm } = scriptedLlm(["1"]);
-    const first = await runTurn(flow, null, { type: "start" }, { decisions: llm, replies: llm });
-    const asked = await runTurn(
-      flow,
-      first.state,
-      { type: "reply", text: "Book please" },
-      { decisions: llm, replies: llm },
+  it("decides a Branch right after a Tool from the tool's result, without waiting for the caller", async () => {
+    const { llm, prompts } = scriptedLlm([
+      "1",
+      JSON.stringify({ reason: "the time is free", path: "Time is free" }),
+    ]);
+    const deps = { decisions: llm, replies: null, tools };
+    const first = await runTurn(flow, null, { type: "start" }, deps);
+    const asked = await runTurn(flow, first.state, { type: "reply", text: "Book please" }, deps);
+    const done = await runTurn(flow, asked.state, { type: "reply", text: "Ali" }, deps);
+    expect(done.events.map((e) => e.type)).toEqual([
+      "answer",
+      "toolCall",
+      "branch",
+      "pathChosen",
+      "say",
+      "end",
+    ]);
+    expect(prompts[1]![1]!.content).toContain(
+      'Note: The tool "checkAvailability" was called with {} and returned: {"free":true}',
     );
-    const atSlot = await runTurn(
-      flow,
-      asked.state,
-      { type: "reply", text: "Ali" },
-      { decisions: llm, replies: llm },
-    );
-    expect(atSlot.state).toMatchObject({ nodeId: "slot", waitingFor: "path" });
-    expect(atSlot.events.at(-1)?.type).toBe("note");
   });
 
   it("writes AI response steps with the language model and adds them to the transcript", async () => {
-    const { llm, prompts } = scriptedLlm(["1", "Sorry, that time is taken. How about Monday?"]);
-    const first = await runTurn(flow, null, { type: "start" }, { decisions: llm, replies: llm });
-    const asked = await runTurn(
-      flow,
-      first.state,
-      { type: "reply", text: "Book please" },
-      { decisions: llm, replies: llm },
-    );
-    const atSlot = await runTurn(
-      flow,
-      asked.state,
-      { type: "reply", text: "Ali" },
-      { decisions: llm, replies: llm },
-    );
-    const result = await runTurn(
-      flow,
-      atSlot.state,
-      { type: "choosePath", handle: "else" },
-      { decisions: llm, replies: llm },
-    );
+    const { llm, prompts } = scriptedLlm([
+      "1",
+      JSON.stringify({ reason: "not free", path: "None of these" }),
+      "Sorry, that time is taken. How about Monday?",
+    ]);
+    const deps = { decisions: llm, replies: llm, tools };
+    const first = await runTurn(flow, null, { type: "start" }, deps);
+    const asked = await runTurn(flow, first.state, { type: "reply", text: "Book please" }, deps);
+    const result = await runTurn(flow, asked.state, { type: "reply", text: "Ali" }, deps);
 
-    expect(result.events[1]).toMatchObject({
-      type: "aiResponse",
+    const reply = result.events.find((e) => e.type === "aiResponse");
+    expect(reply).toMatchObject({
       text: "Sorry, that time is taken. How about Monday?",
       llm: { model: "fake-1" },
     });
@@ -232,11 +247,11 @@ describe("runTurn with AI", () => {
       role: "agent",
       text: "Sorry, that time is taken. How about Monday?",
     });
-    const [system, conversation] = prompts[1]!;
+    const [system, conversation] = prompts[2]!;
     expect(system!.content).toContain("Your task for this step: Offer other times.");
     expect(system!.content).toContain("- caller_name: Ali");
-    // The whole conversation, tool note included, is one transcript in one user message.
-    expect(prompts[1]).toHaveLength(2);
+    // The whole conversation, tool result included, is one transcript in one user message.
+    expect(prompts[2]).toHaveLength(2);
     expect(conversation!.role).toBe("user");
     expect(conversation!.content).toContain("Caller: Ali\nNote: The tool");
   });
@@ -257,16 +272,20 @@ describe("runTurn with AI", () => {
 
 describe("runTurn model routing", () => {
   it("sends Branch decisions and AI replies to their own models", async () => {
-    const decider = scriptedLlm(["1"]);
+    const decider = scriptedLlm([
+      "1",
+      JSON.stringify({ reason: "not free", path: "None of these" }),
+    ]);
     const writer = scriptedLlm(["Sorry, that time is taken."]);
-    const deps = { decisions: decider.llm, replies: writer.llm };
+    const deps = { decisions: decider.llm, replies: writer.llm, tools };
     const first = await runTurn(flow, null, { type: "start" }, deps);
     const asked = await runTurn(flow, first.state, { type: "reply", text: "Book please" }, deps);
-    const atSlot = await runTurn(flow, asked.state, { type: "reply", text: "Ali" }, deps);
-    await runTurn(flow, atSlot.state, { type: "choosePath", handle: "else" }, deps);
+    await runTurn(flow, asked.state, { type: "reply", text: "Ali" }, deps);
 
-    expect(decider.prompts).toHaveLength(1);
-    expect(decider.prompts[0]![0]!.content).toContain("You route a phone call");
+    expect(decider.prompts).toHaveLength(2);
+    expect(decider.prompts.every((p) => p[0]!.content.includes("You route a phone call"))).toBe(
+      true,
+    );
     expect(writer.prompts).toHaveLength(1);
     expect(writer.prompts[0]![0]!.content).toContain("Your task for this step");
   });
@@ -416,7 +435,7 @@ describe("runTurn structured answers and decisions", () => {
 
   it("lets the AI decide with structured output, and shows what keywords would have chosen", async () => {
     const { llm, prompts } = scriptedLlm([
-      JSON.stringify({ path: 2, reason: "they want to call off the visit" }),
+      JSON.stringify({ reason: "they want to call off the visit", path: "Wants to cancel" }),
     ]);
     const deps = { decisions: llm, replies: null };
     const first = await runTurn(keywordFlow, null, { type: "start" }, deps);
@@ -433,7 +452,48 @@ describe("runTurn structured answers and decisions", () => {
       reason: "they want to call off the visit",
       keywordGuess: "Otherwise",
     });
-    expect(prompts[0]![0]!.content).toContain('first "reason"');
+    expect(prompts[0]![0]!.content).toContain("copy the text of the path");
+  });
+});
+
+describe("runTurn Branch rules", () => {
+  const ruleFlow = (conditions: object[]): AgentFlow => ({
+    nodes: [
+      node("start", "start", {}),
+      node("check", "tool", { toolName: "checkAvailability", saveAs: "slot" }),
+      node("decide", "branch", { conditions }),
+      node("yes", "end", { message: "free" }),
+      node("other", "end", { message: "other" }),
+    ],
+    edges: [
+      { id: "e1", source: "start", target: "check" },
+      { id: "e2", source: "check", target: "decide" },
+      { id: "e3", source: "decide", target: "yes", sourceHandle: "c1" },
+      { id: "e4", source: "decide", target: "other", sourceHandle: "else" },
+    ],
+  });
+
+  it("decides in code from a variable rule, without any AI", async () => {
+    const flow = ruleFlow([{ id: "c1", label: "Free", variable: "slot_free", equals: "TRUE" }]);
+    const result = await runTurn(flow, null, { type: "start" }, { ...noAi, tools });
+    expect(result.events.find((e) => e.type === "pathChosen")).toEqual({
+      type: "pathChosen",
+      nodeId: "decide",
+      label: "Free",
+      by: "rule",
+      reason: 'slot_free is "true"',
+    });
+    expect(result.events.at(-1)).toMatchObject({ type: "end", message: "free" });
+  });
+
+  it("takes Otherwise when every path has a rule and none matches", async () => {
+    const flow = ruleFlow([{ id: "c1", label: "Failed", variable: "slot_ok", equals: "false" }]);
+    const result = await runTurn(flow, null, { type: "start" }, { ...noAi, tools });
+    expect(result.events.find((e) => e.type === "pathChosen")).toMatchObject({
+      label: "Otherwise",
+      by: "rule",
+      reason: 'slot_ok is "true"',
+    });
   });
 });
 

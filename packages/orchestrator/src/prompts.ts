@@ -4,46 +4,68 @@ import { buildSystemPrompt, type PromptSettings, type TranscriptEntry } from "@v
 // The prompts the conversation engine sends to the language model. Kept in one file so they
 // are easy to read and change. (Roadmap phase 3, the prompt studio, makes them editable per agent.)
 
-/** Asks the model which Branch path fits. It answers with JSON: a path number and a reason. */
+/** The answer for "no path fits" in Branch decisions. */
+export const NONE_OF_THESE = "None of these";
+
+/**
+ * The texts the model chooses from: the path labels (numbered only if two are the same).
+ * The model copies a label instead of picking a number: in testing, a label was never worse
+ * than a number and fixed cases where a model reasoned "no booking" and then wrote path 1.
+ */
+export function branchChoices(paths: { label: string }[]): string[] {
+  const labels = paths.map((path) => path.label);
+  const unique = new Set(labels).size === labels.length && !labels.includes(NONE_OF_THESE);
+  return unique ? labels : labels.map((label, index) => `${index + 1}. ${label}`);
+}
+
+/** Asks the model which Branch path fits. It answers with JSON: a reason, then the path's text. */
 export function branchDecisionPrompt(
   paths: { label: string }[],
   transcript: TranscriptEntry[],
+  /** A tool result the decision is about (a Branch right after a Tool step). */
+  toolResult?: string,
 ): ChatMessage[] {
-  const options = paths.map((path, index) => `${index + 1}. ${path.label}`).join("\n");
+  const options = [...branchChoices(paths), NONE_OF_THESE]
+    .map((choice) => `- ${choice}`)
+    .join("\n");
   return [
     {
       role: "system",
       content: [
         "You route a phone call that an AI agent is handling.",
         "Read the conversation and decide which path the call should take next,",
-        "based mostly on what the caller said last.",
+        "based on what the caller said last, or on a tool's result if one was just called.",
         "",
         "Paths:",
         options,
-        "0. None of these paths fit",
         "",
         'Answer with JSON: first "reason", a short explanation of what the caller wants, then',
-        '"path", the number of the path that fits that reason.',
+        '"path": copy the text of the path that fits that reason.',
       ].join("\n"),
     },
-    { role: "user", content: formatTranscript(transcript) },
+    {
+      role: "user",
+      content: toolResult
+        ? `${formatTranscript(transcript)}\n\nThis decision is about the result of the tool that was just called. Read its fields carefully (true/false values matter):\n${toolResult}`
+        : formatTranscript(transcript),
+    },
   ];
 }
 
-/** Structured output for Branch decisions: the path number must be one of the offered ones. */
-export function branchDecisionSchema(pathCount: number) {
+/** Structured output for Branch decisions: "path" must be one of the offered texts. */
+export function branchDecisionSchema(paths: { label: string }[]) {
   return {
     name: "branch_decision",
     schema: {
       type: "object",
       additionalProperties: false,
       // "reason" comes first on purpose: models write JSON in order, so the model explains
-      // before it commits to a path. With "path" first, the reason was written after the
+      // before it commits to a path. With the path first, the reason was written after the
       // decision and sometimes contradicted it.
       required: ["reason", "path"],
       properties: {
         reason: { type: "string" },
-        path: { type: "integer", enum: Array.from({ length: pathCount + 1 }, (_, i) => i) },
+        path: { type: "string", enum: [...branchChoices(paths), NONE_OF_THESE] },
       },
     },
   };
@@ -63,9 +85,16 @@ export function aiResponsePrompt(
   instructions: string,
   variables: Readonly<Record<string, string>>,
   transcript: TranscriptEntry[],
+  withTools = false,
 ): ChatMessage[] {
+  const system = buildSystemPrompt(settings, { instructions, variables });
   return [
-    { role: "system", content: buildSystemPrompt(settings, { instructions, variables }) },
+    {
+      role: "system",
+      content: withTools
+        ? `${system}\n\nWhen a tool can give you information you need (such as free times or booking details), call it instead of guessing. Dates are YYYY-MM-DD, times HH:MM (24-hour).`
+        : system,
+    },
     {
       role: "user",
       content: `${formatTranscript(transcript)}\n\nWrite only the agent's next reply.`,
@@ -85,4 +114,29 @@ export function parseBranchAnswer(answer: string, pathCount: number): number | n
   if (!match) return null;
   const number = Number(match[0]);
   return number >= 1 && number <= pathCount ? number : null;
+}
+
+/** Asks the model to fill in a tool's missing arguments from the conversation (function calling). */
+export function toolArgumentsPrompt(
+  tool: { name: string; description: string },
+  given: Record<string, unknown>,
+  variables: Readonly<Record<string, string>>,
+  transcript: TranscriptEntry[],
+): ChatMessage[] {
+  const known = Object.entries(variables).map(([name, value]) => `- ${name}: ${value}`);
+  return [
+    {
+      role: "system",
+      content: [
+        `Call the tool "${tool.name}" (${tool.description}).`,
+        "Fill in its arguments from the conversation and the known values. Prefer the known",
+        "values: they are already checked. Dates are YYYY-MM-DD, times HH:MM (24-hour).",
+        Object.keys(given).length ? `Already set: ${JSON.stringify(given)}` : "",
+        "",
+        "Known values:",
+        ...(known.length ? known : ["- none"]),
+      ].join("\n"),
+    },
+    { role: "user", content: formatTranscript(transcript) },
+  ];
 }

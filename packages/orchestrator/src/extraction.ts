@@ -295,9 +295,13 @@ const SPECS: Record<
       period: { type: "string", enum: ["am", "pm", "none"] },
     },
     toValue: (data, _now, said) => {
+      // "Noon" and "midnight" are exact: code sets them, whatever the model says. (qwen3:8b
+      // turned "12 noon" into 00:00 by claiming "am".)
+      if (/\bnoon\b/i.test(said)) return { value: "12:00", spoken: "12 noon" };
+      if (/\bmidnight\b/i.test(said)) return { value: "00:00", spoken: "midnight" };
       // Small models sometimes claim "am" or "pm" that the caller never said: only trust it
       // when the caller's words support it.
-      const saidPeriod = /\b(a\.?m\.?|p\.?m\.?|morning|afternoon|evening|night|noon)\b/i.test(said);
+      const saidPeriod = /\b(a\.?m\.?|p\.?m\.?|morning|afternoon|evening|night)\b/i.test(said);
       const time = resolveTime(saidPeriod ? data : { ...data, period: "none" });
       return time ?? "hour must be 0-23 and minute 0-59";
     },

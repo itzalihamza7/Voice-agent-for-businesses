@@ -1,4 +1,4 @@
-// POST /api/simulate { flow, state, action, models, prompt }: runs one turn of a test conversation.
+// POST /api/simulate { flow, state, action, models, prompt, tools }: runs one turn of a test call.
 // The browser keeps the state between turns; nothing is stored. Used by the builder's test chat.
 // Language models run here on the server, so API keys never reach the browser.
 import { ConversationError, runTurn } from "@voice-agent/orchestrator";
@@ -10,12 +10,14 @@ import {
 } from "@voice-agent/pipeline";
 import { SimulateRequestSchema, type ModelSpec } from "@voice-agent/shared";
 import { parseJsonBody } from "@/server/http";
+import { loadTools } from "@/server/tools";
 
 export async function POST(request: Request) {
   const parsed = await parseJsonBody(request, SimulateRequestSchema);
   if ("response" in parsed) return parsed.response;
 
-  const { flow, state, action, models, prompt } = parsed.data;
+  const { flow, state, action, models, prompt, tools: toolConfig } = parsed.data;
+  const resolved = await loadTools(toolConfig);
   try {
     const fallback = models.fallback ? createLanguageModel(models.fallback) : null;
     const build = (spec: ModelSpec | null): LanguageModelProvider | null => {
@@ -27,6 +29,7 @@ export async function POST(request: Request) {
       decisions: build(models.decisions),
       replies: build(models.replies),
       ...(prompt ? { prompt } : {}),
+      tools: resolved.tools,
     };
     return Response.json(await runTurn(flow, state, action, deps));
   } catch (error) {
@@ -34,5 +37,8 @@ export async function POST(request: Request) {
       return Response.json({ error: error.message }, { status: 400 });
     }
     throw error;
+  } finally {
+    // Disconnect from MCP servers.
+    await resolved.close();
   }
 }

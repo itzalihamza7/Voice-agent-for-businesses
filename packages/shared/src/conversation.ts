@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { AgentFlowSchema } from "./flow";
 import { PromptSettingsSchema } from "./prompt";
+import { AgentToolsSchema } from "./tools";
 
 // Types for running a conversation through a flow (the test chat today, real calls later).
 // The engine itself lives in @voice-agent/orchestrator.
@@ -61,6 +62,8 @@ export const SimulateRequestSchema = z.object({
   }),
   // The agent's prompt settings, possibly unsaved edits. Defaults when missing.
   prompt: PromptSettingsSchema.optional(),
+  // The agent's webhook tools and MCP servers, possibly unsaved edits.
+  tools: AgentToolsSchema.optional(),
 });
 
 /** Prompt playground: one AI reply with the given prompt settings, to compare two versions. */
@@ -122,15 +125,29 @@ export type ConversationEvent =
       text: string | null;
       llm?: LlmCallInfo;
     }
-  | { type: "tool"; nodeId: string; toolName: string }
+  // A tool was called: by a Tool step, or by the AI during an AI response step.
+  | {
+      type: "toolCall";
+      nodeId: string;
+      toolName: string;
+      by: "step" | "ai";
+      arguments: Record<string, unknown>;
+      /** Arguments the AI filled in because the step left them empty. */
+      filledByAi?: string[];
+      ok: boolean;
+      result?: Record<string, unknown>;
+      error?: string;
+      latencyMs: number;
+      llm?: LlmCallInfo;
+    }
   | { type: "knowledgeLookup"; nodeId: string; query: string }
   | { type: "branch"; nodeId: string; paths: { handle: string; label: string }[] }
   | {
       type: "pathChosen";
       nodeId: string;
       label: string;
-      /** "you" = picked by hand, "ai" = language model, "keywords" = keyword rules. */
-      by: "you" | "ai" | "keywords";
+      /** "you" = by hand, "ai" = language model, "keywords" = keyword rules, "rule" = variable rule. */
+      by: "you" | "ai" | "keywords" | "rule";
       llm?: LlmCallInfo;
       // The AI's raw answer and its short explanation, to see how it decided.
       aiAnswer?: string;

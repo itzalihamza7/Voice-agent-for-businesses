@@ -13,6 +13,9 @@ web_environment:
     - OPENAI_MODEL=gpt-4.1-mini
     # OpenAI models that may be picked (non-reasoning models; prices in pipeline/pricing.ts).
     - OPENAI_MODELS=gpt-4.1-mini,gpt-4.1-nano,gpt-4o-mini
+    # Local development only: lets webhook/MCP tools reach this machine (e.g. the demo MCP server
+    # at http://localhost:3000/api/demo-mcp). Never set this in production (SSRF protection).
+    - TOOLS_ALLOW_PRIVATE_HOSTS=true
 
 # Runs the Next.js dev server inside the web container. On every `ddev start` it first
 # installs dependencies, applies database migrations and seeds demo data (all idempotent),

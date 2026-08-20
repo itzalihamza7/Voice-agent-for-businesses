@@ -139,6 +139,21 @@ describe("extractAnswer: language model", () => {
     ).toMatchObject({ value: "21:00" });
   });
 
+  it("sets noon and midnight in code, whatever the model claims", async () => {
+    const { llm } = jsonLlm([{ found: true, hour: 12, minute: 0, period: "am" }]);
+    expect(await extractAnswer("time", "12 noon", { ...base, llm })).toMatchObject({
+      value: "12:00",
+    });
+    const late = jsonLlm([{ found: true, hour: 12, minute: 0, period: "pm" }]);
+    expect(await extractAnswer("time", "at midnight", { ...base, llm: late.llm })).toMatchObject({
+      value: "00:00",
+    });
+    const afternoon = jsonLlm([{ found: true, hour: 3, minute: 0, period: "pm" }]);
+    expect(
+      await extractAnswer("time", "three in the afternoon", { ...base, llm: afternoon.llm }),
+    ).toMatchObject({ value: "15:00" });
+  });
+
   it("uses the rules first and only calls the model when they can't tell", async () => {
     const { llm, calls } = jsonLlm([]);
     expect(await extractAnswer("phone", "0300 1234567", { ...base, llm })).toMatchObject({

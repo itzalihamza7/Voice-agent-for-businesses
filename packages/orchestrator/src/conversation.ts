@@ -13,12 +13,15 @@ import {
   type TranscriptEntry,
   type TurnResult,
 } from "@voice-agent/shared";
+import type { Tool } from "@voice-agent/tools";
 import { llmCallInfo } from "./llm-info";
 import { z } from "zod";
 import { extractAnswer } from "./extraction";
+import { replyWithTools, runToolStep } from "./tool-runner";
 import {
   aiResponsePrompt,
   branchDecisionPrompt,
+  branchChoices,
   branchDecisionSchema,
   parseBranchAnswer,
 } from "./prompts";
@@ -31,8 +34,8 @@ import {
 //   - Branch: with a decisions model, waits for what the caller says and lets the model pick
 //     the path. Without one (or right after a Tool, whose result doesn't exist yet), the path
 //     is picked by hand.
-// AI response steps are written by the replies model when there is one. Tool and Knowledge
-// lookup steps are only reported for now (roadmap phases 5 and 6).
+// AI response steps are written by the replies model when there is one, and may call tools.
+// Tool steps call their tool. Knowledge lookup steps are only reported for now (roadmap phase 6).
 
 // A loop of steps that never wait for the caller would otherwise run forever.
 const MAX_STEPS_PER_TURN = 200;
@@ -56,6 +59,8 @@ export interface ConversationDeps {
   prompt?: PromptSettings;
   /** The current time, for {{today}}. Injectable so tests are repeatable. */
   now?: Date;
+  /** Tools the agent can use (built-in, webhook, MCP). Without them, Tool steps fail politely. */
+  tools?: ReadonlyMap<string, Tool>;
 }
 
 type BranchNode = Extract<FlowNode, { type: "branch" }>;
@@ -67,6 +72,7 @@ interface Turn {
   replies: LanguageModelProvider | null;
   prompt: PromptSettings;
   now: Date;
+  tools: ReadonlyMap<string, Tool> | null;
   /** {{business_name}}, {{today}}: usable everywhere, next to the collected answers. */
   builtIns: Record<string, string>;
   variables: Record<string, string>;
@@ -88,6 +94,7 @@ function newTurn(
     replies: deps.replies,
     prompt,
     now,
+    tools: deps.tools ?? null,
     builtIns: builtInVariables(prompt, now),
     variables,
     transcript,
@@ -184,11 +191,7 @@ async function continueAfter(
         await writeAiResponse(turn, current);
         break;
       case "tool":
-        turn.transcript.push({
-          role: "system",
-          text: `The tool "${current.data.toolName}" was called but returned NO RESULT (tools aren't connected yet). Nothing it would have returned is known, so don't state any of it.`,
-        });
-        turn.events.push({ type: "tool", nodeId: current.id, toolName: current.data.toolName });
+        await runToolStep(turn, current, templateVariables(turn), turn.decisions ?? turn.replies);
         break;
       case "knowledgeLookup":
         turn.transcript.push({
@@ -203,16 +206,26 @@ async function continueAfter(
         break;
       case "branch":
         turn.events.push({ type: "branch", nodeId: current.id, paths: branchPaths(current) });
+        // Variable rules are checked in code first, without waiting for the caller.
+        const ruled = ruleDecision(current, templateVariables(turn));
+        if (ruled) {
+          turn.events.push({
+            type: "pathChosen",
+            nodeId: current.id,
+            label: ruled.path.label,
+            by: "rule",
+            reason: ruled.reason,
+          });
+          return continueAfter(turn, current, ruled.path.handle);
+        }
         // Without AI or keywords, a person has to pick the path.
         if (!turn.decisions && !hasKeywords(current)) return waiting(turn, current.id, "path");
+        // Right after a Tool step, the decision is about the tool's result: decide straight away
+        // (keywords about what the caller said don't apply, so without AI it's picked by hand).
         if (previous.type === "tool") {
-          turn.events.push({
-            type: "note",
-            nodeId: current.id,
-            message:
-              "This choice depends on the tool's result, and tools aren't connected yet, so pick the path by hand.",
-          });
-          return waiting(turn, current.id, "path");
+          return turn.decisions
+            ? decideBranch(turn, current, { useKeywords: false })
+            : waiting(turn, current.id, "path");
         }
         // Let the caller respond to what the agent just said before deciding.
         if (turn.transcript.at(-1)?.role !== "caller") {
@@ -310,14 +323,17 @@ async function answerAsk(
 }
 
 /** Picks a Branch path from what the caller said (AI, or keyword rules without AI), then continues. */
-async function decideBranch(turn: Turn, node: BranchNode): Promise<TurnResult> {
+async function decideBranch(
+  turn: Turn,
+  node: BranchNode,
+  { useKeywords = true } = {},
+): Promise<TurnResult> {
   const paths = branchPaths(node);
   const conditions = paths.filter((path) => path.handle !== BRANCH_ELSE_HANDLE);
   const callerSaid =
     [...turn.transcript].reverse().find((entry) => entry.role === "caller")?.text ?? "";
-  const keywordPath = hasKeywords(node)
-    ? (matchKeywords(node, callerSaid) ?? OTHERWISE)
-    : undefined;
+  const keywordPath =
+    useKeywords && hasKeywords(node) ? (matchKeywords(node, callerSaid) ?? OTHERWISE) : undefined;
 
   if (!turn.decisions) {
     if (!keywordPath) return waiting(turn, node.id, "path");
@@ -331,18 +347,23 @@ async function decideBranch(turn: Turn, node: BranchNode): Promise<TurnResult> {
   }
 
   try {
+    // After a Tool step, point the model at the tool's result: in testing, gpt-4.1-nano
+    // otherwise read "requestedTimeFree: false" as free because the caller had asked for that time.
+    const toolResult = useKeywords
+      ? undefined
+      : [...turn.transcript].reverse().find((entry) => entry.role === "system")?.text;
     const result = await turn.decisions.complete(
-      branchDecisionPrompt(conditions, turn.transcript),
+      branchDecisionPrompt(conditions, turn.transcript, toolResult),
       {
         temperature: 0,
-        jsonSchema: branchDecisionSchema(conditions.length),
+        jsonSchema: branchDecisionSchema(conditions),
       },
     );
     const decision = BranchDecisionSchema.safeParse(safeJson(result.text));
-    // Structured output should always parse; reading a bare number is a fallback for models
+    // Structured output gives a path text; a bare number is read as a fallback for models
     // that ignore the schema.
     const number = decision.success
-      ? decision.data.path
+      ? branchChoices(conditions).indexOf(decision.data.path) + 1
       : parseBranchAnswer(result.text, conditions.length);
     const path = (number ? conditions[number - 1] : undefined) ?? OTHERWISE;
     turn.events.push({
@@ -367,7 +388,33 @@ async function decideBranch(turn: Turn, node: BranchNode): Promise<TurnResult> {
   }
 }
 
-const BranchDecisionSchema = z.object({ path: z.number().int().min(0), reason: z.string() });
+/**
+ * Decides a Branch by its variable rules: the first path whose rule matches. If every path has
+ * a rule and none matches, "Otherwise". Null if rules can't decide (other paths need the AI).
+ */
+function ruleDecision(node: BranchNode, variables: Readonly<Record<string, string>>) {
+  const conditions = node.data.conditions;
+  if (!conditions.some((c) => c.variable)) return null;
+  const paths = branchPaths(node);
+  for (const [index, condition] of conditions.entries()) {
+    const value = variables[condition.variable];
+    if (
+      condition.variable &&
+      value?.trim().toLowerCase() === condition.equals.trim().toLowerCase()
+    ) {
+      return { path: paths[index]!, reason: `${condition.variable} is "${value}"` };
+    }
+  }
+  if (conditions.every((c) => c.variable)) {
+    const values = conditions.map(
+      (c) => `${c.variable} is "${variables[c.variable] ?? "not set"}"`,
+    );
+    return { path: OTHERWISE, reason: [...new Set(values)].join(", ") };
+  }
+  return null;
+}
+
+const BranchDecisionSchema = z.object({ reason: z.string(), path: z.string() });
 
 function safeJson(text: string): unknown {
   try {
@@ -402,18 +449,27 @@ async function writeAiResponse(turn: Turn, node: Extract<FlowNode, { type: "aiRe
     turn.events.push({ type: "aiResponse", nodeId: node.id, instructions, text: null });
     return;
   }
+  // Only tools that exist and were allowed for this step.
+  const allowed = node.data.tools.flatMap((name) => {
+    const tool = turn.tools?.get(name);
+    return tool ? [tool] : [];
+  });
   try {
-    const result = await turn.replies.complete(
-      aiResponsePrompt(turn.prompt, instructions, templateVariables(turn), turn.transcript),
-      { temperature: 0.4 },
+    const messages = aiResponsePrompt(
+      turn.prompt,
+      instructions,
+      templateVariables(turn),
+      turn.transcript,
+      allowed.length > 0,
     );
-    agentSays(turn, result.text);
+    const reply = await replyWithTools(turn, node.id, turn.replies, messages, allowed);
+    agentSays(turn, reply.text);
     turn.events.push({
       type: "aiResponse",
       nodeId: node.id,
       instructions,
-      text: result.text,
-      llm: llmCallInfo(result),
+      text: reply.text,
+      llm: reply.llm,
     });
   } catch (error) {
     turn.events.push({ type: "llmError", nodeId: node.id, message: errorMessage(error) });
