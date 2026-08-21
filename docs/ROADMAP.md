@@ -41,25 +41,25 @@ feature support when building each phase. It changes often.
 
 ## Phases
 
-| #   | Phase                           | Concepts                                                                       | %   | Status                               |
-| --- | ------------------------------- | ------------------------------------------------------------------------------ | --- | ------------------------------------ |
-| 0   | Boilerplate                     | Monorepo, provider interfaces, mocks, DDEV                                     | 10  | ✅ Done                              |
-| 1   | Data foundation                 | Prisma models, Postgres config store, real API routes                          | 4   | ✅ Done                              |
-| 2   | Agent builder MVP               | React Flow canvas, typed node settings, versions                               | 9   | ✅ Done                              |
-| 3   | Prompt engineering studio       | System prompts, templates, few-shot, voice style, playground                   | 6   | ✅ Done                              |
-| 4   | LLM harness + text simulator    | Retries, timeouts, fallback, model routing, thinking control, cost, test chat  | 8   | ✅ Done                              |
-| 5   | Structured outputs & tools      | JSON schema output, intents, function calling, agentic loop, MCP               | 6   | In progress: structured outputs done |
-| 6   | RAG knowledge base              | Ingestion, chunking, embeddings, pgvector, hybrid search, reranking, citations | 9   |                                      |
-| 7   | Memory & context                | Context budgets, rolling summaries, long-term caller memory                    | 3   |                                      |
-| 8   | Evals                           | Golden sets, simulated callers, LLM-as-judge, RAG metrics, regression gate     | 7   |                                      |
-| 9   | Guardrails & safety             | Prompt injection, PII redaction, output checks, grounding, escalation          | 5   |                                      |
-| 10  | Voice in the browser            | Streaming STT → LLM → TTS, VAD, barge-in, latency budgets, LLM token streaming | 8   |                                      |
-| 11  | Phone calls                     | Twilio media streams, routing, human transfer                                  | 5   |                                      |
-| 12  | Dashboard & LLM analytics       | Stored LLM traces, summaries, sentiment, topic clustering, failure analysis    | 6   |                                      |
-| 13  | Multi-agent & AI flow generator | Router + specialists, handoffs, reasoning, LLM-generated flows                 | 4   |                                      |
-| 14  | Rollback & A/B experiments      | Rollback, traffic splits, comparing versions                                   | 3   |                                      |
-| 15  | Businesses & auth               | Login, roles, tenant isolation, encrypted vendor keys                          | 3   |                                      |
-| 16  | Production hardening            | CI, Playwright, deploy, error tracking, rate limits, cost per call             | 4   |                                      |
+| #   | Phase                           | Concepts                                                                       | %   | Status  |
+| --- | ------------------------------- | ------------------------------------------------------------------------------ | --- | ------- |
+| 0   | Boilerplate                     | Monorepo, provider interfaces, mocks, DDEV                                     | 10  | ✅ Done |
+| 1   | Data foundation                 | Prisma models, Postgres config store, real API routes                          | 4   | ✅ Done |
+| 2   | Agent builder MVP               | React Flow canvas, typed node settings, versions                               | 9   | ✅ Done |
+| 3   | Prompt engineering studio       | System prompts, templates, few-shot, voice style, playground                   | 6   | ✅ Done |
+| 4   | LLM harness + text simulator    | Retries, timeouts, fallback, model routing, thinking control, cost, test chat  | 8   | ✅ Done |
+| 5   | Structured outputs & tools      | JSON schema output, intents, function calling, agentic loop, MCP               | 6   | ✅ Done |
+| 6   | RAG knowledge base              | Ingestion, chunking, embeddings, pgvector, hybrid search, reranking, citations | 9   |         |
+| 7   | Memory & context                | Context budgets, rolling summaries, long-term caller memory                    | 3   |         |
+| 8   | Evals                           | Golden sets, simulated callers, LLM-as-judge, RAG metrics, regression gate     | 7   |         |
+| 9   | Guardrails & safety             | Prompt injection, PII redaction, output checks, grounding, escalation          | 5   |         |
+| 10  | Voice in the browser            | Streaming STT → LLM → TTS, VAD, barge-in, latency budgets, LLM token streaming | 8   |         |
+| 11  | Phone calls                     | Twilio media streams, routing, human transfer                                  | 5   |         |
+| 12  | Dashboard & LLM analytics       | Stored LLM traces, summaries, sentiment, topic clustering, failure analysis    | 6   |         |
+| 13  | Multi-agent & AI flow generator | Router + specialists, handoffs, reasoning, LLM-generated flows                 | 4   |         |
+| 14  | Rollback & A/B experiments      | Rollback, traffic splits, comparing versions                                   | 3   |         |
+| 15  | Businesses & auth               | Login, roles, tenant isolation, encrypted vendor keys                          | 3   |         |
+| 16  | Production hardening            | CI, Playwright, deploy, error tracking, rate limits, cost per call             | 4   |         |
 
 ## Phase details
 
@@ -119,13 +119,14 @@ feature support when building each phase. It changes often.
   instructions ask for data they don't have. Real tool results (phase 5) and a grounding check
   (phase 9) are the proper fix.
 
-### 5. Structured outputs & tools
+### 5. Structured outputs & tools ✅
 
 - ✅ Ask steps have an answer type (name, phone, email, date, time, number, yes/no): rules
   first, then the model's JSON (structured output), validated in code; re-ask up to 2 times.
 - ✅ Branch decisions as JSON `{ reason, path }`; keyword rules as a baseline for comparison.
-- Built-in mock tools, webhook tools (URL + JSON schema), agentic loop with iteration limits.
-- MCP client: use tools from any MCP server.
+- ✅ Built-in booking tools (mock), webhook tools (URL + JSON schema, SSRF guard), MCP client
+  (plus a demo MCP server), Tool steps with templates and AI-filled arguments, agentic loop
+  (up to 4 rounds) in AI response steps, Branch rules for tool results.
 
   **Findings: extracting answers** (9 realistic spoken answers, see `live` scripts):
 
@@ -141,6 +142,26 @@ feature support when building each phase. It changes often.
   - Small models added a "+1" country code nobody said, and invented "am" for "half past three".
   - An example in the prompt ("ali at gmail dot com") made gpt-4.1-nano drop the dot in
     "ali dot hamza": examples teach patterns, including the wrong ones.
+
+  **Findings: tools** (booking agent v3, three scripted calls per model):
+
+  |                                               | gpt-4.1-nano | qwen3:8b | llama3.1:8b |
+  | --------------------------------------------- | ------------ | -------- | ----------- |
+  | Book a free time (real reference)             | ✓            | ✓        | ✓           |
+  | Taken time → alternatives → booked            | ✓            | ✓        | ✓           |
+  | Every offered time really free                | ✓            | ✓        | ✓           |
+  | Cancel booking ABC123 (AI fills `action`)     | ✓            | ✓        | ✓           |
+  | AI calls MCP tools (loyalty points, currency) | ✓            | ✓        | n/a         |
+  - Phase 4's biggest problem is gone: with real tool results, no model invented free times.
+  - Before Branch rules, gpt-4.1-nano read `requestedTimeFree: false` as free (twice, even with a
+    prompt pointing at the result). The tool itself refused the booking, so nothing wrong was
+    booked, but the caller was sent to a human. Rules fixed it on every model.
+  - With an empty calendar day, gpt-4.1-mini said "there are other times available that day"
+    without calling the tool for another day. qwen3:8b said "we're closed on Sundays" with no
+    such fact anywhere. Grounding checks (phase 9) are still needed.
+  - qwen3:8b turned "12 noon" into 00:00 by claiming "am"; noon and midnight are now set in code.
+  - Choosing a path by its label text instead of a number fixed qwen3:8b reasoning "doesn't want
+    to book" and then picking the booking path (0/3 → 3/3).
 
   **Findings: Branch decisions** (5 callers, booking agent):
 

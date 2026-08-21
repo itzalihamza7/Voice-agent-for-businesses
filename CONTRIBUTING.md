@@ -96,6 +96,14 @@ settle before testing in the browser.
   (dates, times) in code. Put a `reason` field before the decision field in JSON schemas.
 - Prompt changes are measured, not guessed: run the same cases against Ollama and OpenAI models
   before and after a change (see the findings in docs/ROADMAP.md).
+- Tools live in `packages/tools` (built-in, webhook, MCP) and run through
+  `packages/orchestrator/src/tool-runner.ts`. Tool results that decide a path use Branch rules
+  (variable equals value), not the AI. Branch decisions ask the model for the path's label text,
+  not a number.
+- Webhook and MCP URLs go through the SSRF guard (`assertPublicUrl`). Only DDEV sets
+  `TOOLS_ALLOW_PRIVATE_HOSTS=true`; never enable it in production.
+- The built-in booking tools keep bookings in memory: `ddev restart` empties the mock calendar.
+  Browser tests use their own fixture agents, never the real agents.
 - Unit tests never call a real language model: use a scripted fake (see `conversation.test.ts`).
   Model behaviour is checked by hand or with live runs against both Ollama and OpenAI.
 - Pinned on purpose: TypeScript 6.0 (typescript-eslint does not support 7 yet), ESLint 9

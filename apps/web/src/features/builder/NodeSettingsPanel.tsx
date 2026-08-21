@@ -1,8 +1,15 @@
 "use client";
 
-import { ANSWER_TYPES, type AnswerType, type FlowIssue, type FlowNode } from "@voice-agent/shared";
+import {
+  ANSWER_TYPES,
+  type AnswerType,
+  type FlowIssue,
+  type FlowNode,
+  type ToolInfo,
+} from "@voice-agent/shared";
 import type { ReactNode } from "react";
 import { NODE_CATALOG, newId } from "./node-catalog";
+import { toolParameters } from "./tool-list";
 
 // Edits the settings of the selected node. Each node type has its own small form.
 
@@ -20,11 +27,13 @@ const ANSWER_TYPE_LABELS: Record<AnswerType, string> = {
 interface Props {
   node: FlowNode;
   issues: FlowIssue[];
+  /** Every tool the agent can use, for Tool and AI response steps. */
+  tools: ToolInfo[];
   onChange: (data: FlowNode["data"]) => void;
   onDelete: () => void;
 }
 
-export function NodeSettingsPanel({ node, issues, onChange, onDelete }: Props) {
+export function NodeSettingsPanel({ node, issues, tools, onChange, onDelete }: Props) {
   const kind = NODE_CATALOG[node.type];
   return (
     <div className="space-y-4">
@@ -33,7 +42,7 @@ export function NodeSettingsPanel({ node, issues, onChange, onDelete }: Props) {
         <p className="text-sm text-gray-500">{kind.description}</p>
       </div>
 
-      <Form node={node} onChange={onChange} />
+      <Form node={node} tools={tools} onChange={onChange} />
 
       {issues.length > 0 && (
         <ul className="space-y-1 rounded border border-red-200 bg-red-50 p-2 text-sm text-red-700">
@@ -57,7 +66,7 @@ export function NodeSettingsPanel({ node, issues, onChange, onDelete }: Props) {
   );
 }
 
-function Form({ node, onChange }: Pick<Props, "node" | "onChange">) {
+function Form({ node, tools, onChange }: Pick<Props, "node" | "tools" | "onChange">) {
   switch (node.type) {
     case "start":
       return <p className="text-sm text-gray-500">Connect Start to the first step of the call.</p>;
@@ -111,12 +120,42 @@ function Form({ node, onChange }: Pick<Props, "node" | "onChange">) {
       );
     case "aiResponse":
       return (
-        <TextArea
-          label="Instructions for the AI"
-          rows={5}
-          value={node.data.instructions}
-          onChange={(instructions) => onChange({ ...node.data, instructions })}
-        />
+        <>
+          <TextArea
+            label="Instructions for the AI"
+            rows={5}
+            value={node.data.instructions}
+            onChange={(instructions) => onChange({ ...node.data, instructions })}
+          />
+          <fieldset className="space-y-1">
+            <legend className="text-sm font-medium">Tools the AI may use</legend>
+            <p className="text-xs text-gray-500">
+              The AI can call these (several times if needed) before it answers, e.g. to look up
+              free times instead of guessing.
+            </p>
+            {tools.map((tool) => (
+              <label key={tool.name} className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={node.data.tools.includes(tool.name)}
+                  onChange={(event) =>
+                    onChange({
+                      ...node.data,
+                      tools: event.target.checked
+                        ? [...node.data.tools, tool.name]
+                        : node.data.tools.filter((name) => name !== tool.name),
+                    })
+                  }
+                />
+                <span>
+                  <code className="text-xs">{tool.name}</code>
+                  <span className="block text-xs text-gray-500">{tool.description}</span>
+                </span>
+              </label>
+            ))}
+          </fieldset>
+        </>
       );
     case "branch":
       return (
@@ -137,6 +176,32 @@ function Form({ node, onChange }: Pick<Props, "node" | "onChange">) {
                     })
                   }
                 />
+                <div className="flex gap-1">
+                  <TextInput
+                    label={`Path ${index + 1}: rule variable`}
+                    placeholder="availability_requestedTimeFree"
+                    value={condition.variable}
+                    onChange={(variable) =>
+                      onChange({
+                        conditions: node.data.conditions.map((c) =>
+                          c.id === condition.id ? { ...c, variable } : c,
+                        ),
+                      })
+                    }
+                  />
+                  <TextInput
+                    label="equals"
+                    placeholder="true"
+                    value={condition.equals}
+                    onChange={(equals) =>
+                      onChange({
+                        conditions: node.data.conditions.map((c) =>
+                          c.id === condition.id ? { ...c, equals } : c,
+                        ),
+                      })
+                    }
+                  />
+                </div>
                 <TextInput
                   label={`Path ${index + 1}: keywords (optional)`}
                   placeholder="book, appointment"
@@ -169,28 +234,87 @@ function Form({ node, onChange }: Pick<Props, "node" | "onChange">) {
             className="text-sm text-blue-600 underline"
             onClick={() =>
               onChange({
-                conditions: [...node.data.conditions, { id: newId("c"), label: "", keywords: "" }],
+                conditions: [
+                  ...node.data.conditions,
+                  { id: newId("c"), label: "", keywords: "", variable: "", equals: "" },
+                ],
               })
             }
           >
             + Add path
           </button>
           <p className="text-xs text-gray-500">
-            &quot;Otherwise&quot; is taken when no path matches. With an AI model, the AI picks the
-            path from what the caller said; keywords are used without AI, and shown next to the
-            AI&apos;s choice for comparison.
+            &quot;Otherwise&quot; is taken when no path matches. A rule (variable equals value) is
+            checked first, in code: best for tool results, e.g. availability_requestedTimeFree =
+            true. Otherwise the AI picks the path from what the caller said; keywords are used
+            without AI, and shown next to the AI&apos;s choice for comparison.
           </p>
         </div>
       );
-    case "tool":
+    case "tool": {
+      const tool = tools.find((t) => t.name === node.data.toolName);
+      const saveAs = node.data.saveAs || "result";
       return (
-        <TextInput
-          label="Tool name"
-          placeholder="lookupOrder"
-          value={node.data.toolName}
-          onChange={(toolName) => onChange({ ...node.data, toolName })}
-        />
+        <>
+          <label className="block text-sm">
+            <span className="font-medium">Tool</span>
+            <select
+              aria-label="Tool"
+              className="mt-1 w-full rounded border border-gray-300 px-2 py-1"
+              value={node.data.toolName}
+              onChange={(event) => onChange({ ...node.data, toolName: event.target.value })}
+            >
+              <option value="">Choose a tool…</option>
+              {node.data.toolName && !tool && (
+                <option value={node.data.toolName}>{node.data.toolName} (not available)</option>
+              )}
+              {tools.map((t) => (
+                <option key={t.name} value={t.name}>
+                  {t.name} ({t.source})
+                </option>
+              ))}
+            </select>
+            {tool && <span className="mt-1 block text-xs text-gray-500">{tool.description}</span>}
+          </label>
+          {tool && (
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-medium">Arguments</legend>
+              <p className="text-xs text-gray-500">
+                Use {"{{variables}}"}, e.g. {"{{preferred_date}}"}. Leave empty to let the AI fill
+                it in from the conversation.
+              </p>
+              {toolParameters(tool).map((parameter) => (
+                <TextInput
+                  key={parameter.name}
+                  label={`${parameter.name}${parameter.required ? " *" : ""}`}
+                  placeholder={parameter.description}
+                  value={node.data.arguments[parameter.name] ?? ""}
+                  onChange={(value) =>
+                    onChange({
+                      ...node.data,
+                      arguments: { ...node.data.arguments, [parameter.name]: value },
+                    })
+                  }
+                />
+              ))}
+            </fieldset>
+          )}
+          <TextInput
+            label="Save the result as (optional)"
+            placeholder="availability"
+            value={node.data.saveAs}
+            onChange={(value) => onChange({ ...node.data, saveAs: value })}
+          />
+          <p className="text-xs text-gray-500">
+            The result&apos;s fields become variables
+            {tool?.resultFields
+              ? `: ${tool.resultFields.map((field) => `{{${saveAs}_${field}}}`).join(", ")}`
+              : `, e.g. {{${saveAs}_status}}`}
+            . The AI and later steps always see the full result.
+          </p>
+        </>
       );
+    }
     case "knowledgeLookup":
       return (
         <TextArea

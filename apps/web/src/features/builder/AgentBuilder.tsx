@@ -10,6 +10,7 @@ import {
   type FlowIssue,
   type FlowNode,
   type FlowNodeType,
+  type AgentTools,
   type PromptSettings,
 } from "@voice-agent/shared";
 import {
@@ -41,6 +42,8 @@ import { createNode, newId } from "./node-catalog";
 import { DRAG_MIME_TYPE, NodePalette } from "./NodePalette";
 import { NodeSettingsPanel } from "./NodeSettingsPanel";
 import { PromptStudio } from "./PromptStudio";
+import { useToolList } from "./tool-list";
+import { ToolsPanel } from "./ToolsPanel";
 import { TestChat } from "./TestChat";
 import { VersionHistory } from "./VersionHistory";
 
@@ -70,8 +73,13 @@ export function AgentBuilder(props: Props) {
 type SaveStatus = { kind: "idle" | "saving" | "saved" } | { kind: "error"; message: string };
 
 /** What gets saved, as a string, to detect unsaved changes. */
-function snapshot(name: string, flow: AgentFlow, prompt: PromptSettings): string {
-  return JSON.stringify({ name, flow, prompt });
+function snapshot(
+  name: string,
+  flow: AgentFlow,
+  prompt: PromptSettings,
+  tools: AgentTools,
+): string {
+  return JSON.stringify({ name, flow, prompt, tools });
 }
 
 function Builder({ agentId, initial, versions: initialVersions }: Props) {
@@ -80,14 +88,16 @@ function Builder({ agentId, initial, versions: initialVersions }: Props) {
   const [name, setName] = useState(initial.name);
   const [providers, setProviders] = useState(initial.providers);
   const [prompt, setPrompt] = useState(initial.prompt);
+  const [toolConfig, setToolConfig] = useState(initial.tools);
+  const toolList = useToolList(toolConfig);
   // "flow" = the canvas; "prompt" = the prompt studio (shown on top of the canvas).
-  const [mode, setMode] = useState<"flow" | "prompt">("flow");
+  const [mode, setMode] = useState<"flow" | "prompt" | "tools">("flow");
   const [initialCanvas] = useState(() => toReactFlow(initial.flow));
   const [nodes, setNodes, onNodesChange] = useNodesState<BuilderNode>(initialCanvas.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialCanvas.edges);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [savedSnapshot, setSavedSnapshot] = useState(() =>
-    snapshot(initial.name, initial.flow, initial.prompt),
+    snapshot(initial.name, initial.flow, initial.prompt, initial.tools),
   );
   const [status, setStatus] = useState<SaveStatus>({ kind: "idle" });
   // While testing, the right column shows the test chat instead of step settings.
@@ -104,7 +114,7 @@ function Builder({ agentId, initial, versions: initialVersions }: Props) {
     }),
     [issues, testing, activeNodeId],
   );
-  const dirty = snapshot(name, flow, prompt) !== savedSnapshot;
+  const dirty = snapshot(name, flow, prompt, toolConfig) !== savedSnapshot;
   const savedPrompt = versions.find((v) => v.version === openVersion)?.prompt ?? initial.prompt;
   const latestVersion = versions.at(-1)?.version ?? 0;
   // Saving an unchanged old version is allowed: it restores it as the newest version.
@@ -211,8 +221,9 @@ function Builder({ agentId, initial, versions: initialVersions }: Props) {
     setName(version.name);
     setProviders(version.providers);
     setPrompt(version.prompt);
+    setToolConfig(version.tools);
     setOpenVersion(version.version);
-    setSavedSnapshot(snapshot(version.name, version.flow, version.prompt));
+    setSavedSnapshot(snapshot(version.name, version.flow, version.prompt, version.tools));
     setSelectedId(null);
     setStatus({ kind: "idle" });
     // Wait for React Flow to render the loaded nodes before fitting them in view.
@@ -221,11 +232,11 @@ function Builder({ agentId, initial, versions: initialVersions }: Props) {
 
   async function save() {
     setStatus({ kind: "saving" });
-    const sent = snapshot(name, flow, prompt);
+    const sent = snapshot(name, flow, prompt, toolConfig);
     const response = await fetch(`/api/agents/${encodeURIComponent(agentId)}/versions`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ schemaVersion: 1, name, providers, flow, prompt }),
+      body: JSON.stringify({ schemaVersion: 1, name, providers, flow, prompt, tools: toolConfig }),
     });
     if (!response.ok) {
       const body = (await response.json().catch(() => null)) as { error?: string } | null;
@@ -262,7 +273,7 @@ function Builder({ agentId, initial, versions: initialVersions }: Props) {
           {issues.length ? `${issues.length} issue(s)` : "Ready to run ✓"}
         </span>
         <div className="flex overflow-hidden rounded border border-gray-300 text-sm" role="tablist">
-          {(["flow", "prompt"] as const).map((tab) => (
+          {(["flow", "prompt", "tools"] as const).map((tab) => (
             <button
               key={tab}
               type="button"
@@ -274,7 +285,7 @@ function Builder({ agentId, initial, versions: initialVersions }: Props) {
               }}
               className={`px-3 py-1 ${mode === tab ? "bg-gray-800 text-white" : "hover:bg-gray-100"}`}
             >
-              {tab === "flow" ? "Flow" : "Prompt"}
+              {{ flow: "Flow", prompt: "Prompt", tools: "Tools" }[tab]}
             </button>
           ))}
         </div>
@@ -309,6 +320,16 @@ function Builder({ agentId, initial, versions: initialVersions }: Props) {
       </header>
 
       <div className="relative flex min-h-0 flex-1">
+        {mode === "tools" && (
+          <div className="absolute inset-0 z-10 flex bg-white">
+            <ToolsPanel
+              config={toolConfig}
+              onChange={setToolConfig}
+              available={toolList.tools}
+              problems={toolList.problems}
+            />
+          </div>
+        )}
         {mode === "prompt" && (
           // On top of the canvas instead of replacing it, so the canvas keeps its zoom and position.
           <div className="absolute inset-0 z-10 flex bg-white">
@@ -356,12 +377,18 @@ function Builder({ agentId, initial, versions: initialVersions }: Props) {
 
         <aside className="w-80 space-y-6 overflow-y-auto border-l border-gray-200 p-4">
           {testing ? (
-            <TestChat flow={flow} prompt={prompt} onActiveNodeChange={setActiveNodeId} />
+            <TestChat
+              flow={flow}
+              prompt={prompt}
+              tools={toolConfig}
+              onActiveNodeChange={setActiveNodeId}
+            />
           ) : selectedNode ? (
             <NodeSettingsPanel
               key={selectedNode.id}
               node={selectedNode}
               issues={issues.filter((issue) => issue.nodeId === selectedNode.id)}
+              tools={toolList.tools}
               onChange={(data) => updateNodeData(selectedNode.id, data)}
               onDelete={() => deleteNode(selectedNode.id)}
             />

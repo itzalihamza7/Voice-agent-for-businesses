@@ -6,6 +6,7 @@ import type {
   ConversationEvent,
   ConversationState,
   LlmCallInfo,
+  AgentTools,
   PromptSettings,
   TurnResult,
 } from "@voice-agent/shared";
@@ -34,10 +35,12 @@ interface Props {
   flow: AgentFlow;
   /** The prompt settings on screen (possibly unsaved), used for AI replies. */
   prompt: PromptSettings;
+  /** The agent's webhook tools and MCP servers (possibly unsaved). */
+  tools: AgentTools;
   onActiveNodeChange: (nodeId: string | null) => void;
 }
 
-export function TestChat({ flow, prompt, onActiveNodeChange }: Props) {
+export function TestChat({ flow, prompt, tools, onActiveNodeChange }: Props) {
   const { options, problems } = useModelOptions();
   // Until the user changes it, the default follows the loaded model list.
   const [userChoice, setUserChoice] = useState<ModelChoice | null>(null);
@@ -73,6 +76,7 @@ export function TestChat({ flow, prompt, onActiveNodeChange }: Props) {
           fallback: toModelSpec(choice.fallback),
         },
         prompt,
+        tools,
       }),
     });
     setPending(false);
@@ -303,8 +307,21 @@ function toMessages(event: ConversationEvent): Message[] {
               `AI response (choose an AI model to hear it). Instructions: "${event.instructions}"`,
             ),
           ];
-    case "tool":
-      return [note(`Tool call: ${event.toolName} (tools are connected in roadmap phase 5)`)];
+    case "toolCall": {
+      const who = event.by === "ai" ? "AI called" : "Tool";
+      const outcome = event.ok ? `→ ${short(event.result)}` : `failed: ${event.error ?? ""}`;
+      const filled = event.filledByAi?.length
+        ? ` (AI filled in: ${event.filledByAi.join(", ")})`
+        : "";
+      return [
+        {
+          kind: "note",
+          tone: event.ok ? "data" : "error",
+          text: `🔧 ${who} ${event.toolName}(${short(event.arguments)}) ${outcome}${filled} · ${event.latencyMs} ms`,
+          ...(event.llm ? { llm: event.llm } : {}),
+        },
+      ];
+    }
     case "knowledgeLookup":
       return [note(`Knowledge lookup: "${event.query}" (knowledge base comes in phase 6)`)];
     case "branch":
@@ -312,6 +329,8 @@ function toMessages(event: ConversationEvent): Message[] {
     case "pathChosen": {
       if (event.by === "you") return [note(`→ ${event.label}`)];
       if (event.by === "keywords") return [note(`→ Keywords chose: ${event.label}`)];
+      if (event.by === "rule")
+        return [note(`→ Rule chose: ${event.label} (${event.reason ?? ""})`)];
       const reason = event.reason ? ` Reason: "${event.reason.trim()}"` : "";
       const keywords =
         event.keywordGuess !== undefined
@@ -350,4 +369,10 @@ function lastNodeId(events: ConversationEvent[]): string | null {
     if (event.nodeId) return event.nodeId;
   }
   return null;
+}
+
+/** Compact JSON for the chat, cut off when long. */
+function short(value: unknown): string {
+  const text = JSON.stringify(value ?? {});
+  return text.length > 160 ? `${text.slice(0, 157)}…` : text;
 }

@@ -60,7 +60,7 @@ Why:
 Dependencies only point one way:
 
 ```
-web → orchestrator → pipeline, agent-config → db, shared
+web → orchestrator → pipeline, agent-config, tools → db, shared
 ```
 
 `shared` imports nothing internal. The UI never imports `pipeline` or `db` directly. It goes
@@ -79,6 +79,7 @@ through the API. Only `apps/web/src/server/` creates the database client and the
 | `packages/pipeline/`     | The voice pipeline. One folder per step (`providers/stt`, `llm`, `tts`), each with an interface (`types.ts`) and a fake implementation (`mock.ts`). `registry.ts` picks implementations by name. `pipeline.ts` runs one turn.                                                                      |
 | `packages/agent-config/` | Storing and versioning agent configs. `AgentConfigStore` is the interface, with two implementations: `InMemoryAgentConfigStore` (tests) and `PrismaAgentConfigStore` (Postgres). `store.contract.ts` holds the tests both must pass. `versioning.ts` is the placeholder for rollback / A/B logic.  |
 | `packages/orchestrator/` | The "glue": agent use cases (create, list, save a version) and sessions (load the agent's config, build its providers). Later it drives the conversation and saves call logs. Has no HTTP code.                                                                                                    |
+| `packages/tools/`        | Tools agents can call: built-in booking tools (mock), webhook tools, MCP client, argument checks against JSON Schema, SSRF guard.                                                                                                                                                                  |
 | `packages/db/`           | Database access with **Prisma 7** and PostgreSQL. `prisma/schema.prisma` (tables: businesses, agents, agent_config_versions, calls, transcript_turns), `prisma/migrations/`, and an idempotent `prisma/seed.ts`.                                                                                   |
 | `.ddev/`                 | DDEV config: the Docker-based development environment (Node 22 + PostgreSQL 17). Our settings live in `config.voice-agent.yaml`, because `ddev config` rewrites `config.yaml`.                                                                                                                     |
 
@@ -229,6 +230,42 @@ services" as the reason for choosing the change/cancel path.
 **Keywords** (optional, per Branch path) route calls without AI and are shown next to the AI's
 choice for comparison. They are a baseline: "I need to move my _appointment_" matches a
 booking keyword.
+
+## How tools work
+
+Tools let an agent do things: check availability, create a booking, look something up.
+Code: `packages/tools` (the tools) and `packages/orchestrator/src/tool-runner.ts` (running them).
+
+**Where tools come from** (`resolveTools`, per call):
+
+| Source     | What it is                                                                                                                                                                         |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Built-in   | `checkAvailability`, `createBooking`, `findBooking`, `updateBooking` on a mock booking system (Mon–Sat 9:00–17:00, demo booking `ABC123`; bookings live in memory until a restart) |
+| Webhook    | The business's own URL: we POST `{ "arguments": {...} }` and use the JSON object it returns                                                                                        |
+| MCP server | Any Model Context Protocol server (Streamable HTTP). Its tools are discovered live and named `server_tool`. The app includes a demo server at `/api/demo-mcp`                      |
+
+Webhooks and MCP servers are saved with the agent's version (the builder's **Tools** tab).
+
+**Tool steps:** arguments come from templates (`date = {{preferred_date}}`). Required arguments
+left empty are filled in by the AI from the conversation (function calling with a forced tool
+choice). Arguments are checked against the tool's JSON Schema before the call. With "save
+result as" `availability`, the result's fields become `{{availability_freeTimes}}` etc., plus
+`{{availability_ok}}` and `{{availability_error}}`. The full result always goes into the
+transcript, so later steps and the AI can see it.
+
+**AI response steps with tools (the agentic loop):** the model may call the allowed tools, read
+the results and call again, up to 4 rounds; the last round offers no tools, so it must answer.
+Tools that weren't allowed for the step are refused.
+
+**Branch rules:** a path can say "take me when `{{variable}}` equals a value", checked in code
+before any AI. Use them for tool results (`availability_requestedTimeFree = true`): in testing,
+gpt-4.1-nano read `requestedTimeFree: false` as free, even with a focused prompt. Language is for
+the AI; true/false data is for code.
+
+**Safety (SSRF):** webhook and MCP URLs are user input, but our server makes the request. Private
+addresses (localhost, 10.x, 192.168.x, 169.254.169.254 cloud metadata, ...) are blocked and
+redirects aren't followed. `TOOLS_ALLOW_PRIVATE_HOSTS=true` (set in DDEV only) allows them for
+local testing. Known limit: DNS rebinding between the check and the request.
 
 ## How a test call works
 
