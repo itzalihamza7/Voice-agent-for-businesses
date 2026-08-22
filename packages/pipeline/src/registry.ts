@@ -1,6 +1,8 @@
 import type { ModelSpec, ModelOption, ProviderSelection } from "@voice-agent/shared";
 import { MockLanguageModelProvider } from "./providers/llm/mock";
 import { OpenAICompatibleProvider } from "./providers/llm/openai-compatible";
+import { OpenAICompatibleEmbeddings } from "./providers/embeddings/openai-compatible";
+import type { EmbeddingProvider } from "./providers/embeddings/types";
 import { openAiCostUsd } from "./providers/llm/pricing";
 import type { LanguageModelProvider } from "./providers/llm/types";
 import { MockSpeechToTextProvider } from "./providers/stt/mock";
@@ -155,4 +157,50 @@ export async function listLanguageModels(
     problems.push("OpenAI is off: OPENAI_API_KEY is not set.");
   }
   return { models, problems };
+}
+
+// --- Embeddings ------------------------------------------------------------------------------
+
+/** Embedding models by id. Prices from https://developers.openai.com/api/docs/pricing (2026-10-19). */
+const embeddingModels: Record<string, (env: Env) => EmbeddingProvider> = {
+  "ollama/nomic-embed-text": (env) =>
+    new OpenAICompatibleEmbeddings({
+      id: "ollama/nomic-embed-text",
+      baseUrl: ollamaBaseUrl(env),
+      model: "nomic-embed-text",
+      prefixes: { query: "search_query: ", document: "search_document: " },
+      pricePerMillionTokens: 0,
+      timeoutMs: 120_000,
+    }),
+  "openai/text-embedding-3-small": (env) => {
+    if (!env.OPENAI_API_KEY) {
+      throw new ProviderConfigError("OPENAI_API_KEY is not set (put it in .ddev/.env.web).");
+    }
+    return new OpenAICompatibleEmbeddings({
+      id: "openai/text-embedding-3-small",
+      baseUrl: "https://api.openai.com/v1",
+      model: "text-embedding-3-small",
+      apiKey: env.OPENAI_API_KEY,
+      pricePerMillionTokens: 0.02,
+    });
+  },
+};
+
+/**
+ * The embedding models to use, from EMBEDDING_MODELS (comma-separated ids). Documents are
+ * embedded with every one, so searches can compare them. The first is the default for search.
+ */
+export function configuredEmbeddingModels(env: Env = process.env): string[] {
+  const ids = (env.EMBEDDING_MODELS ?? "ollama/nomic-embed-text")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
+  for (const id of ids) {
+    if (!embeddingModels[id]) throw new ProviderConfigError(`Unknown embedding model "${id}"`);
+  }
+  return ids;
+}
+
+export function createEmbeddingModel(id: string, env: Env = process.env): EmbeddingProvider {
+  return factoryFor("embedding", embeddingModels, id)(env);
 }

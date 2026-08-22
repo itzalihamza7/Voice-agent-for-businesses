@@ -17,8 +17,9 @@ model Business {
   name      String
   createdAt DateTime @default(now()) @map("created_at")
 
-  agents Agent[]
-  calls  Call[]
+  agents             Agent[]
+  calls              Call[]
+  knowledgeDocuments KnowledgeDocument[]
 
   @@map("businesses")
 }
@@ -98,4 +99,60 @@ model TranscriptTurn {
 
   @@index([callId, atMs])
   @@map("transcript_turns")
+}
+
+// ----- Knowledge base (RAG, roadmap phase 6) -------------------------------------------------
+// Documents belong to a business and are shared by all its agents. Each document is split into
+// chunks; each chunk is embedded once per embedding model, so models can be compared.
+
+model KnowledgeDocument {
+  id         String   @id @default(uuid())
+  businessId String   @map("business_id")
+  title      String
+  // "text" (pasted text or FAQ), "url" (a web page) or "pdf".
+  sourceType String   @map("source_type")
+  sourceUrl  String?  @map("source_url")
+  // How it was split: "fixed", "headings" or "semantic".
+  chunking   String
+  // The full extracted text, so the document can be chunked again later.
+  content    String
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  business Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  chunks   KnowledgeChunk[]
+
+  @@index([businessId])
+  @@map("knowledge_documents")
+}
+
+model KnowledgeChunk {
+  id         String  @id @default(uuid())
+  documentId String  @map("document_id")
+  // Copied from the document, so every search can filter by business without a join.
+  businessId String  @map("business_id")
+  position   Int
+  heading    String?
+  // Keyword search computes the full-text vector (to_tsvector) when searching: fine for a
+  // business's knowledge base. At large scale, add a stored tsvector column with a GIN index.
+  content    String
+
+  document   KnowledgeDocument    @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  embeddings KnowledgeEmbedding[]
+
+  @@index([businessId])
+  @@map("knowledge_chunks")
+}
+
+model KnowledgeEmbedding {
+  chunkId   String                 @map("chunk_id")
+  // e.g. "ollama/nomic-embed-text": vectors from different models can't be compared.
+  model     String
+  // pgvector, without a fixed size, so models with different sizes share one table.
+  // (An ANN index would need a fixed size; exact search is fine for a business's FAQ.)
+  embedding Unsupported("vector")
+
+  chunk KnowledgeChunk @relation(fields: [chunkId], references: [id], onDelete: Cascade)
+
+  @@id([chunkId, model])
+  @@map("knowledge_embeddings")
 }
