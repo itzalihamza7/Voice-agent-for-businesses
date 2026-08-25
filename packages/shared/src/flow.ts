@@ -79,8 +79,23 @@ export const FlowNodeSchema = z.discriminatedUnion("type", [
       saveAs: z.string().default(""),
     }),
   ),
-  // Searches the business's knowledge base (RAG: roadmap phase 6).
-  nodeSchema("knowledgeLookup", z.object({ query: z.string() })),
+  // Searches the business's knowledge base (RAG) for what the caller asked. `query` is the topic,
+  // added to the caller's words. The results are given to later AI steps as numbered sources.
+  nodeSchema(
+    "knowledgeLookup",
+    z.object({
+      query: z.string(),
+      // How many passages to give the AI.
+      limit: z.number().int().min(1).max(8).default(3),
+      // hybrid = keyword + meaning (vector) search, merged.
+      mode: z.enum(["hybrid", "vector", "keyword"]).default("hybrid"),
+      // Let the AI turn the caller's words into a search query first.
+      rewrite: z.boolean().default(true),
+      // Let the AI rate the results and drop unrelated ones. On by default: without it, small
+      // models given unrelated passages invented answers ("we do offer tattoos").
+      rerank: z.boolean().default(true),
+    }),
+  ),
   // Hands the call to a human. Ends the agent's part of the call.
   nodeSchema("transfer", z.object({ phoneNumber: z.string(), message: z.string() })),
   // Hangs up, optionally after a goodbye message.

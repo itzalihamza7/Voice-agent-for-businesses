@@ -22,6 +22,12 @@ export interface SearchOptions {
   rewriteWith?: LanguageModelProvider | null;
   /** Model that reranks the candidates. null = keep the search order. */
   rerankWith?: LanguageModelProvider | null;
+  /**
+   * With reranking: drop results rated below this (0–10). Embedding similarity can't tell an
+   * answerable question from an unanswerable one (the score ranges overlap); the reranker can.
+   * Without results, the AI is told nothing was found instead of being handed unrelated text.
+   */
+  minRelevance?: number;
   /** Extra context for rewriting, e.g. the step's topic. */
   context?: string;
 }
@@ -39,11 +45,15 @@ export interface SearchOutcome {
   llm: LlmCallInfo[];
 }
 
-/** How many candidates each method finds before fusing and reranking. */
+/** How many candidates each method finds before fusing. */
 const CANDIDATES = 10;
+/** How many of the fused results the AI rates (at least `limit`). */
+const RERANK_CANDIDATES = 6;
+/** In testing, answerable questions scored 10 and unanswerable ones mostly 0–2 (once 7). */
+const DEFAULT_MIN_RELEVANCE = 5;
 
 export async function searchKnowledge(
-  store: KnowledgeStore,
+  store: Pick<KnowledgeStore, "keywordSearch" | "vectorSearch">,
   options: SearchOptions,
 ): Promise<SearchOutcome> {
   const started = performance.now();
@@ -76,9 +86,19 @@ export async function searchKnowledge(
         ? vector
         : reciprocalRankFusion([keyword, vector]);
   if (options.rerankWith && results.length > 1) {
-    const reranked = await rerank(options.rerankWith, options.query, results);
+    // Rerank only the top few: given 10 passages, llama3.1:8b rated every one 0 (even the exact
+    // answer); with up to 8 it rated correctly. Long lists are hard for small models.
+    const candidates = results.slice(0, Math.max(RERANK_CANDIDATES, options.limit));
+    const reranked = await rerank(options.rerankWith, options.query, candidates);
     llm.push(reranked.llm);
-    results = reranked.results;
+    // Only filter when the reranker answered: a failed rerank keeps the fused order (and its
+    // fusion scores, which are far below any relevance threshold).
+    if (reranked.rated) {
+      const minimum = options.minRelevance ?? DEFAULT_MIN_RELEVANCE;
+      results = reranked.results.filter((hit) => hit.score >= minimum);
+    } else {
+      results = reranked.results;
+    }
   }
 
   return {
@@ -194,14 +214,16 @@ async function rerank(llm: LanguageModelProvider, question: string, hits: Knowle
     },
   );
   const parsed = RerankSchema.safeParse(safeJson(result.text));
-  if (!parsed.success) return { results: hits, llm: info(result) };
+  if (!parsed.success || parsed.data.scores.length === 0) {
+    return { results: hits, llm: info(result), rated: false };
+  }
   // Unrated passages keep their place behind the rated ones.
   const relevance = new Map(parsed.data.scores.map((s) => [s.id, s.relevance]));
   const results = hits
     .map((hit, i) => ({ hit, relevance: relevance.get(i + 1) ?? -1, i }))
     .sort((a, b) => b.relevance - a.relevance || a.i - b.i)
     .map(({ hit, relevance: r }) => ({ ...hit, score: r }));
-  return { results, llm: info(result) };
+  return { results, llm: info(result), rated: true };
 }
 
 function info(result: Awaited<ReturnType<LanguageModelProvider["complete"]>>): LlmCallInfo {

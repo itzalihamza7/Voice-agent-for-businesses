@@ -140,7 +140,20 @@ export type ConversationEvent =
       latencyMs: number;
       llm?: LlmCallInfo;
     }
-  | { type: "knowledgeLookup"; nodeId: string; query: string }
+  | {
+      type: "knowledgeLookup";
+      nodeId: string;
+      /** What was asked: the caller's words plus the step's topic. */
+      query: string;
+      /** What was actually searched (after AI rewriting). */
+      searchQuery: string;
+      results: { documentTitle: string; heading: string | null; excerpt: string; score: number }[];
+      latencyMs: number;
+      /** Set when the search couldn't run. */
+      error?: string;
+      /** Rewriting and reranking calls, summed. */
+      llm?: LlmCallInfo;
+    }
   | { type: "branch"; nodeId: string; paths: { handle: string; label: string }[] }
   | {
       type: "pathChosen";
