@@ -17,6 +17,7 @@ import type { Tool } from "@voice-agent/tools";
 import { llmCallInfo } from "./llm-info";
 import { z } from "zod";
 import { extractAnswer } from "./extraction";
+import { lookUpKnowledge, type KnowledgeSearcher } from "./knowledge";
 import { replyWithTools, runToolStep } from "./tool-runner";
 import {
   aiResponsePrompt,
@@ -35,7 +36,7 @@ import {
 //     the path. Without one (or right after a Tool, whose result doesn't exist yet), the path
 //     is picked by hand.
 // AI response steps are written by the replies model when there is one, and may call tools.
-// Tool steps call their tool. Knowledge lookup steps are only reported for now (roadmap phase 6).
+// Tool steps call their tool. Knowledge lookup steps search the business's knowledge base.
 
 // A loop of steps that never wait for the caller would otherwise run forever.
 const MAX_STEPS_PER_TURN = 200;
@@ -61,6 +62,8 @@ export interface ConversationDeps {
   now?: Date;
   /** Tools the agent can use (built-in, webhook, MCP). Without them, Tool steps fail politely. */
   tools?: ReadonlyMap<string, Tool>;
+  /** The business's knowledge base. Without it, Knowledge lookup steps fail politely. */
+  knowledge?: KnowledgeSearcher;
 }
 
 type BranchNode = Extract<FlowNode, { type: "branch" }>;
@@ -73,6 +76,7 @@ interface Turn {
   prompt: PromptSettings;
   now: Date;
   tools: ReadonlyMap<string, Tool> | null;
+  knowledge: KnowledgeSearcher | null;
   /** {{business_name}}, {{today}}: usable everywhere, next to the collected answers. */
   builtIns: Record<string, string>;
   variables: Record<string, string>;
@@ -95,6 +99,7 @@ function newTurn(
     prompt,
     now,
     tools: deps.tools ?? null,
+    knowledge: deps.knowledge ?? null,
     builtIns: builtInVariables(prompt, now),
     variables,
     transcript,
@@ -194,15 +199,13 @@ async function continueAfter(
         await runToolStep(turn, current, templateVariables(turn), turn.decisions ?? turn.replies);
         break;
       case "knowledgeLookup":
-        turn.transcript.push({
-          role: "system",
-          text: "The knowledge base was searched but returned NO RESULT (it is empty). Don't state any facts it would have contained.",
-        });
-        turn.events.push({
-          type: "knowledgeLookup",
-          nodeId: current.id,
-          query: fill(current.data.query),
-        });
+        await lookUpKnowledge(
+          turn,
+          current,
+          templateVariables(turn),
+          turn.knowledge,
+          turn.decisions,
+        );
         break;
       case "branch":
         turn.events.push({ type: "branch", nodeId: current.id, paths: branchPaths(current) });

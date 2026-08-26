@@ -7,7 +7,7 @@ import { createPrismaClient, DEFAULT_BUSINESS_ID, type PrismaClient } from "@voi
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
-function getPrisma(): PrismaClient {
+export function getPrisma(): PrismaClient {
   globalForPrisma.prisma ??= createPrismaClient();
   return globalForPrisma.prisma;
 }

@@ -497,6 +497,78 @@ describe("runTurn Branch rules", () => {
   });
 });
 
+describe("runTurn knowledge lookup", () => {
+  const kbFlow: AgentFlow = {
+    nodes: [
+      node("start", "start", {}),
+      node("ask", "ask", { question: "How can I help?", variable: "q" }),
+      node("kb", "knowledgeLookup", { query: "prices", rerank: true }),
+      node("bye", "end", { message: "" }),
+    ],
+    edges: [
+      { id: "e1", source: "start", target: "ask" },
+      { id: "e2", source: "ask", target: "kb" },
+      { id: "e3", source: "kb", target: "bye" },
+    ],
+  };
+
+  it("searches with the caller's words and the step's topic, and gives the AI numbered sources", async () => {
+    const seen: unknown[] = [];
+    const knowledge = {
+      async search(options: unknown) {
+        seen.push(options);
+        return {
+          searchQuery: "haircut price",
+          results: [
+            {
+              documentTitle: "FAQ",
+              heading: "Prices",
+              content: "A haircut costs £30.",
+              score: 0.9,
+            },
+          ],
+          latencyMs: 12,
+          llm: [],
+        };
+      },
+    };
+    const { llm } = scriptedLlm([]);
+    const deps = { decisions: llm, replies: null, knowledge };
+    const first = await runTurn(kbFlow, null, { type: "start" }, deps);
+    const done = await runTurn(
+      kbFlow,
+      first.state,
+      { type: "reply", text: "How much is a haircut?" },
+      deps,
+    );
+
+    expect(seen[0]).toMatchObject({
+      query: "How much is a haircut?",
+      context: "prices",
+      mode: "hybrid",
+      limit: 3,
+      rewriteWith: llm,
+      rerankWith: llm,
+    });
+    expect(done.events[1]).toMatchObject({
+      type: "knowledgeLookup",
+      searchQuery: "haircut price",
+      results: [{ documentTitle: "FAQ", heading: "Prices", excerpt: "A haircut costs £30." }],
+    });
+    expect(done.state.transcript.at(-1)?.text).toContain("[1] FAQ › Prices: A haircut costs £30.");
+  });
+
+  it("says so when there is no knowledge base, instead of failing", async () => {
+    const first = await runTurn(kbFlow, null, { type: "start" }, noAi);
+    const done = await runTurn(kbFlow, first.state, { type: "reply", text: "Prices?" }, noAi);
+    expect(done.events[1]).toMatchObject({
+      type: "knowledgeLookup",
+      results: [],
+      error: "The knowledge base isn't available.",
+    });
+  });
+});
+
 describe("runTurn errors", () => {
   it("rejects actions that don't fit the current step", async () => {
     const base = { variables: {}, transcript: [], retries: 0 };

@@ -8,6 +8,7 @@ const nextConfig: NextConfig = {
     "@voice-agent/db",
     "@voice-agent/orchestrator",
     "@voice-agent/pipeline",
+    "@voice-agent/rag",
     "@voice-agent/shared",
     "@voice-agent/tools",
   ],
