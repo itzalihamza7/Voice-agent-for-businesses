@@ -63,7 +63,7 @@ export const NODE_CATALOG: Catalog = {
     label: "Knowledge lookup",
     description: "Search the business's documents and FAQs.",
     accent: "border-teal-500 bg-teal-50",
-    defaultData: () => ({ query: "" }),
+    defaultData: () => ({ query: "", limit: 3, mode: "hybrid", rewrite: true, rerank: true }),
     summary: (data) => data.query,
   },
   transfer: {

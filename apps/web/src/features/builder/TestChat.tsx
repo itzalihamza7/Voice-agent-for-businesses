@@ -322,8 +322,24 @@ function toMessages(event: ConversationEvent): Message[] {
         },
       ];
     }
-    case "knowledgeLookup":
-      return [note(`Knowledge lookup: "${event.query}" (knowledge base comes in phase 6)`)];
+    case "knowledgeLookup": {
+      if (event.error) return [note(`📚 Knowledge lookup failed: ${event.error}`, "error")];
+      const sources = event.results.length
+        ? event.results
+            .map((r, i) => `[${i + 1}] ${r.documentTitle}${r.heading ? ` › ${r.heading}` : ""}`)
+            .join("  ")
+        : "nothing relevant found";
+      const rewritten =
+        event.searchQuery !== event.query ? ` (searched "${event.searchQuery}")` : "";
+      return [
+        {
+          kind: "note",
+          tone: event.results.length ? "data" : "error",
+          text: `📚 Knowledge${rewritten}: ${sources} · ${event.latencyMs} ms`,
+          ...(event.llm ? { llm: event.llm } : {}),
+        },
+      ];
+    }
     case "branch":
       return [];
     case "pathChosen": {

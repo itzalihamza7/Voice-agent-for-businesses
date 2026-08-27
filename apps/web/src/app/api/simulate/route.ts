@@ -10,6 +10,7 @@ import {
 } from "@voice-agent/pipeline";
 import { SimulateRequestSchema, type ModelSpec } from "@voice-agent/shared";
 import { parseJsonBody } from "@/server/http";
+import { knowledgeSearcher } from "@/server/knowledge";
 import { loadTools } from "@/server/tools";
 
 export async function POST(request: Request) {
@@ -30,6 +31,7 @@ export async function POST(request: Request) {
       replies: build(models.replies),
       ...(prompt ? { prompt } : {}),
       tools: resolved.tools,
+      knowledge: knowledgeSearcher(),
     };
     return Response.json(await runTurn(flow, state, action, deps));
   } catch (error) {

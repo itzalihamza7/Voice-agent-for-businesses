@@ -317,11 +317,76 @@ function Form({ node, tools, onChange }: Pick<Props, "node" | "tools" | "onChang
     }
     case "knowledgeLookup":
       return (
-        <TextArea
-          label="What to look up"
-          value={node.data.query}
-          onChange={(query) => onChange({ ...node.data, query })}
-        />
+        <>
+          <TextArea
+            label="Topic (optional)"
+            value={node.data.query}
+            onChange={(query) => onChange({ ...node.data, query })}
+          />
+          <p className="text-xs text-gray-500">
+            The search uses what the caller just asked; the topic helps when their words are vague.
+            Documents are managed on the Knowledge base page.
+          </p>
+          <label className="block text-sm">
+            <span className="font-medium">Search</span>
+            <select
+              aria-label="Search mode"
+              className="mt-1 w-full rounded border border-gray-300 px-2 py-1"
+              value={node.data.mode}
+              onChange={(event) =>
+                onChange({ ...node.data, mode: event.target.value as typeof node.data.mode })
+              }
+            >
+              <option value="hybrid">Hybrid: meaning + keywords (default)</option>
+              <option value="vector">Meaning only (vector)</option>
+              <option value="keyword">Keywords only</option>
+            </select>
+          </label>
+          <label className="block text-sm">
+            <span className="font-medium">Passages to give the AI</span>
+            <select
+              aria-label="Passages to give the AI"
+              className="mt-1 w-full rounded border border-gray-300 px-2 py-1"
+              value={node.data.limit}
+              onChange={(event) => onChange({ ...node.data, limit: Number(event.target.value) })}
+            >
+              {[1, 2, 3, 4, 5, 6, 8].map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={node.data.rewrite}
+              onChange={(event) => onChange({ ...node.data, rewrite: event.target.checked })}
+            />
+            <span>
+              Rewrite the question first
+              <span className="block text-xs text-gray-500">
+                The AI turns spoken words into a search query (~1 s).
+              </span>
+            </span>
+          </label>
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={node.data.rerank}
+              onChange={(event) => onChange({ ...node.data, rerank: event.target.checked })}
+            />
+            <span>
+              Check relevance (rerank)
+              <span className="block text-xs text-gray-500">
+                The AI rates the passages and drops unrelated ones (~1 s). Recommended: without it,
+                small models invented answers from unrelated passages.
+              </span>
+            </span>
+          </label>
+        </>
       );
     case "transfer":
       return (
