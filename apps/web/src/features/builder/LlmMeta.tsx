@@ -24,5 +24,7 @@ export function LlmMeta({ llm }: { llm: LlmCallInfo }) {
 /** Tiny amounts need more digits: one reply often costs a fraction of a cent. */
 export function formatCost(usd: number): string {
   if (usd === 0) return "$0 (local)";
+  // Embedding a short document costs millionths of a dollar.
+  if (usd < 0.000005) return "< $0.00001";
   return usd < 0.01 ? `$${usd.toFixed(5)}` : `$${usd.toFixed(2)}`;
 }
