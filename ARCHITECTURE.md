@@ -68,20 +68,21 @@ through the API. Only `apps/web/src/server/` creates the database client and the
 
 ## What each folder is for
 
-| Folder                   | Purpose                                                                                                                                                                                                                                                                                            |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/web/`              | The **frontend**: a Next.js (App Router) app with React and Tailwind CSS.                                                                                                                                                                                                                          |
-| `apps/web/src/app/`      | Pages, one folder per URL. `/` lists agents and creates new ones, `agents/[agentId]/builder` is the builder, `dashboard/calls` is the dashboard.                                                                                                                                                   |
-| `apps/web/src/app/api/`  | **Server-side** route handlers: the HTTP edge of the orchestration layer. They validate the request with a shared Zod schema and call the orchestrator. `/api/agents`, `/api/agents/:agentId/versions` and `/api/simulate` (test calls) work; `/api/calls` and `/api/sessions` still return `501`. |
-| `apps/web/src/server/`   | Server-only wiring: one shared Prisma client, the business-scoped config store, and HTTP helpers (body validation, error → status code).                                                                                                                                                           |
-| `apps/web/src/features/` | React components grouped by feature: `builder/` (the React Flow agent builder, prompt studio, test chat), `agents/` (create-agent form), `dashboard/`. Pages stay small and import from here.                                                                                                      |
-| `packages/shared/`       | Types and **Zod** schemas used everywhere: `AgentConfig` (the versioned JSON), the flow's node and edge types (`flow.ts`), `validateFlow()` (`flow-validation.ts`), prompt settings and `buildSystemPrompt()` (`prompt.ts`), and `CallLog`, `TranscriptTurn`, `Sentiment`.                         |
-| `packages/pipeline/`     | The voice pipeline. One folder per step (`providers/stt`, `llm`, `tts`), each with an interface (`types.ts`) and a fake implementation (`mock.ts`). `registry.ts` picks implementations by name. `pipeline.ts` runs one turn.                                                                      |
-| `packages/agent-config/` | Storing and versioning agent configs. `AgentConfigStore` is the interface, with two implementations: `InMemoryAgentConfigStore` (tests) and `PrismaAgentConfigStore` (Postgres). `store.contract.ts` holds the tests both must pass. `versioning.ts` is the placeholder for rollback / A/B logic.  |
-| `packages/orchestrator/` | The "glue": agent use cases (create, list, save a version) and sessions (load the agent's config, build its providers). Later it drives the conversation and saves call logs. Has no HTTP code.                                                                                                    |
-| `packages/tools/`        | Tools agents can call: built-in booking tools (mock), webhook tools, MCP client, argument checks against JSON Schema, SSRF guard.                                                                                                                                                                  |
-| `packages/db/`           | Database access with **Prisma 7** and PostgreSQL. `prisma/schema.prisma` (tables: businesses, agents, agent_config_versions, calls, transcript_turns), `prisma/migrations/`, and an idempotent `prisma/seed.ts`.                                                                                   |
-| `.ddev/`                 | DDEV config: the Docker-based development environment (Node 22 + PostgreSQL 17). Our settings live in `config.voice-agent.yaml`, because `ddev config` rewrites `config.yaml`.                                                                                                                     |
+| Folder                   | Purpose                                                                                                                                                                                                                                                                                                                |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web/`              | The **frontend**: a Next.js (App Router) app with React and Tailwind CSS.                                                                                                                                                                                                                                              |
+| `apps/web/src/app/`      | Pages, one folder per URL. `/` lists agents and creates new ones, `agents/[agentId]/builder` is the builder, `knowledge` is the knowledge base, `dashboard/calls` is the dashboard.                                                                                                                                    |
+| `apps/web/src/app/api/`  | **Server-side** route handlers: the HTTP edge of the orchestration layer. They validate the request with a shared Zod schema and call the orchestrator. `/api/agents`, `/api/agents/:agentId/versions`, `/api/simulate` (test calls) and `/api/knowledge/*` work; `/api/calls` and `/api/sessions` still return `501`. |
+| `apps/web/src/server/`   | Server-only wiring: one shared Prisma client, the business-scoped config store, and HTTP helpers (body validation, error → status code).                                                                                                                                                                               |
+| `apps/web/src/features/` | React components grouped by feature: `builder/` (the React Flow agent builder, prompt studio, test chat), `agents/` (create-agent form), `knowledge/` (documents, search playground), `dashboard/`. Pages stay small and import from here.                                                                             |
+| `packages/shared/`       | Types and **Zod** schemas used everywhere: `AgentConfig` (the versioned JSON), the flow's node and edge types (`flow.ts`), `validateFlow()` (`flow-validation.ts`), prompt settings and `buildSystemPrompt()` (`prompt.ts`), and `CallLog`, `TranscriptTurn`, `Sentiment`.                                             |
+| `packages/pipeline/`     | The voice pipeline. One folder per step (`providers/stt`, `llm`, `tts`), each with an interface (`types.ts`) and a fake implementation (`mock.ts`). `registry.ts` picks implementations by name. `pipeline.ts` runs one turn.                                                                                          |
+| `packages/agent-config/` | Storing and versioning agent configs. `AgentConfigStore` is the interface, with two implementations: `InMemoryAgentConfigStore` (tests) and `PrismaAgentConfigStore` (Postgres). `store.contract.ts` holds the tests both must pass. `versioning.ts` is the placeholder for rollback / A/B logic.                      |
+| `packages/orchestrator/` | The "glue": agent use cases (create, list, save a version) and sessions (load the agent's config, build its providers). Later it drives the conversation and saves call logs. Has no HTTP code.                                                                                                                        |
+| `packages/rag/`          | The knowledge base (RAG): text extraction from web pages and PDFs, chunking, embedding, the business-scoped `KnowledgeStore` (pgvector + full-text search) and `searchKnowledge()` (hybrid search, rewriting, reranking).                                                                                              |
+| `packages/tools/`        | Tools agents can call: built-in booking tools (mock), webhook tools, MCP client, argument checks against JSON Schema, SSRF guard.                                                                                                                                                                                      |
+| `packages/db/`           | Database access with **Prisma 7** and PostgreSQL. `prisma/schema.prisma` (tables: businesses, agents, agent_config_versions, calls, transcript_turns, knowledge_documents, knowledge_chunks, knowledge_embeddings), `prisma/migrations/`, and an idempotent `prisma/seed.ts`.                                          |
+| `.ddev/`                 | DDEV config: the Docker-based development environment (Node 22 + PostgreSQL 17). Our settings live in `config.voice-agent.yaml`, because `ddev config` rewrites `config.yaml`.                                                                                                                                         |
 
 ## How "swap a vendor without code changes" works
 
@@ -140,11 +141,11 @@ With nothing selected, the right column shows the flow's issues and the version 
 | AI response      | instructions for the LLM               | 1                                |
 | Branch           | a list of paths ("when the caller...") | one per path + "Otherwise"       |
 | Tool             | tool name                              | 1                                |
-| Knowledge lookup | what to look up                        | 1                                |
+| Knowledge lookup | topic, search mode, passages, rerank   | 1                                |
 | Transfer         | phone number, message                  | none (the call leaves the agent) |
 | End              | goodbye message                        | none                             |
 
-Tool, Knowledge lookup and AI response are only _designed_ here. Running them comes in later
+All of them run in the test chat ("How a test call works"); speech and phone calls come in later
 phases (see the roadmap).
 
 **Two levels of checking.**
@@ -267,6 +268,66 @@ addresses (localhost, 10.x, 192.168.x, 169.254.169.254 cloud metadata, ...) are 
 redirects aren't followed. `TOOLS_ALLOW_PRIVATE_HOSTS=true` (set in DDEV only) allows them for
 local testing. Known limit: DNS rebinding between the check and the request.
 
+## How the knowledge base works (RAG)
+
+A business adds its FAQ, price list, web pages or PDFs once (page `/knowledge`); every agent of
+the business can then answer from them in **Knowledge lookup** steps. Code: `packages/rag`.
+
+```
+Adding a document (/knowledge)                 During a call (Knowledge lookup step)
+  pasted text / web page / PDF                   caller: "where can I leave my car?"
+  → extract the text        (extract.ts)         → rewrite as a search query (AI, optional)
+  → split into chunks       (chunking.ts)        → keyword search + vector search  (store.ts)
+  → embed every chunk with every model           → fuse the two rankings (RRF)     (search.ts)
+  → knowledge_documents / _chunks / _embeddings  → AI rates the passages 0–10, drops those < 5
+                                                 → passages go into the transcript for the AI
+```
+
+**Chunking** (`chunking.ts`), chosen per document, with a preview before saving:
+
+| Strategy | Splits                                                   | Good for                    |
+| -------- | -------------------------------------------------------- | --------------------------- |
+| Headings | at `#` headings and FAQ questions                        | FAQs, structured pages      |
+| Fixed    | every ~800 characters at a word, overlapping 120         | anything; can mix topics    |
+| Semantic | where neighbouring sentences' embeddings are least alike | long prose without headings |
+
+**Embeddings.** `EMBEDDING_MODELS` lists the models (`ollama/nomic-embed-text`,
+`openai/text-embedding-3-small`). Each chunk is embedded once per model, one row each in
+`knowledge_embeddings`, so models can be compared; calls use the first. Vectors from different
+models can't be compared, so every vector search names its model. nomic-embed-text expects the
+prefixes `search_query:` / `search_document:`; the provider adds them.
+
+**Search** (`searchKnowledge`, in `search.ts`):
+
+- **Keyword**: Postgres full-text search (`to_tsvector` / `ts_rank`), with the words OR-ed,
+  because a caller's sentence rarely contains every word of the passage. Finds exact words
+  (names, prices), misses paraphrases ("leave my car" vs "parking").
+- **Vector**: cosine distance (pgvector `<=>`) between the question's and the chunks' embeddings.
+  Finds meaning, but always returns _something_, even for questions the documents can't answer.
+- **Hybrid**: Reciprocal Rank Fusion. Each list votes `1 / (60 + rank)` for its results. It uses
+  ranks because cosine similarity and `ts_rank` aren't on the same scale.
+- **Query rewriting** (optional): the AI turns "uh hi, how much for my little boy" into
+  "child haircut price".
+- **Reranking** (on by default): the AI rates the top 6 passages from 0 to 10 and those under 5
+  are dropped. This is what lets the agent say "I don't know": similarity scores of answerable
+  and unanswerable questions overlap, rerank scores barely do. If the AI's ratings can't be read,
+  the search order is kept.
+
+**In a call** (`packages/orchestrator/src/knowledge.ts`): the step searches with the caller's
+last message (its topic setting is context for rewriting). The passages go into the transcript
+as a note ("use only these facts"), or a note that nothing relevant was found, so the next AI
+response step answers from the documents or says it doesn't know. The test chat shows the
+sources (`[1] FAQ › Prices`), the search query and the time taken.
+
+**Scope and safety.** Chunks carry their `businessId` and every query filters by it
+(`KnowledgeStore` is created per business). Web pages are fetched through the SSRF guard, with
+every redirect checked again.
+
+**pgvector.** DDEV's Postgres image doesn't include it: `.ddev/db-build/Dockerfile` installs
+`postgresql-17-pgvector` and the migration runs `CREATE EXTENSION vector`. The vector column has
+no fixed size (models differ), so there is no ANN index: exact search is fast enough for a
+business's few hundred chunks.
+
 ## How a test call works
 
 The builder's **Test** button opens a chat where you play the caller. It lets you check a flow's
@@ -289,10 +350,11 @@ Browser (TestChat)                        Server
   decisions**, a model for **AI replies**, and an optional **fallback**. The list comes from
   `GET /api/models`: every model installed in Ollama (asked live) plus the allowed OpenAI models.
   - At a **Branch**, the engine waits for what the caller says, then asks the decisions model
-    which path fits (it answers with a path number; anything unreadable means "Otherwise").
+    which path fits (it answers with JSON `{ reason, path }`, the path's label; anything unreadable
+    means "Otherwise"). Branch rules (variable equals value) are checked first, in code.
   - **AI response** steps are written by the replies model, following the step's instructions.
-  - Right after a **Tool** step the path is still picked by hand, because tools don't return
-    results yet (roadmap phase 5).
+  - **Tool** steps call real tools ("How tools work"); **Knowledge lookup** steps search the
+    business's documents ("How the knowledge base works").
   - If a model fails, the fallback model answers and the chat says so. Without a fallback,
     Branches fall back to picking by hand.
   - Every AI request shows its model, time, tokens (and cached tokens) and estimated cost.
@@ -335,6 +397,7 @@ environment variables:
 | `OLLAMA_REASONING_EFFORT` | `.ddev/config.voice-agent.yaml`                     | not sent (we set `none`)                                                                                              |
 | `OPENAI_MODEL`            | `.ddev/config.voice-agent.yaml`                     | `gpt-4.1-mini`                                                                                                        |
 | `OPENAI_MODELS`           | `.ddev/config.voice-agent.yaml`                     | `OPENAI_MODEL` only. **Allow-list**: other OpenAI models are refused, so an expensive one can't be picked by accident |
+| `EMBEDDING_MODELS`        | `.ddev/config.voice-agent.yaml`                     | `ollama/nomic-embed-text` (comma-separated; documents are embedded with each, calls use the first)                    |
 | `OPENAI_API_KEY`          | `.ddev/.env.web` (**git-ignored**, never committed) | none                                                                                                                  |
 
 Ollama runs directly on macOS, not in DDEV: Docker on a Mac has no access to the GPU.
@@ -346,7 +409,8 @@ Ollama runs directly on macOS, not in DDEV: Docker on a Mac has no access to the
 - **web**: Node 22. Runs `npm install`, applies database migrations, seeds demo data (a
   `demo-business` and a `demo` agent), then starts the Next.js dev server at
   https://voice-agent.ddev.site. Every step is safe to repeat, so this happens on every start.
-- **db**: PostgreSQL 17 (user/password/database are all `db`). Data survives `ddev stop`.
+- **db**: PostgreSQL 17 with pgvector (user/password/database are all `db`). Data survives
+  `ddev stop`.
 
 All npm commands run inside the container (`ddev npm test`), so every developer gets the same
 Node version and the same Linux binaries, and nobody needs Postgres installed locally.
@@ -398,4 +462,4 @@ There are two kinds of tests:
 | **Versioned configs** (rollback, A/B)                                 | Schema: `packages/shared/src/agent-config.ts`. Storage (done): `PrismaAgentConfigStore` in `packages/agent-config/`, using the `agent_config_versions` table. Rollback / A/B logic: `packages/agent-config/src/versioning.ts`.            |
 | **Orchestration**                                                     | `packages/orchestrator/` holds the logic. `apps/web/src/app/api/` is its HTTP door today. A future `apps/voice-gateway/` (WebSocket server for phone calls) would be a second door into the same package.                                 |
 | **Sentiment analysis**                                                | A new provider interface in `packages/pipeline/src/providers/sentiment/` when it is needed. The `Sentiment` type already exists in `shared`.                                                                                              |
-| **AI features** (prompts, LLM harness, tools, RAG, evals, guardrails) | See [docs/ROADMAP.md](docs/ROADMAP.md). New packages planned: `packages/rag`, `packages/evals`, `packages/tools`. Every LLM feature runs against both a local model (Ollama) and the OpenAI API, so they can be compared.                 |
+| **AI features** (prompts, LLM harness, tools, RAG, evals, guardrails) | See [docs/ROADMAP.md](docs/ROADMAP.md). `packages/rag` and `packages/tools` exist; `packages/evals` is planned. Every LLM feature runs against both a local model (Ollama) and the OpenAI API, so they can be compared.                   |

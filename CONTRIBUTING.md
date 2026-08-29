@@ -22,6 +22,7 @@ container, so plain `npm ...` on macOS will fail on native binaries.
 | Regenerate Prisma client | `ddev npm run db:generate` |
 | Start Ollama (runs on the Mac, not in DDEV) | `brew services start ollama` |
 | Download the local model | `ollama pull llama3.1:8b` |
+| Download the local embedding model (knowledge base) | `ollama pull nomic-embed-text` |
 | Create + apply a DB migration after editing `schema.prisma` | `ddev npm run db:migrate -- --name <change>` |
 | Apply migrations + seed demo data (idempotent) | `ddev npm run db:setup` |
 | Postgres shell | `ddev psql` |
@@ -46,6 +47,9 @@ settle before testing in the browser.
   Prisma implementations, and `store.contract.ts` (tests every implementation must pass).
 - `packages/orchestrator`: use cases between the web app and the rest (agents, sessions) and the
   conversation engine (`conversation.ts`: walks a flow turn by turn, pure functions). No HTTP code.
+- `packages/tools`: tools agents can call (built-in booking mock, webhooks, MCP client, SSRF guard).
+- `packages/rag`: the knowledge base: extraction, chunking, embedding, `KnowledgeStore` (pgvector +
+  full-text) and `searchKnowledge()` (hybrid, rewrite, rerank). The page is `apps/web/src/app/knowledge`.
 - `packages/db`: Prisma 7 + PostgreSQL. Schema, migrations and seed in `prisma/`.
   Generated client goes to `src/generated/` (gitignored).
 - `.ddev/config.voice-agent.yaml`: our DDEV settings. Don't put them in `config.yaml`: `ddev config` rewrites it.
@@ -104,6 +108,13 @@ settle before testing in the browser.
   `TOOLS_ALLOW_PRIVATE_HOSTS=true`; never enable it in production.
 - The built-in booking tools keep bookings in memory: `ddev restart` empties the mock calendar.
   Browser tests use their own fixture agents, never the real agents.
+- Knowledge base: documents belong to a business (shared by its agents) and every chunk is
+  embedded with every model in `EMBEDDING_MODELS`; calls use the first. Documents added before an
+  embedding model was added have no vectors for it (no re-embed button yet: delete and re-add). Vector searches must name the embedding model, and every
+  knowledge query filters by `businessId`. Reranking stays on by default: it is what drops
+  irrelevant passages, so the agent says "I don't know" instead of inventing an answer.
+- pgvector comes from `.ddev/db-build/Dockerfile`. The `vector` column is `Unsupported` in Prisma:
+  read and write embeddings with raw SQL in `packages/rag/src/store.ts`.
 - Unit tests never call a real language model: use a scripted fake (see `conversation.test.ts`).
   Model behaviour is checked by hand or with live runs against both Ollama and OpenAI.
 - Pinned on purpose: TypeScript 6.0 (typescript-eslint does not support 7 yet), ESLint 9

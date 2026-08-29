@@ -14,9 +14,14 @@ export default async function HomePage() {
     <main className="mx-auto max-w-2xl p-8">
       <div className="flex items-baseline justify-between">
         <h1 className="text-2xl font-semibold">Your agents</h1>
-        <Link className="text-sm text-blue-600 underline" href="/dashboard/calls">
-          Call dashboard
-        </Link>
+        <span className="flex gap-4">
+          <Link className="text-sm text-blue-600 underline" href="/knowledge">
+            Knowledge base
+          </Link>
+          <Link className="text-sm text-blue-600 underline" href="/dashboard/calls">
+            Call dashboard
+          </Link>
+        </span>
       </div>
 
       <CreateAgentForm />
