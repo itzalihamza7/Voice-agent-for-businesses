@@ -49,7 +49,7 @@ feature support when building each phase. It changes often.
 | 3   | Prompt engineering studio       | System prompts, templates, few-shot, voice style, playground                   | 6   | ✅ Done |
 | 4   | LLM harness + text simulator    | Retries, timeouts, fallback, model routing, thinking control, cost, test chat  | 8   | ✅ Done |
 | 5   | Structured outputs & tools      | JSON schema output, intents, function calling, agentic loop, MCP               | 6   | ✅ Done |
-| 6   | RAG knowledge base              | Ingestion, chunking, embeddings, pgvector, hybrid search, reranking, citations | 9   |         |
+| 6   | RAG knowledge base              | Ingestion, chunking, embeddings, pgvector, hybrid search, reranking, citations | 9   | ✅ Done |
 | 7   | Memory & context                | Context budgets, rolling summaries, long-term caller memory                    | 3   |         |
 | 8   | Evals                           | Golden sets, simulated callers, LLM-as-judge, RAG metrics, regression gate     | 7   |         |
 | 9   | Guardrails & safety             | Prompt injection, PII redaction, output checks, grounding, escalation          | 5   |         |
@@ -169,12 +169,69 @@ feature support when building each phase. It changes often.
   | ------------- | -------- | --------------------------------- | --------------------------------- |
   | 2/5           | 5/5      | 4/5                               | 5/5 (three runs)                  |
 
-### 6. RAG knowledge base
+### 6. RAG knowledge base ✅
 
-- Ingest PDFs, FAQs and URLs. Compare fixed-size, heading-based and semantic chunking.
-- Embeddings in pgvector (check whether the DDEV Postgres image needs the extension added).
-- Hybrid search (vector + Postgres full-text), reranking, query rewriting, citations.
-- Every search scoped by `businessId`. New package: `packages/rag`.
+- ✅ Knowledge base page (`/knowledge`): paste text, fetch a web page (SSRF-guarded) or upload a
+  PDF; fixed, heading or semantic chunking with a preview; every chunk embedded with
+  `nomic-embed-text` (Ollama) and `text-embedding-3-small` (OpenAI) in pgvector.
+- ✅ Keyword (Postgres full-text), vector and hybrid search (Reciprocal Rank Fusion), AI query
+  rewriting and AI reranking with a relevance cut-off; a search playground comparing them.
+- ✅ Knowledge lookup steps in calls, with sources (citations) in the test chat. Everything
+  scoped by `businessId`. New package: `packages/rag`.
+
+  **Findings: retrieval** (sample salon FAQ, 12 spoken questions such as "where can I leave my
+  car", right passage ranked first):
+
+  |                                   | Headings (12 chunks) | Semantic | Fixed (3 big chunks) |
+  | --------------------------------- | -------------------- | -------- | -------------------- |
+  | Keyword                           | 8/12                 | 8/12     | 8/12                 |
+  | Vector, nomic-embed-text (local)  | **12/12**            | 12/12    | 8–10/12              |
+  | Vector, text-embedding-3-small    | **12/12**            | 12/12    | 8–10/12              |
+  | Hybrid (keyword + vector, RRF)    | 11/12                |          |                      |
+  | Hybrid + rewriting or + reranking | **12/12**            |          |                      |
+  - Keyword search misses paraphrases: car ↔ parking, present ↔ gift voucher, married ↔ bridal.
+  - Hybrid lost one that vector alone found: "can you do my hair, I'm getting married" matched
+    the keyword "hair" in another section. Rewriting or reranking fixed it, at about +0.9 s and
+    +1 s (gpt-4.1-nano).
+  - The free local embedding model was as accurate as OpenAI's on this FAQ, and faster (0.3 s
+    vs 2.2 s to embed the whole FAQ, which cost OpenAI $0.0000078).
+  - Big fixed chunks hurt: one chunk holds several topics, so its vector is a blur of all of them.
+
+  **Findings: knowing when there is no answer.** Vector search always returns its closest
+  passages. Similarity scores of answerable and unanswerable questions overlapped for both
+  embedding models, so no similarity threshold can tell them apart. AI rerank scores could
+  (gpt-4.1-nano: every answerable question 10; unanswerable 0, 2, 0, 0, 0, 7), so passages rated
+  under 5 are now dropped and reranking is on by default.
+
+  | Live calls (booking agent v3) | Before the cut-off                                | After                                               |
+  | ----------------------------- | ------------------------------------------------- | --------------------------------------------------- |
+  | "Do you do tattoos?"          | qwen3:8b and llama3.1:8b invented tattoo services | no model invented them ("I don't have information") |
+  | Price, opening hours, parking | answered from the FAQ                             | answered from the FAQ, two exceptions (see below)   |
+
+  **Findings: the reranker model** (hybrid search with nomic-embed-text; 13 answerable questions,
+  5 the FAQ can't answer, such as "do you do nails" or "is there a cash machine nearby"):
+
+  |                                  | gpt-4.1-nano | qwen3:8b | llama3.1:8b |
+  | -------------------------------- | ------------ | -------- | ----------- |
+  | Right passage first              | **13/13**    | 13/13    | 11/13       |
+  | Unanswerable → nothing passed on | **5/5**      | 4/5      | 4/5         |
+  | Time per search (embed + rerank) | **1.3 s**    | 17 s     | slower      |
+  - "Is there a cash machine nearby?" got Location and parking rated 6 (qwen) and 10 (llama).
+  - "Can I bring my dog?" got Accessibility rated 10 by all three: the FAQ only says "assistance
+    dogs are welcome". The passage is relevant; whether the reply then overstates it is a
+    grounding question (phase 9).
+  - llama missed "present for my sister" (gift vouchers) and "which shampoo brands" (products).
+  - llama3.1:8b as reranker, given 10 passages, rated every one 0, including the exact answer;
+    with up to 8 it rated correctly. In a live call that left "how much is a men's haircut"
+    unanswered. Now only the top 6 are reranked.
+
+  **Other observations**
+
+  - qwen3:8b still said "we currently don't offer tattoo services": nothing was found, but the
+    reply states a fact the FAQ doesn't. Before the cut-off, gpt-4.1-nano merged two passages into
+    a wrong answer ("closed Sundays, but walk in any time"). Grounding checks are phase 9.
+  - gpt-4.1-nano sent "can I park near you?" to Otherwise: the booking agent's question path is
+    labelled too narrowly. A wider label (or a path per topic) is a flow fix, not a RAG fix.
 
 ### 7. Memory & context
 
