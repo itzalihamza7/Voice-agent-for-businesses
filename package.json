@@ -23,7 +23,8 @@
     "db:generate": "npm run db:generate -w @voice-agent/db",
     "db:migrate": "npm run db:migrate -w @voice-agent/db",
     "db:seed": "npm run db:seed -w @voice-agent/db",
-    "db:setup": "npm run db:setup -w @voice-agent/db"
+    "db:setup": "npm run db:setup -w @voice-agent/db",
+    "kb:seed": "npm run kb:seed -w @voice-agent/rag"
   },
   "devDependencies": {
     "@types/node": "^22.19.0",

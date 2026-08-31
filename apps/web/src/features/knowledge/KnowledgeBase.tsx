@@ -41,6 +41,27 @@ export function KnowledgeBase({ initialDocuments }: { initialDocuments: Document
     setOpenChunks({ ...openChunks, [id]: chunks });
   }
 
+  const [examples, setExamples] = useState<{ busy?: boolean; message?: string; error?: string }>(
+    {},
+  );
+
+  async function addExamples() {
+    setExamples({ busy: true });
+    const response = await fetch("/api/knowledge/examples", { method: "POST" });
+    const body = (await response.json()) as { added?: string[]; error?: string };
+    if (!response.ok) {
+      setExamples({ error: body.error ?? `HTTP ${response.status}` });
+      return;
+    }
+    const added = body.added ?? [];
+    setExamples({
+      message: added.length
+        ? `Added ${added.join(", ")}.`
+        : "The example documents are already there.",
+    });
+    await refresh();
+  }
+
   async function remove(id: string, title: string) {
     if (!window.confirm(`Delete "${title}" and its chunks?`)) return;
     await fetch(`/api/knowledge/documents/${id}`, { method: "DELETE" });
@@ -51,7 +72,24 @@ export function KnowledgeBase({ initialDocuments }: { initialDocuments: Document
     <div className="grid min-h-0 flex-1 grid-cols-2 divide-x divide-gray-200">
       <section className="space-y-6 overflow-y-auto p-6">
         <div>
-          <h2 className="font-semibold">Documents</h2>
+          <div className="flex items-baseline justify-between gap-2">
+            <h2 className="font-semibold">Documents</h2>
+            <button
+              type="button"
+              onClick={addExamples}
+              disabled={examples.busy}
+              className="text-xs text-blue-600 underline disabled:opacity-40"
+              title="A hair salon's FAQ, price list, policies and about page, for trying things out"
+            >
+              {examples.busy ? "Adding examples…" : "Add example documents"}
+            </button>
+          </div>
+          {examples.message && (
+            <p className="mt-1 text-xs text-emerald-700" data-testid="examples-message">
+              {examples.message}
+            </p>
+          )}
+          {examples.error && <p className="mt-1 text-xs text-red-600">{examples.error}</p>}
           {documents.length === 0 ? (
             <p className="mt-2 text-sm text-gray-500">
               No documents yet. Add your FAQ, price list or website below.

@@ -21,11 +21,12 @@ web_environment:
     - EMBEDDING_MODELS=ollama/nomic-embed-text,openai/text-embedding-3-small
 
 # Runs the Next.js dev server inside the web container. On every `ddev start` it first
-# installs dependencies, applies database migrations and seeds demo data (all idempotent),
+# installs dependencies, applies database migrations, seeds demo data and, while the knowledge
+# base is empty, adds the example documents (all idempotent),
 # so a fresh clone works with just `ddev start`.
 web_extra_daemons:
     - name: next-dev
-      command: bash -c 'npm install && npm run db:setup && npm run dev -w @voice-agent/web -- --hostname 0.0.0.0 --port 3000'
+      command: bash -c 'npm install && npm run db:setup && npm run kb:seed && npm run dev -w @voice-agent/web -- --hostname 0.0.0.0 --port 3000'
       directory: /var/www/html
 
 # Sends https://voice-agent.ddev.site straight to the Next.js dev server.

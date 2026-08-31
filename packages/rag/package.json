@@ -7,7 +7,8 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "kb:seed": "tsx scripts/seed-examples.ts"
   },
   "dependencies": {
     "@voice-agent/db": "*",
@@ -16,5 +17,8 @@
     "@voice-agent/tools": "*",
     "unpdf": "^1.9.1",
     "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.15"
   }
 }
