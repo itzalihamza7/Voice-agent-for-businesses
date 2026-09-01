@@ -58,6 +58,11 @@ export interface CompletionResult {
   fellBackFrom?: { model: string; error: string };
   /** Tools the model wants called. Run them and send the results back as "tool" messages. */
   toolCalls?: ToolCall[];
+  /**
+   * The model counted far fewer prompt tokens than were sent: its context window cut the
+   * prompt. Ollama does this without an error, dropping the start (the system prompt) first.
+   */
+  promptCut?: boolean;
 }
 
 export interface LanguageModelProvider {

@@ -12,6 +12,12 @@ export function LlmMeta({ llm }: { llm: LlmCallInfo }) {
   return (
     <span className="block text-[10px] text-gray-400 not-italic" data-testid="llm-meta">
       {parts.join(" · ")}
+      {llm.promptCut && (
+        <span className="block text-amber-600" data-testid="prompt-cut-note">
+          Prompt cut: the model&apos;s context window dropped its start (its instructions). Lower
+          the context budget or raise the model&apos;s context length.
+        </span>
+      )}
       {llm.fellBackFrom && (
         <span className="block text-amber-600" data-testid="fallback-note">
           Fallback: {llm.fellBackFrom.model} failed ({llm.fellBackFrom.error})

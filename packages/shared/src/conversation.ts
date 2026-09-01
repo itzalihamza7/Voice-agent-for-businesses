@@ -12,6 +12,13 @@ export const TranscriptEntrySchema = z.object({
   text: z.string(),
 });
 
+// The rolling summary of the call's earlier part: what the AI sees instead of those messages.
+export const CallSummarySchema = z.object({
+  text: z.string(),
+  // The summary covers transcript[0 .. upTo - 1].
+  upTo: z.number().int().min(0),
+});
+
 export const ConversationStateSchema = z.object({
   // The Ask or Branch step the conversation is waiting at. null = the call is over.
   nodeId: z.string().min(1).nullable(),
@@ -64,6 +71,8 @@ export const SimulateRequestSchema = z.object({
   prompt: PromptSettingsSchema.optional(),
   // The agent's webhook tools and MCP servers, possibly unsaved edits.
   tools: AgentToolsSchema.optional(),
+  // Tokens the conversation part of each prompt may use (see orchestrator/context.ts).
+  contextBudget: z.number().int().min(200).max(50_000).optional(),
 });
 
 /** Prompt playground: one AI reply with the given prompt settings, to compare two versions. */
@@ -97,6 +106,8 @@ export interface LlmCallInfo {
   costUsd: number | null;
   /** Set when the chosen model failed and the fallback model answered. */
   fellBackFrom?: { model: string; error: string };
+  /** The model's context window cut the prompt (it counted far fewer tokens than were sent). */
+  promptCut?: boolean;
 }
 
 /** What happened during one turn, in order. The test chat turns these into messages. */
@@ -183,6 +194,7 @@ export interface TurnResult {
 }
 
 export type TranscriptEntry = z.infer<typeof TranscriptEntrySchema>;
+export type CallSummary = z.infer<typeof CallSummarySchema>;
 export type ConversationState = z.infer<typeof ConversationStateSchema>;
 export type ConversationAction = z.infer<typeof ConversationActionSchema>;
 export type SimulateRequest = z.infer<typeof SimulateRequestSchema>;

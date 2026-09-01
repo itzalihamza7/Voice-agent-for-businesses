@@ -1,3 +1,4 @@
+import { estimateTokens } from "@voice-agent/shared";
 import { z } from "zod";
 import {
   LanguageModelError,
@@ -138,6 +139,7 @@ export class OpenAICompatibleProvider implements LanguageModelProvider {
             usage,
             costUsd: this.config.estimateCost?.(usage) ?? null,
             ...(toolCalls?.length ? { toolCalls } : {}),
+            ...(usage && wasCut(messages, usage.inputTokens) ? { promptCut: true } : {}),
           };
         }
 
@@ -190,3 +192,16 @@ function toolChoice(options: CompletionOptions) {
     ? choice
     : { type: "function", function: { name: choice.name } };
 }
+
+/**
+ * True when the model saw much less of the prompt than was sent. Token counts differ between
+ * tokenizers, so only a big gap counts: in testing, Ollama (4,096-token window) reported 2,050
+ * tokens for a ~6,000-token prompt and ignored the system prompt's instruction.
+ */
+function wasCut(messages: ChatMessage[], reportedTokens: number): boolean {
+  const sent = estimateTokens(messages.map((message) => message.content).join("\n"));
+  return sent >= MIN_TOKENS_TO_CHECK && reportedTokens < sent * CUT_RATIO;
+}
+
+const MIN_TOKENS_TO_CHECK = 200;
+const CUT_RATIO = 0.6;

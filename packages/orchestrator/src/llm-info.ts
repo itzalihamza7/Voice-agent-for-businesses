@@ -11,5 +11,6 @@ export function llmCallInfo(result: CompletionResult): LlmCallInfo {
     cachedInputTokens: result.usage?.cachedInputTokens ?? null,
     costUsd: result.costUsd,
     ...(result.fellBackFrom ? { fellBackFrom: result.fellBackFrom } : {}),
+    ...(result.promptCut ? { promptCut: true } : {}),
   };
 }

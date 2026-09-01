@@ -73,6 +73,20 @@ describe("OpenAICompatibleProvider", () => {
     expect(result.costUsd).toBe(0.1);
   });
 
+  it("flags a prompt the model's context window cut (far fewer tokens counted than sent)", async () => {
+    const long = "word ".repeat(2000); // ~2,500 tokens
+    const cut = { ...okBody, usage: { prompt_tokens: 2050, completion_tokens: 3 } };
+    const fits = { ...okBody, usage: { prompt_tokens: 2300, completion_tokens: 3 } };
+    const ask = (body: unknown) =>
+      provider(vi.fn<typeof fetch>().mockResolvedValue(json(body))).complete([
+        { role: "user", content: long + long },
+      ]);
+    expect((await ask(cut)).promptCut).toBe(true);
+    expect(
+      (await ask({ ...fits, usage: { prompt_tokens: 5000, completion_tokens: 3 } })).promptCut,
+    ).toBeUndefined();
+  });
+
   it("asks for structured output with a strict JSON schema", async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(json(okBody));
     const schema = { type: "object", properties: { found: { type: "boolean" } } };
