@@ -6,6 +6,7 @@ import type {
 import { FlowNodeSchema, type ConversationEvent, type FlowNode } from "@voice-agent/shared";
 import type { Tool } from "@voice-agent/tools";
 import { describe, expect, it } from "vitest";
+import { buildContext, DEFAULT_CONTEXT_BUDGET } from "./context";
 import { replyWithTools, runToolStep, type ToolTurn } from "./tool-runner";
 
 const calls: Record<string, unknown>[] = [];
@@ -26,13 +27,15 @@ const checkAvailability: Tool = {
 
 function newTurn(): ToolTurn {
   calls.length = 0;
-  return {
+  const turn: ToolTurn = {
     tools: new Map([[checkAvailability.name, checkAvailability]]),
     now: new Date(2026, 9, 18),
     variables: {},
     transcript: [{ role: "caller", text: "Is Friday free for two people?" }],
     events: [],
+    context: () => buildContext(turn.transcript, null, DEFAULT_CONTEXT_BUDGET),
   };
+  return turn;
 }
 
 function toolNode(data: object): Extract<FlowNode, { type: "tool" }> {

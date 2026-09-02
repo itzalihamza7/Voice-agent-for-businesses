@@ -1,5 +1,6 @@
 import type { ChatMessage } from "@voice-agent/pipeline";
-import { buildSystemPrompt, type PromptSettings, type TranscriptEntry } from "@voice-agent/shared";
+import { buildSystemPrompt, type PromptSettings } from "@voice-agent/shared";
+import { formatContext, type CallContext } from "./context";
 
 // The prompts the conversation engine sends to the language model. Kept in one file so they
 // are easy to read and change. (Roadmap phase 3, the prompt studio, makes them editable per agent.)
@@ -21,7 +22,7 @@ export function branchChoices(paths: { label: string }[]): string[] {
 /** Asks the model which Branch path fits. It answers with JSON: a reason, then the path's text. */
 export function branchDecisionPrompt(
   paths: { label: string }[],
-  transcript: TranscriptEntry[],
+  context: CallContext,
   /** A tool result the decision is about (a Branch right after a Tool step). */
   toolResult?: string,
 ): ChatMessage[] {
@@ -46,8 +47,8 @@ export function branchDecisionPrompt(
     {
       role: "user",
       content: toolResult
-        ? `${formatTranscript(transcript)}\n\nThis decision is about the result of the tool that was just called. Read its fields carefully (true/false values matter):\n${toolResult}`
-        : formatTranscript(transcript),
+        ? `${formatContext(context)}\n\nThis decision is about the result of the tool that was just called. Read its fields carefully (true/false values matter):\n${toolResult}`
+        : formatContext(context),
     },
   ];
 }
@@ -84,28 +85,33 @@ export function aiResponsePrompt(
   settings: PromptSettings,
   instructions: string,
   variables: Readonly<Record<string, string>>,
-  transcript: TranscriptEntry[],
+  context: CallContext,
   withTools = false,
+  /** Facts remembered about the caller from earlier calls. */
+  memory: string[] = [],
 ): ChatMessage[] {
   const system = buildSystemPrompt(settings, { instructions, variables });
+  const parts = [system];
+  if (withTools) {
+    parts.push(
+      "When a tool can give you information you need (such as free times or booking details), call it instead of guessing. Dates are YYYY-MM-DD, times HH:MM (24-hour).",
+    );
+  }
+  if (memory.length) {
+    parts.push(
+      [
+        "What you remember about this caller from earlier calls (it may be out of date; use it naturally, don't read it out):",
+        ...memory.map((fact) => `- ${fact}`),
+      ].join("\n"),
+    );
+  }
   return [
-    {
-      role: "system",
-      content: withTools
-        ? `${system}\n\nWhen a tool can give you information you need (such as free times or booking details), call it instead of guessing. Dates are YYYY-MM-DD, times HH:MM (24-hour).`
-        : system,
-    },
+    { role: "system", content: parts.join("\n\n") },
     {
       role: "user",
-      content: `${formatTranscript(transcript)}\n\nWrite only the agent's next reply.`,
+      content: `${formatContext(context)}\n\nWrite only the agent's next reply.`,
     },
   ];
-}
-
-function formatTranscript(transcript: TranscriptEntry[]): string {
-  if (transcript.length === 0) return "(The call has just started.)";
-  const speaker = { agent: "Agent", caller: "Caller", system: "Note" } as const;
-  return transcript.map((entry) => `${speaker[entry.role]}: ${entry.text}`).join("\n");
 }
 
 /** Reads the path number from the model's answer. 0, or anything unreadable, means "Otherwise". */
@@ -121,7 +127,7 @@ export function toolArgumentsPrompt(
   tool: { name: string; description: string },
   given: Record<string, unknown>,
   variables: Readonly<Record<string, string>>,
-  transcript: TranscriptEntry[],
+  context: CallContext,
 ): ChatMessage[] {
   const known = Object.entries(variables).map(([name, value]) => `- ${name}: ${value}`);
   return [
@@ -137,6 +143,6 @@ export function toolArgumentsPrompt(
         ...(known.length ? known : ["- none"]),
       ].join("\n"),
     },
-    { role: "user", content: formatTranscript(transcript) },
+    { role: "user", content: formatContext(context) },
   ];
 }

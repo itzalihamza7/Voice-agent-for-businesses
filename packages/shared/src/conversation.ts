@@ -33,10 +33,23 @@ export const ConversationStateSchema = z.object({
   transcript: z.array(TranscriptEntrySchema).max(1000),
   // How many times the current Ask step has re-asked because the answer wasn't understood.
   retries: z.number().int().min(0).default(0),
+  // Added in phase 7 (memory & context), so older states from the browser still parse.
+  summary: CallSummarySchema.nullable().default(null),
+  // The caller's number (caller ID) and what is remembered about them from earlier calls.
+  callerPhone: z.string().nullable().default(null),
+  callerMemory: z.array(z.string()).default([]),
 });
 
 export const ConversationActionSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("start") }),
+  // callerPhone: the number the call comes from, for the caller's long-term memory.
+  z.object({
+    type: z.literal("start"),
+    callerPhone: z
+      .string()
+      .trim()
+      .regex(/^\+?[0-9 ()-]{6,20}$/, "Not a phone number")
+      .optional(),
+  }),
   // What the caller says: an answer to an Ask step, or a message the AI routes at a Branch.
   z.object({ type: z.literal("reply"), text: z.string().trim().min(1).max(2000) }),
   // Pick a Branch path by hand (a condition id or "else"), optionally with what the caller said.
@@ -179,6 +192,21 @@ export type ConversationEvent =
       /** What the keyword rules would have chosen, for comparison with the AI. */
       keywordGuess?: string;
     }
+  // The conversation didn't fit the context budget, so parts were shortened or left out.
+  | {
+      type: "contextCut";
+      nodeId: string;
+      tokensBefore: number;
+      tokensAfter: number;
+      notesShortened: number;
+      messagesDropped: number;
+    }
+  // The rolling summary was updated with `added` more messages.
+  | { type: "summary"; text: string; added: number; llm?: LlmCallInfo }
+  // The caller's long-term memory: loaded at the start, updated at the end of the call.
+  | { type: "memoryLoaded"; phoneNumber: string; facts: string[]; callCount: number }
+  | { type: "memorySaved"; phoneNumber: string; facts: string[]; llm?: LlmCallInfo }
+  | { type: "memoryError"; phoneNumber: string; message: string }
   // Explanations for the person testing, e.g. why a path has to be picked by hand.
   | { type: "note"; nodeId: string; message: string }
   // The language model failed. The call goes on without it where it can.

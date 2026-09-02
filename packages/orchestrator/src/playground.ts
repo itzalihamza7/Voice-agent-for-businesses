@@ -5,6 +5,7 @@ import {
   type LlmCallInfo,
   type PromptSettings,
 } from "@voice-agent/shared";
+import { buildContext } from "./context";
 import { llmCallInfo } from "./llm-info";
 import { aiResponsePrompt } from "./prompts";
 
@@ -36,9 +37,9 @@ export async function runPromptPlayground(
     ...builtInVariables(input.prompt, input.now ?? new Date()),
     ...input.variables,
   };
-  const transcript = [{ role: "caller" as const, text: input.callerMessage }];
+  const context = buildContext([{ role: "caller", text: input.callerMessage }], null, Infinity);
   const result = await llm.complete(
-    aiResponsePrompt(input.prompt, input.instructions, variables, transcript),
+    aiResponsePrompt(input.prompt, input.instructions, variables, context),
     { temperature: 0.4 },
   );
   return {

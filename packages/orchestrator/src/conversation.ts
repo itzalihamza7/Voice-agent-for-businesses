@@ -8,6 +8,7 @@ import {
   type AgentFlow,
   type ConversationAction,
   type ConversationEvent,
+  type CallSummary,
   type ConversationState,
   type FlowNode,
   type TranscriptEntry,
@@ -16,6 +17,9 @@ import {
 import type { Tool } from "@voice-agent/tools";
 import { llmCallInfo } from "./llm-info";
 import { z } from "zod";
+import { buildContext, decisionContext, DEFAULT_CONTEXT_BUDGET, type CallContext } from "./context";
+import { normalizePhoneNumber, updateMemoryFacts, type CallerMemoryStore } from "./memory";
+import { updateSummary } from "./summary";
 import { extractAnswer } from "./extraction";
 import { lookUpKnowledge, type KnowledgeSearcher } from "./knowledge";
 import { replyWithTools, runToolStep } from "./tool-runner";
@@ -37,6 +41,11 @@ import {
 //     is picked by hand.
 // AI response steps are written by the replies model when there is one, and may call tools.
 // Tool steps call their tool. Knowledge lookup steps search the business's knowledge base.
+//
+// Memory & context: every AI request sees the call through buildContext (context.ts): the
+// rolling summary plus recent messages, within the context budget. After each turn the summary
+// is updated if the call has grown (summary.ts). With a caller number, the caller's memory is
+// loaded at the start and updated when the call ends (memory.ts).
 
 // A loop of steps that never wait for the caller would otherwise run forever.
 const MAX_STEPS_PER_TURN = 200;
@@ -64,6 +73,10 @@ export interface ConversationDeps {
   tools?: ReadonlyMap<string, Tool>;
   /** The business's knowledge base. Without it, Knowledge lookup steps fail politely. */
   knowledge?: KnowledgeSearcher;
+  /** Tokens the conversation part of each prompt may use. */
+  contextBudget?: number;
+  /** Long-term memory per caller number. Without it, calls have no memory. */
+  memory?: CallerMemoryStore;
 }
 
 type BranchNode = Extract<FlowNode, { type: "branch" }>;
@@ -82,17 +95,28 @@ interface Turn {
   variables: Record<string, string>;
   transcript: TranscriptEntry[];
   events: ConversationEvent[];
+  summary: CallSummary | null;
+  callerPhone: string | null;
+  callerMemory: string[];
+  context(nodeId: string): CallContext;
 }
+
+/** What a turn carries over from the previous one. */
+type Carried = Pick<ConversationState, "summary" | "callerPhone" | "callerMemory">;
+
+const NOTHING_CARRIED: Carried = { summary: null, callerPhone: null, callerMemory: [] };
 
 function newTurn(
   flow: AgentFlow,
   deps: ConversationDeps,
   variables: Record<string, string>,
   transcript: TranscriptEntry[],
+  carried: Carried = NOTHING_CARRIED,
 ): Turn {
   const prompt = deps.prompt ?? DEFAULT_PROMPT_SETTINGS;
   const now = deps.now ?? new Date();
-  return {
+  const budget = deps.contextBudget ?? DEFAULT_CONTEXT_BUDGET;
+  const turn: Turn = {
     flow,
     decisions: deps.decisions,
     replies: deps.replies,
@@ -104,7 +128,17 @@ function newTurn(
     variables,
     transcript,
     events: [],
+    ...carried,
+    context(nodeId) {
+      const context = buildContext(turn.transcript, turn.summary, budget);
+      const { cuts } = context;
+      if (cuts.notesShortened || cuts.messagesDropped) {
+        turn.events.push({ type: "contextCut", nodeId, ...cuts });
+      }
+      return context;
+    },
   };
+  return turn;
 }
 
 /** Built-in variables plus the collected answers (answers win if a name is used twice). */
@@ -118,8 +152,19 @@ export async function runTurn(
   action: ConversationAction,
   deps: ConversationDeps,
 ): Promise<TurnResult> {
+  return afterTurn(await runSteps(flow, state, action, deps), deps);
+}
+
+async function runSteps(
+  flow: AgentFlow,
+  state: ConversationState | null,
+  action: ConversationAction,
+  deps: ConversationDeps,
+): Promise<TurnResult> {
   if (action.type === "start") {
-    const turn = newTurn(flow, deps, {}, []);
+    const loaded = await loadMemory(action.callerPhone, deps);
+    const turn = newTurn(flow, deps, {}, [], loaded.carried);
+    if (loaded.event) turn.events.push(loaded.event);
     const start = flow.nodes.find((node) => node.type === "start");
     if (!start) {
       turn.events.push({ type: "stuck", message: "The flow has no Start step." });
@@ -129,7 +174,11 @@ export async function runTurn(
   }
 
   if (!state || state.nodeId === null) throw new ConversationError("The call is already over.");
-  const turn = newTurn(flow, deps, { ...state.variables }, [...state.transcript]);
+  const turn = newTurn(flow, deps, { ...state.variables }, [...state.transcript], {
+    summary: state.summary,
+    callerPhone: state.callerPhone,
+    callerMemory: state.callerMemory,
+  });
   const node = flow.nodes.find((n) => n.id === state.nodeId);
 
   if (action.type === "reply") {
@@ -356,7 +405,7 @@ async function decideBranch(
       ? undefined
       : [...turn.transcript].reverse().find((entry) => entry.role === "system")?.text;
     const result = await turn.decisions.complete(
-      branchDecisionPrompt(conditions, turn.transcript, toolResult),
+      branchDecisionPrompt(conditions, decisionContext(turn.transcript, turn.summary), toolResult),
       {
         temperature: 0,
         jsonSchema: branchDecisionSchema(conditions),
@@ -462,8 +511,9 @@ async function writeAiResponse(turn: Turn, node: Extract<FlowNode, { type: "aiRe
       turn.prompt,
       instructions,
       templateVariables(turn),
-      turn.transcript,
+      turn.context(node.id),
       allowed.length > 0,
+      turn.callerMemory,
     );
     const reply = await replyWithTools(turn, node.id, turn.replies, messages, allowed);
     agentSays(turn, reply.text);
@@ -522,9 +572,20 @@ function waiting(
   retries = 0,
 ): TurnResult {
   return {
-    state: { nodeId, waitingFor, variables: turn.variables, transcript: turn.transcript, retries },
+    state: {
+      nodeId,
+      waitingFor,
+      variables: turn.variables,
+      transcript: turn.transcript,
+      retries,
+      ...carriedFrom(turn),
+    },
     events: turn.events,
   };
+}
+
+function carriedFrom(turn: Turn): Carried {
+  return { summary: turn.summary, callerPhone: turn.callerPhone, callerMemory: turn.callerMemory };
 }
 
 function finished(turn: Turn): TurnResult {
@@ -535,7 +596,79 @@ function finished(turn: Turn): TurnResult {
       variables: turn.variables,
       transcript: turn.transcript,
       retries: 0,
+      ...carriedFrom(turn),
     },
     events: turn.events,
   };
+}
+
+/** The caller's number and memory at the start of a call, and the event that reports it. */
+async function loadMemory(
+  phone: string | undefined,
+  deps: ConversationDeps,
+): Promise<{ carried: Carried; event?: ConversationEvent }> {
+  if (!phone) return { carried: NOTHING_CARRIED };
+  const phoneNumber = normalizePhoneNumber(phone);
+  const withPhone = { ...NOTHING_CARRIED, callerPhone: phoneNumber };
+  if (!deps.memory) return { carried: withPhone };
+  try {
+    const memory = await deps.memory.get(phoneNumber);
+    const facts = memory?.facts ?? [];
+    return {
+      carried: { ...withPhone, callerMemory: facts },
+      event: { type: "memoryLoaded", phoneNumber, facts, callCount: memory?.callCount ?? 0 },
+    };
+  } catch (error) {
+    return {
+      carried: withPhone,
+      event: { type: "memoryError", phoneNumber, message: errorMessage(error) },
+    };
+  }
+}
+
+/**
+ * After the steps: while the call goes on, update the rolling summary if the call has grown;
+ * when it has ended, update the caller's memory. Both use the decisions model.
+ */
+async function afterTurn(result: TurnResult, deps: ConversationDeps): Promise<TurnResult> {
+  const { state, events } = result;
+  const budget = deps.contextBudget ?? DEFAULT_CONTEXT_BUDGET;
+  const llm = deps.decisions;
+  if (state.nodeId !== null) {
+    if (!llm) return result;
+    try {
+      const update = await updateSummary(llm, state.transcript, state.summary, budget);
+      if (update) {
+        state.summary = update.summary;
+        events.push({
+          type: "summary",
+          text: update.summary.text,
+          added: update.added,
+          llm: update.llm,
+        });
+      }
+    } catch (error) {
+      // Without a new summary the context budget still keeps prompts small.
+      events.push({ type: "llmError", nodeId: state.nodeId, message: errorMessage(error) });
+    }
+    return result;
+  }
+
+  const phoneNumber = state.callerPhone;
+  if (!phoneNumber || !deps.memory) return result;
+  if (!llm) {
+    events.push({ type: "memoryError", phoneNumber, message: "No AI model to update the memory." });
+    return result;
+  }
+  try {
+    const businessName = (deps.prompt ?? DEFAULT_PROMPT_SETTINGS).businessName;
+    const call = buildContext(state.transcript, state.summary, budget);
+    const update = await updateMemoryFacts(llm, businessName, state.callerMemory, call);
+    const saved = await deps.memory.save(phoneNumber, update.facts);
+    state.callerMemory = saved.facts;
+    events.push({ type: "memorySaved", phoneNumber, facts: saved.facts, llm: update.llm });
+  } catch (error) {
+    events.push({ type: "memoryError", phoneNumber, message: errorMessage(error) });
+  }
+  return result;
 }

@@ -361,6 +361,46 @@ function toMessages(event: ConversationEvent): Message[] {
         },
       ];
     }
+    case "contextCut": {
+      const what = [
+        event.notesShortened ? `${event.notesShortened} earlier note(s) shortened` : "",
+        event.messagesDropped ? `${event.messagesDropped} oldest message(s) left out` : "",
+      ].filter(Boolean);
+      return [
+        note(
+          `✂️ Context over budget: ~${event.tokensBefore} → ~${event.tokensAfter} tokens (${what.join(", ")})`,
+        ),
+      ];
+    }
+    case "summary":
+      return [
+        {
+          kind: "note",
+          tone: "data",
+          text: `📝 Summary updated (+${event.added} messages): ${event.text}`,
+          ...(event.llm ? { llm: event.llm } : {}),
+        },
+      ];
+    case "memoryLoaded":
+      return [
+        note(
+          event.facts.length
+            ? `🧠 Returning caller ${event.phoneNumber} (${event.callCount} earlier call(s)): ${event.facts.join(" ")}`
+            : `🧠 New caller ${event.phoneNumber}: nothing remembered yet.`,
+          "data",
+        ),
+      ];
+    case "memorySaved":
+      return [
+        {
+          kind: "note",
+          tone: "data",
+          text: `🧠 Memory saved for ${event.phoneNumber}: ${event.facts.join(" ") || "(nothing to remember)"}`,
+          ...(event.llm ? { llm: event.llm } : {}),
+        },
+      ];
+    case "memoryError":
+      return [note(`🧠 Memory for ${event.phoneNumber} not updated: ${event.message}`, "error")];
     case "note":
       return [note(event.message)];
     case "llmError":
@@ -382,7 +422,7 @@ function toMessages(event: ConversationEvent): Message[] {
 
 function lastNodeId(events: ConversationEvent[]): string | null {
   for (const event of [...events].reverse()) {
-    if (event.nodeId) return event.nodeId;
+    if ("nodeId" in event && event.nodeId) return event.nodeId;
   }
   return null;
 }

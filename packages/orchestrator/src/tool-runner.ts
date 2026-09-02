@@ -12,6 +12,7 @@ import {
   type TranscriptEntry,
 } from "@voice-agent/shared";
 import { checkArguments, missingArguments, type Tool, type ToolResult } from "@voice-agent/tools";
+import type { CallContext } from "./context";
 import { llmCallInfo } from "./llm-info";
 import { toolArgumentsPrompt } from "./prompts";
 
@@ -28,6 +29,8 @@ export interface ToolTurn {
   variables: Record<string, string>;
   transcript: TranscriptEntry[];
   events: ConversationEvent[];
+  /** What an AI request for this step sees of the call (within the context budget). */
+  context(nodeId: string): CallContext;
 }
 
 const MAX_TOOL_ROUNDS = 4;
@@ -74,7 +77,7 @@ export async function runToolStep(
   if (missing.length > 0 && llm) {
     try {
       const result = await llm.complete(
-        toolArgumentsPrompt(tool, args, variables, turn.transcript),
+        toolArgumentsPrompt(tool, args, variables, turn.context(node.id)),
         { temperature: 0, tools: [toolSpec(tool)], toolChoice: { name: tool.name } },
       );
       llmInfo = llmCallInfo(result);

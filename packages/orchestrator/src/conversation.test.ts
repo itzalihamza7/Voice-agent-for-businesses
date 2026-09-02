@@ -4,6 +4,7 @@ import {
   DEFAULT_PROMPT_SETTINGS,
   FlowNodeSchema,
   type AgentFlow,
+  type ConversationEvent,
   type ConversationState,
   type FlowNode,
 } from "@voice-agent/shared";
@@ -222,9 +223,11 @@ describe("runTurn with AI", () => {
       "say",
       "end",
     ]);
+    // The decision sees the spoken messages plus the tool's result in its own section.
     expect(prompts[1]![1]!.content).toContain(
-      'Note: The tool "checkAvailability" was called with {} and returned: {"free":true}',
+      'Read its fields carefully (true/false values matter):\nThe tool "checkAvailability" was called with {} and returned: {"free":true}',
     );
+    expect(prompts[1]![1]!.content).toContain("Caller: Ali");
   });
 
   it("writes AI response steps with the language model and adds them to the transcript", async () => {
@@ -569,9 +572,153 @@ describe("runTurn knowledge lookup", () => {
   });
 });
 
+describe("runTurn memory and context", () => {
+  // Start → ask a question → AI answer → end.
+  const qaFlow: AgentFlow = {
+    nodes: [
+      node("start", "start", {}),
+      node("ask", "ask", { question: "How can I help?", variable: "q" }),
+      node("answer", "aiResponse", { instructions: "Answer the question." }),
+      node("bye", "end", { message: "Bye!" }),
+    ],
+    edges: [
+      { id: "e1", source: "start", target: "ask" },
+      { id: "e2", source: "ask", target: "answer" },
+      { id: "e3", source: "answer", target: "bye" },
+    ],
+  };
+
+  function memoryStore(facts: string[]) {
+    const saved: { phone: string; facts: string[] }[] = [];
+    return {
+      saved,
+      store: {
+        get: async (phone: string) =>
+          facts.length ? { phoneNumber: phone, facts, callCount: 1, lastCallAt: "" } : null,
+        save: async (phone: string, newFacts: string[]) => {
+          saved.push({ phone, facts: newFacts });
+          return { phoneNumber: phone, facts: newFacts, callCount: 2, lastCallAt: "" };
+        },
+        forget: async () => true,
+      },
+    };
+  }
+
+  it("loads the caller's memory, gives it to AI replies and updates it when the call ends", async () => {
+    const { store, saved } = memoryStore(["Name is Ali."]);
+    const replies = scriptedLlm(["Hi Ali! It's £30."]);
+    const decisions = scriptedLlm([
+      JSON.stringify({
+        facts: [
+          { fact: "Name is Ali.", about: "caller" },
+          { fact: "Asked the haircut price.", about: "caller" },
+        ],
+      }),
+    ]);
+    const deps = { decisions: decisions.llm, replies: replies.llm, memory: store };
+
+    const first = await runTurn(
+      qaFlow,
+      null,
+      { type: "start", callerPhone: "+44 7700 900123" },
+      deps,
+    );
+    expect(first.events[0]).toEqual({
+      type: "memoryLoaded",
+      phoneNumber: "+447700900123",
+      facts: ["Name is Ali."],
+      callCount: 1,
+    });
+    expect(first.state).toMatchObject({
+      callerPhone: "+447700900123",
+      callerMemory: ["Name is Ali."],
+    });
+
+    const done = await runTurn(
+      qaFlow,
+      first.state,
+      { type: "reply", text: "Haircut price?" },
+      deps,
+    );
+    expect(replies.prompts[0]![0]!.content).toContain("- Name is Ali.");
+    expect(saved).toEqual([
+      { phone: "+447700900123", facts: ["Name is Ali.", "Asked the haircut price."] },
+    ]);
+    expect(done.events.at(-1)).toMatchObject({ type: "memorySaved" });
+    expect(done.state.callerMemory).toEqual(["Name is Ali.", "Asked the haircut price."]);
+  });
+
+  it("has no memory without a caller number", async () => {
+    const { store, saved } = memoryStore(["Name is Ali."]);
+    const deps = {
+      decisions: scriptedLlm([]).llm,
+      replies: scriptedLlm(["£30."]).llm,
+      memory: store,
+    };
+    const first = await runTurn(qaFlow, null, { type: "start" }, deps);
+    await runTurn(qaFlow, first.state, { type: "reply", text: "Price?" }, deps);
+    expect(first.events.some((e) => e.type === "memoryLoaded")).toBe(false);
+    expect(saved).toEqual([]);
+  });
+
+  it("summarizes a long call and sends the summary instead of the old messages", async () => {
+    // A Branch that loops back to itself: the caller keeps talking, the AI keeps choosing it.
+    const loop: AgentFlow = {
+      nodes: [
+        node("start", "start", {}),
+        node("greet", "say", { text: "Hello!" }),
+        node("listen", "branch", { conditions: [{ id: "c-more", label: "Anything" }] }),
+        node("reply", "say", { text: "I see." }),
+      ],
+      edges: [
+        { id: "e1", source: "start", target: "greet" },
+        { id: "e2", source: "greet", target: "listen" },
+        { id: "e3", source: "listen", target: "reply", sourceHandle: "c-more" },
+        { id: "e4", source: "listen", target: "reply", sourceHandle: "else" },
+        { id: "e5", source: "reply", target: "listen" },
+      ],
+    };
+    const choose = '{"reason":"more","path":"Anything"}';
+    // From turn 3 the call is longer than the six messages kept word for word, and over 60%
+    // of the 200-token budget: the summary is updated after turns 3 and 4.
+    const decisions = scriptedLlm([
+      choose,
+      choose,
+      choose,
+      '{"summary":"S1: the caller talked about their week."}',
+      choose,
+      '{"summary":"S2: the caller talked about their week and month."}',
+    ]);
+    const deps = { decisions: decisions.llm, replies: null, contextBudget: 200 };
+    let { state } = await runTurn(loop, null, { type: "start" }, deps);
+    const long = "word ".repeat(60);
+    let events: ConversationEvent[] = [];
+    for (let i = 0; i < 4; i++) {
+      ({ state, events } = await runTurn(loop, state, { type: "reply", text: long + i }, deps));
+    }
+
+    expect(state.summary).toEqual({
+      text: "S2: the caller talked about their week and month.",
+      upTo: 3,
+    });
+    expect(events.at(-1)).toMatchObject({ type: "summary", added: 2 });
+    // Turn 4's decision saw the first summary instead of the first messages.
+    const turn4 = decisions.prompts[4]![1]!.content;
+    expect(turn4).toContain("Summary of the call so far: S1: the caller talked about their week.");
+    expect(turn4).not.toContain("Agent: Hello!");
+  });
+});
+
 describe("runTurn errors", () => {
   it("rejects actions that don't fit the current step", async () => {
-    const base = { variables: {}, transcript: [], retries: 0 };
+    const base = {
+      variables: {},
+      transcript: [],
+      retries: 0,
+      summary: null,
+      callerPhone: null,
+      callerMemory: [],
+    };
     const atBranch: ConversationState = { ...base, nodeId: "intent", waitingFor: "path" };
     const atAsk: ConversationState = { ...base, nodeId: "ask-name", waitingFor: "answer" };
     const over: ConversationState = { ...base, nodeId: null, waitingFor: null };
