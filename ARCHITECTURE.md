@@ -73,7 +73,7 @@ through the API. Only `apps/web/src/server/` creates the database client and the
 | `apps/web/`              | The **frontend**: a Next.js (App Router) app with React and Tailwind CSS.                                                                                                                                                                                                                                              |
 | `apps/web/src/app/`      | Pages, one folder per URL. `/` lists agents and creates new ones, `agents/[agentId]/builder` is the builder, `knowledge` is the knowledge base, `dashboard/calls` is the dashboard.                                                                                                                                    |
 | `apps/web/src/app/api/`  | **Server-side** route handlers: the HTTP edge of the orchestration layer. They validate the request with a shared Zod schema and call the orchestrator. `/api/agents`, `/api/agents/:agentId/versions`, `/api/simulate` (test calls) and `/api/knowledge/*` work; `/api/calls` and `/api/sessions` still return `501`. |
-| `apps/web/src/server/`   | Server-only wiring: one shared Prisma client, the business-scoped config store, and HTTP helpers (body validation, error → status code).                                                                                                                                                                               |
+| `apps/web/src/server/`   | Server-only wiring: one shared Prisma client, the business-scoped config store, the knowledge base and caller memory stores, and HTTP helpers (body validation, error → status code).                                                                                                                                  |
 | `apps/web/src/features/` | React components grouped by feature: `builder/` (the React Flow agent builder, prompt studio, test chat), `agents/` (create-agent form), `knowledge/` (documents, search playground), `dashboard/`. Pages stay small and import from here.                                                                             |
 | `packages/shared/`       | Types and **Zod** schemas used everywhere: `AgentConfig` (the versioned JSON), the flow's node and edge types (`flow.ts`), `validateFlow()` (`flow-validation.ts`), prompt settings and `buildSystemPrompt()` (`prompt.ts`), and `CallLog`, `TranscriptTurn`, `Sentiment`.                                             |
 | `packages/pipeline/`     | The voice pipeline. One folder per step (`providers/stt`, `llm`, `tts`), each with an interface (`types.ts`) and a fake implementation (`mock.ts`). `registry.ts` picks implementations by name. `pipeline.ts` runs one turn.                                                                                          |
@@ -81,7 +81,7 @@ through the API. Only `apps/web/src/server/` creates the database client and the
 | `packages/orchestrator/` | The "glue": agent use cases (create, list, save a version) and sessions (load the agent's config, build its providers). Later it drives the conversation and saves call logs. Has no HTTP code.                                                                                                                        |
 | `packages/rag/`          | The knowledge base (RAG): text extraction from web pages and PDFs, chunking, embedding, the business-scoped `KnowledgeStore` (pgvector + full-text search) and `searchKnowledge()` (hybrid search, rewriting, reranking).                                                                                              |
 | `packages/tools/`        | Tools agents can call: built-in booking tools (mock), webhook tools, MCP client, argument checks against JSON Schema, SSRF guard.                                                                                                                                                                                      |
-| `packages/db/`           | Database access with **Prisma 7** and PostgreSQL. `prisma/schema.prisma` (tables: businesses, agents, agent_config_versions, calls, transcript_turns, knowledge_documents, knowledge_chunks, knowledge_embeddings), `prisma/migrations/`, and an idempotent `prisma/seed.ts`.                                          |
+| `packages/db/`           | Database access with **Prisma 7** and PostgreSQL. `prisma/schema.prisma` (tables: businesses, agents, agent_config_versions, calls, transcript_turns, knowledge_documents, knowledge_chunks, knowledge_embeddings, caller_memories), `prisma/migrations/`, and an idempotent `prisma/seed.ts`.                         |
 | `.ddev/`                 | DDEV config: the Docker-based development environment (Node 22 + PostgreSQL 17). Our settings live in `config.voice-agent.yaml`, because `ddev config` rewrites `config.yaml`.                                                                                                                                         |
 
 ## How "swap a vendor without code changes" works
@@ -319,6 +319,13 @@ as a note ("use only these facts"), or a note that nothing relevant was found, s
 response step answers from the documents or says it doesn't know. The test chat shows the
 sources (`[1] FAQ › Prices`), the search query and the time taken.
 
+**Example documents.** `packages/rag/src/examples.ts` holds four documents for the demo
+business, a hair salon called High Street Hair: an FAQ, a price list, a booking policy and an
+"about us" page, each chunked a different way. The seeded `demo` agent answers questions from
+them in a loop (`packages/db/prisma/demo-agent.ts`). They are added on `ddev start` while the
+knowledge base is empty (`npm run kb:seed`), or with **Add example documents** on `/knowledge`.
+Some topics (nails, tattoos, massages) are left out on purpose, to test "I don't know".
+
 **Scope and safety.** Chunks carry their `businessId` and every query filters by it
 (`KnowledgeStore` is created per business). Web pages are fetched through the SSRF guard, with
 every redirect checked again.
@@ -327,6 +334,42 @@ every redirect checked again.
 `postgresql-17-pgvector` and the migration runs `CREATE EXTENSION vector`. The vector column has
 no fixed size (models differ), so there is no ANN index: exact search is fast enough for a
 business's few hundred chunks.
+
+## How memory and context work
+
+Code: `packages/orchestrator/src/context.ts`, `summary.ts` and `memory.ts`.
+
+**Context budget.** Every AI request gets the call as text, and calls grow: each knowledge
+lookup adds a few hundred tokens of passages. Local models run with a small context window
+(Ollama: 4,096 tokens for prompt and answer) and cut a prompt that doesn't fit without an error:
+in testing, a ~6,000-token prompt was cut to its last ~2,048 tokens, so the system prompt (the
+agent's instructions) went first. So the engine decides what each request sees
+(`buildContext`), within a budget (2,500 tokens by default, which with the system prompt and
+the answer stays inside that window; the test chat can change it):
+
+1. Earlier knowledge and tool notes are shortened to their first line.
+2. The oldest messages are left out; the rolling summary keeps their gist.
+3. Never cut: the system prompt, the summary and the last four messages.
+
+When a model reports far fewer prompt tokens than were sent, the provider marks the request
+`promptCut` and the test chat shows a warning under it.
+
+**Branch decisions see less on purpose** (`decisionContext`): the summary and the last four
+spoken messages, without notes (a tool result the decision depends on is passed separately).
+With the whole call, gpt-4.1-nano ended the demo call on a new question in every run; with the
+short context it routed 50/50 turns right. More context isn't better context.
+
+**Rolling summary.** When the messages after the summary pass 60% of the budget, the decisions
+model folds all but the last six into a short summary (at most 120 words). The browser keeps
+the full transcript in the call's state; only what the AI sees gets shorter.
+
+**Caller memory.** With a caller number (caller ID; the test chat has a field for it), the
+caller's facts are loaded at the start of the call and given to AI replies ("What you remember
+about this caller..."). When the call ends, the decisions model updates them. Code then checks
+them: only facts the AI marked as about the caller (not the business), at most 8, each under
+200 characters, and nothing that looks like a card number. Memories live in the
+`caller_memories` table, per business and normalized phone number. The test chat shows them
+with a **Forget this caller** button (`DELETE /api/callers/:phone/memory`).
 
 ## How a test call works
 
@@ -407,7 +450,8 @@ Ollama runs directly on macOS, not in DDEV: Docker on a Mac has no access to the
 `ddev start` creates two Docker containers:
 
 - **web**: Node 22. Runs `npm install`, applies database migrations, seeds demo data (a
-  `demo-business` and a `demo` agent), then starts the Next.js dev server at
+  `demo-business`, a `demo` Q&A agent and, while the knowledge base is empty, the example
+  documents), then starts the Next.js dev server at
   https://voice-agent.ddev.site. Every step is safe to repeat, so this happens on every start.
 - **db**: PostgreSQL 17 with pgvector (user/password/database are all `db`). Data survives
   `ddev stop`.

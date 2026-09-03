@@ -50,7 +50,7 @@ feature support when building each phase. It changes often.
 | 4   | LLM harness + text simulator    | Retries, timeouts, fallback, model routing, thinking control, cost, test chat  | 8   | ✅ Done |
 | 5   | Structured outputs & tools      | JSON schema output, intents, function calling, agentic loop, MCP               | 6   | ✅ Done |
 | 6   | RAG knowledge base              | Ingestion, chunking, embeddings, pgvector, hybrid search, reranking, citations | 9   | ✅ Done |
-| 7   | Memory & context                | Context budgets, rolling summaries, long-term caller memory                    | 3   |         |
+| 7   | Memory & context                | Context budgets, rolling summaries, long-term caller memory                    | 3   | ✅ Done |
 | 8   | Evals                           | Golden sets, simulated callers, LLM-as-judge, RAG metrics, regression gate     | 7   |         |
 | 9   | Guardrails & safety             | Prompt injection, PII redaction, output checks, grounding, escalation          | 5   |         |
 | 10  | Voice in the browser            | Streaming STT → LLM → TTS, VAD, barge-in, latency budgets, LLM token streaming | 8   |         |
@@ -233,10 +233,55 @@ feature support when building each phase. It changes often.
   - gpt-4.1-nano sent "can I park near you?" to Otherwise: the booking agent's question path is
     labelled too narrowly. A wider label (or a path per topic) is a flow fix, not a RAG fix.
 
-### 7. Memory & context
+### 7. Memory & context ✅
 
-- Context budget (system prompt + chunks + history) and what gets cut first.
-- Rolling summary for long calls; long-term memory per caller phone number.
+- ✅ Example documents for the demo salon (FAQ, price list, policy, about page) and a demo Q&A
+  agent that answers from them in a loop: a long call to test memory and context with.
+- ✅ Context budget: earlier notes are shortened first, then the oldest messages left out;
+  Branch decisions see only the last four spoken messages.
+- ✅ Rolling summary of the earlier call; long-term memory per caller phone number, checked by
+  code, with a Forget button. The test chat shows cuts, summaries and memory.
+
+  **Findings: how much of the call should a decision see?** (demo agent, a 10-turn call of
+  questions ending in "No that's all, thanks, bye", 5 runs per model, 50 decisions):
+
+  | Branch decisions see                  | gpt-4.1-nano       | qwen3:8b    | llama3.1:8b |
+  | ------------------------------------- | ------------------ | ----------- | ----------- |
+  | The whole call (before)               | 23/50              | 45/50       | 50/50       |
+  | The whole call, 600-token budget      | 28/50              |             |             |
+  | Summary + last 4 spoken messages      | **50/50**          | **50/50**   | **50/50**   |
+  | Decision prompt size at the 10th turn | 1,125 → 410 tokens | 1,875 → 326 | 1,635 → 341 |
+  - With the whole call, gpt-4.1-nano ended the call early in every run, on ordinary questions
+    ("What if I'm not happy with my haircut?"). Its stated reason was right ("wants to know the
+    policy if unhappy") but the path it picked was "no more questions". qwen3:8b never ended
+    the call on "No that's all, thanks, bye".
+  - Replaying one failing decision 10 times: whole call 0–3/10 right, without knowledge notes
+    9–10/10, last two or last four spoken messages 10/10. The old knowledge passages were the
+    distraction, not the length alone: a 600-token budget barely helped.
+  - Renaming the paths so they shared no words didn't help (18/50): the labels weren't the
+    problem.
+
+  **Findings: the context window cuts silently.** Sent a ~6,000-token prompt whose system
+  prompt said "reply with exactly one word: BANANA", llama3.1:8b and qwen3:8b through Ollama
+  both reported 2,050 prompt tokens and answered the question at the end instead: the start of
+  the prompt, with the instructions, was dropped without an error. Ollama's window is 4,096
+  tokens for prompt and answer; a prompt over it is cut to about half. Without a budget (8,000)
+  the demo agent's reply prompt grew by ~200 tokens per question (2,519 at the 12th) and would
+  pass the window around the 20th; with the 2,500 default it stays inside, and with 1,200 it
+  stayed between 544 and 1,338 tokens. Requests the model cut are now flagged in the test chat.
+  (`OLLAMA_CONTEXT_LENGTH` raises the window, at the cost of memory and speed.)
+
+  **Findings: caller memory** (gpt-4.1-nano, two calls from the same number):
+  - First version: 8 facts, one invented ("Sam has booked a consultation with Priya": nothing
+    was booked) and four about what _didn't_ happen. Telling it to write only what was said or
+    done fixed both.
+  - Told not to store facts about the business, it still stored 4 of 8 (prices, policies).
+    Asking it to mark each fact "caller" or "business" and dropping the business ones in code
+    worked: 3 accurate facts.
+  - A card number read out in the call was never stored (code also drops anything that looks
+    like one).
+  - It wrote "her daughter" about a caller whose pronouns nobody gave: memory can store
+    assumptions, and the next call reads them as facts.
 
 ### 8. Evals
 

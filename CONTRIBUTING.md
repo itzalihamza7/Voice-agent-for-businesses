@@ -25,6 +25,7 @@ container, so plain `npm ...` on macOS will fail on native binaries.
 | Download the local embedding model (knowledge base) | `ollama pull nomic-embed-text` |
 | Create + apply a DB migration after editing `schema.prisma` | `ddev npm run db:migrate -- --name <change>` |
 | Apply migrations + seed demo data (idempotent) | `ddev npm run db:setup` |
+| Add the example knowledge documents (only while the knowledge base is empty) | `ddev npm run kb:seed` |
 | Postgres shell | `ddev psql` |
 | Dev server logs | `ddev logs -s web -f` |
 | Stop (DB data is kept) | `ddev stop` |
@@ -115,6 +116,12 @@ settle before testing in the browser.
   irrelevant passages, so the agent says "I don't know" instead of inventing an answer.
 - pgvector comes from `.ddev/db-build/Dockerfile`. The `vector` column is `Unsupported` in Prisma:
   read and write embeddings with raw SQL in `packages/rag/src/store.ts`.
+- Memory & context: AI prompts get the call through `buildContext` / `decisionContext`
+  (`packages/orchestrator/src/context.ts`), never the raw transcript. Branch decisions get only the
+  last few spoken messages: more context made routing worse. New per-call state fields need a Zod
+  `.default(...)` so states from older browsers still parse.
+- Caller memory facts are written by the AI and checked by code (`checkFacts`): never store
+  payment details, and keep the Forget button working (callers can ask to be forgotten).
 - Unit tests never call a real language model: use a scripted fake (see `conversation.test.ts`).
   Model behaviour is checked by hand or with live runs against both Ollama and OpenAI.
 - Pinned on purpose: TypeScript 6.0 (typescript-eslint does not support 7 yet), ESLint 9

@@ -10,6 +10,7 @@ import type {
   PromptSettings,
   TurnResult,
 } from "@voice-agent/shared";
+import { estimateTokens } from "@voice-agent/shared";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   defaultModelChoice,
@@ -25,6 +26,12 @@ import { formatCost, LlmMeta } from "./LlmMeta";
 // One model can pick Branch paths and another write AI replies (model routing), with a
 // fallback for when a model fails. Every AI request shows its model, time, tokens and cost,
 // so local and hosted models can be compared.
+// Memory & context: a caller number gives the call long-term memory (facts saved at the end of
+// the call, shown again next time), and the context budget limits how much of the call each
+// AI request sees (older parts are shortened, summarized or left out).
+
+const CONTEXT_BUDGETS = [600, 1200, 2500, 8000];
+const DEFAULT_BUDGET = 2500;
 
 type Message =
   | { kind: "agent"; text: string; llm?: LlmCallInfo }
@@ -51,6 +58,8 @@ export function TestChat({ flow, prompt, tools, onActiveNodeChange }: Props) {
   const [paths, setPaths] = useState<{ handle: string; label: string }[]>([]);
   const [input, setInput] = useState("");
   const [pending, setPending] = useState(false);
+  const [callerPhone, setCallerPhone] = useState("");
+  const [contextBudget, setContextBudget] = useState(DEFAULT_BUDGET);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -77,6 +86,7 @@ export function TestChat({ flow, prompt, tools, onActiveNodeChange }: Props) {
         },
         prompt,
         tools,
+        contextBudget,
       }),
     });
     setPending(false);
@@ -100,7 +110,8 @@ export function TestChat({ flow, prompt, tools, onActiveNodeChange }: Props) {
     setMessages([]);
     setState(null);
     setInput("");
-    void send({ type: "start" }, flow, null);
+    const phone = callerPhone.trim();
+    void send({ type: "start", ...(phone ? { callerPhone: phone } : {}) }, flow, null);
   }
 
   function sendReply(event: FormEvent) {
@@ -124,6 +135,18 @@ export function TestChat({ flow, prompt, tools, onActiveNodeChange }: Props) {
     );
   }
 
+  async function forgetCaller(phone: string) {
+    const response = await fetch(`/api/callers/${encodeURIComponent(phone)}/memory`, {
+      method: "DELETE",
+    });
+    const text =
+      response.status === 204
+        ? `Forgot everything about ${phone}.`
+        : `Nothing was remembered about ${phone}.`;
+    setMessages((current) => [...current, { kind: "note", tone: "info", text }]);
+    setState((current) => current && { ...current, callerMemory: [] });
+  }
+
   const waitingFor = state?.waitingFor ?? null;
   const aiCalls = messages.flatMap((message) =>
     "llm" in message && message.llm ? [message.llm] : [],
@@ -143,6 +166,33 @@ export function TestChat({ flow, prompt, tools, onActiveNodeChange }: Props) {
         </button>
       </div>
       <ModelPicker options={options} problems={problems} choice={choice} onChange={setUserChoice} />
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        <label>
+          <span className="text-gray-600">Caller&apos;s number (memory)</span>
+          <input
+            aria-label="Caller's number"
+            className="mt-0.5 w-full rounded border border-gray-300 px-1 py-0.5"
+            placeholder="none: no memory"
+            value={callerPhone}
+            onChange={(event) => setCallerPhone(event.target.value)}
+          />
+        </label>
+        <label>
+          <span className="text-gray-600">Context budget</span>
+          <select
+            aria-label="Context budget"
+            className="mt-0.5 w-full rounded border border-gray-300 px-1 py-0.5"
+            value={contextBudget}
+            onChange={(event) => setContextBudget(Number(event.target.value))}
+          >
+            {CONTEXT_BUDGETS.map((budget) => (
+              <option key={budget} value={budget}>
+                {budget.toLocaleString()} tokens{budget === DEFAULT_BUDGET ? " (default)" : ""}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
       <p className="text-xs text-gray-500">
         You play the caller. Uses the flow on the canvas, saved or not. Models can be changed
         mid-call.
@@ -217,6 +267,32 @@ export function TestChat({ flow, prompt, tools, onActiveNodeChange }: Props) {
         </p>
       )}
 
+      {state && <ContextMeter state={state} budget={contextBudget} />}
+
+      {state?.callerPhone && (
+        <div className="border-t border-gray-200 pt-2 text-xs" data-testid="caller-memory">
+          <div className="flex items-baseline justify-between">
+            <h3 className="font-semibold text-gray-600">Remembered about {state.callerPhone}</h3>
+            <button
+              type="button"
+              className="text-red-600 underline"
+              onClick={() => void forgetCaller(state.callerPhone!)}
+            >
+              Forget this caller
+            </button>
+          </div>
+          {state.callerMemory.length ? (
+            <ul className="mt-1 list-disc pl-4">
+              {state.callerMemory.map((fact) => (
+                <li key={fact}>{fact}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-1 text-gray-500">Nothing yet: facts are saved when the call ends.</p>
+          )}
+        </div>
+      )}
+
       {state && Object.keys(state.variables).length > 0 && (
         <div className="border-t border-gray-200 pt-2">
           <h3 className="text-xs font-semibold text-gray-600">Collected answers</h3>
@@ -231,6 +307,27 @@ export function TestChat({ flow, prompt, tools, onActiveNodeChange }: Props) {
         </div>
       )}
     </div>
+  );
+}
+
+/** How much of the call the next AI request would see, before any cuts. */
+function ContextMeter({ state, budget }: { state: ConversationState; budget: number }) {
+  const recent = state.transcript.slice(state.summary?.upTo ?? 0);
+  const tokens =
+    (state.summary ? estimateTokens(state.summary.text) : 0) +
+    recent.reduce((sum, entry) => sum + estimateTokens(entry.text), 0);
+  const over = tokens > budget;
+  return (
+    <p
+      className={`text-xs ${over ? "text-amber-700" : "text-gray-500"}`}
+      data-testid="context-meter"
+    >
+      Context: ~{tokens.toLocaleString()} of {budget.toLocaleString()} tokens
+      {state.summary
+        ? ` · summary covers ${state.summary.upTo} of ${state.transcript.length} messages`
+        : ""}
+      {over ? " · next AI request will be shortened" : ""}
+    </p>
   );
 }
 
