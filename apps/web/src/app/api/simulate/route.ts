@@ -9,6 +9,7 @@ import {
   type LanguageModelProvider,
 } from "@voice-agent/pipeline";
 import { SimulateRequestSchema, type ModelSpec } from "@voice-agent/shared";
+import { getCallerMemoryStore } from "@/server/caller-memory";
 import { parseJsonBody } from "@/server/http";
 import { knowledgeSearcher } from "@/server/knowledge";
 import { loadTools } from "@/server/tools";
@@ -17,7 +18,7 @@ export async function POST(request: Request) {
   const parsed = await parseJsonBody(request, SimulateRequestSchema);
   if ("response" in parsed) return parsed.response;
 
-  const { flow, state, action, models, prompt, tools: toolConfig } = parsed.data;
+  const { flow, state, action, models, prompt, tools: toolConfig, contextBudget } = parsed.data;
   const resolved = await loadTools(toolConfig);
   try {
     const fallback = models.fallback ? createLanguageModel(models.fallback) : null;
@@ -32,6 +33,8 @@ export async function POST(request: Request) {
       ...(prompt ? { prompt } : {}),
       tools: resolved.tools,
       knowledge: knowledgeSearcher(),
+      memory: getCallerMemoryStore(),
+      ...(contextBudget ? { contextBudget } : {}),
     };
     return Response.json(await runTurn(flow, state, action, deps));
   } catch (error) {

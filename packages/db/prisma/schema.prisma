@@ -20,6 +20,7 @@ model Business {
   agents             Agent[]
   calls              Call[]
   knowledgeDocuments KnowledgeDocument[]
+  callerMemories     CallerMemory[]
 
   @@map("businesses")
 }
@@ -155,4 +156,26 @@ model KnowledgeEmbedding {
 
   @@id([chunkId, model])
   @@map("knowledge_embeddings")
+}
+
+// ----- Caller memory (roadmap phase 7) --------------------------------------------------------
+// What an agent remembers about a caller between calls, by phone number (caller ID): a few
+// short facts written by the AI at the end of each call and checked by code.
+
+model CallerMemory {
+  id          String   @id @default(uuid())
+  businessId  String   @map("business_id")
+  // Normalized: digits, with a leading "+" if it had one.
+  phoneNumber String   @map("phone_number")
+  // A JSON array of short sentences, e.g. ["Name is Ali.", "Prefers Priya."].
+  facts       Json
+  // How many calls updated this memory.
+  callCount   Int      @default(0) @map("call_count")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, phoneNumber])
+  @@map("caller_memories")
 }
