@@ -1,8 +1,7 @@
-import type { LanguageModelProvider } from "@voice-agent/pipeline";
+import { llmCallInfo, type LanguageModelProvider } from "@voice-agent/pipeline";
 import type { LlmCallInfo } from "@voice-agent/shared";
 import { z } from "zod";
 import { formatContext, type CallContext } from "./context";
-import { llmCallInfo } from "./llm-info";
 
 // Long-term memory per caller: a few short facts, stored by phone number, that the agent sees
 // on the caller's next call ("Ali prefers Saturdays", "booked balayage with Priya, BK-7Q2M").

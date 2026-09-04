@@ -1,4 +1,4 @@
-import type { LanguageModelProvider } from "@voice-agent/pipeline";
+import { llmCallInfo, type LanguageModelProvider } from "@voice-agent/pipeline";
 import {
   BRANCH_ELSE_HANDLE,
   builtInVariables,
@@ -15,7 +15,6 @@ import {
   type TurnResult,
 } from "@voice-agent/shared";
 import type { Tool } from "@voice-agent/tools";
-import { llmCallInfo } from "./llm-info";
 import { z } from "zod";
 import { buildContext, decisionContext, DEFAULT_CONTEXT_BUDGET, type CallContext } from "./context";
 import { normalizePhoneNumber, updateMemoryFacts, type CallerMemoryStore } from "./memory";

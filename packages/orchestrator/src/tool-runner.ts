@@ -1,8 +1,9 @@
-import type {
-  ChatMessage,
-  CompletionResult,
-  LanguageModelProvider,
-  ToolSpec,
+import {
+  llmCallInfo,
+  type ChatMessage,
+  type CompletionResult,
+  type LanguageModelProvider,
+  type ToolSpec,
 } from "@voice-agent/pipeline";
 import {
   renderTemplate,
@@ -13,7 +14,6 @@ import {
 } from "@voice-agent/shared";
 import { checkArguments, missingArguments, type Tool, type ToolResult } from "@voice-agent/tools";
 import type { CallContext } from "./context";
-import { llmCallInfo } from "./llm-info";
 import { toolArgumentsPrompt } from "./prompts";
 
 // Running tools during a conversation:

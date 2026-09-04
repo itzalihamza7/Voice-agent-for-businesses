@@ -1,6 +1,7 @@
 // Public entry point for the voice pipeline (STT -> LLM -> TTS).
 export * from "./providers/stt/types";
 export * from "./providers/llm/types";
+export * from "./providers/llm/call-info";
 export * from "./providers/embeddings/types";
 export * from "./providers/embeddings/openai-compatible";
 export * from "./providers/llm/fallback";

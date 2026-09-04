@@ -1,4 +1,4 @@
-import type { CompletionResult } from "@voice-agent/pipeline";
+import type { CompletionResult } from "./types";
 import type { LlmCallInfo } from "@voice-agent/shared";
 
 /** The details of one language model request that the UI shows (model, time, tokens, cost). */

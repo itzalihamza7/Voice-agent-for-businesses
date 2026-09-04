@@ -1,4 +1,4 @@
-import type { LanguageModelProvider } from "@voice-agent/pipeline";
+import { llmCallInfo, type LanguageModelProvider } from "@voice-agent/pipeline";
 import {
   estimateTokens,
   type CallSummary,
@@ -6,7 +6,6 @@ import {
   type TranscriptEntry,
 } from "@voice-agent/shared";
 import { z } from "zod";
-import { llmCallInfo } from "./llm-info";
 
 // Rolling summary: once the messages after the summary take up more than a share of the
 // context budget, the decisions model folds the older ones (and the previous summary) into a

@@ -1,4 +1,4 @@
-import type { LanguageModelProvider } from "@voice-agent/pipeline";
+import { llmCallInfo, type LanguageModelProvider } from "@voice-agent/pipeline";
 import {
   builtInVariables,
   buildSystemPrompt,
@@ -6,7 +6,6 @@ import {
   type PromptSettings,
 } from "@voice-agent/shared";
 import { buildContext } from "./context";
-import { llmCallInfo } from "./llm-info";
 import { aiResponsePrompt } from "./prompts";
 
 // Prompt playground: runs one AI reply with given prompt settings, so two versions of a prompt
