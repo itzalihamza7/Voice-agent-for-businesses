@@ -2,6 +2,7 @@
 export * from "./agent-config";
 export * from "./call";
 export * from "./conversation";
+export * from "./evals";
 export * from "./flow";
 export * from "./flow-validation";
 export * from "./prompt";
