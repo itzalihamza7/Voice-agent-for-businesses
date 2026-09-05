@@ -1,0 +1,18 @@
+{
+  "name": "@voice-agent/evals",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@voice-agent/pipeline": "*",
+    "@voice-agent/rag": "*",
+    "@voice-agent/shared": "*",
+    "zod": "^4.6.7"
+  }
+}

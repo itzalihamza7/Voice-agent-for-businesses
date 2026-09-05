@@ -6,6 +6,7 @@ const nextConfig: NextConfig = {
   transpilePackages: [
     "@voice-agent/agent-config",
     "@voice-agent/db",
+    "@voice-agent/evals",
     "@voice-agent/orchestrator",
     "@voice-agent/pipeline",
     "@voice-agent/rag",
