@@ -27,16 +27,20 @@ model Business {
 
 // A voice agent. Its design lives in AgentConfigVersion rows, never in this table.
 model Agent {
-  id         String   @id @default(uuid())
-  businessId String   @map("business_id")
+  id          String   @id @default(uuid())
+  businessId  String   @map("business_id")
   // Copy of the latest version's name, so agent lists don't need to read JSON.
-  name       String
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  name        String
+  // The version callers get. null = none published yet (the latest version is used).
+  liveVersion Int?     @map("live_version")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
-  business Business             @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  versions AgentConfigVersion[]
-  calls    Call[]
+  business  Business             @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  versions  AgentConfigVersion[]
+  calls     Call[]
+  evalCases EvalCase[]
+  evalRuns  EvalRun[]
 
   @@index([businessId])
   @@map("agents")
@@ -145,7 +149,7 @@ model KnowledgeChunk {
 }
 
 model KnowledgeEmbedding {
-  chunkId   String                 @map("chunk_id")
+  chunkId   String                @map("chunk_id")
   // e.g. "ollama/nomic-embed-text": vectors from different models can't be compared.
   model     String
   // pgvector, without a fixed size, so models with different sizes share one table.
@@ -178,4 +182,45 @@ model CallerMemory {
 
   @@unique([businessId, phoneNumber])
   @@map("caller_memories")
+}
+
+// ----- Evals (roadmap phase 8) ----------------------------------------------------------------
+// Test cases per agent, and runs of them against a version. A version can only go live after a
+// run, and not if its score dropped (the regression gate).
+
+model EvalCase {
+  id         String   @id @default(uuid())
+  agentId    String   @map("agent_id")
+  name       String
+  // { kind: "script" | "simulated", ... }, validated by Zod (@voice-agent/shared, evals.ts).
+  definition Json
+  // Extra rubric lines for the judge.
+  criteria   Json
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([agentId])
+  @@map("eval_cases")
+}
+
+model EvalRun {
+  id           String   @id @default(uuid())
+  agentId      String   @map("agent_id")
+  agentVersion Int      @map("agent_version")
+  // Which models ran the agent, played the callers and judged.
+  models       Json
+  // "running" until every case has a result, then "done".
+  status       String
+  // 0–100, set when done.
+  score        Float?
+  // The cases to run, in order, and their results so far.
+  caseIds      Json     @map("case_ids")
+  results      Json
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([agentId, createdAt])
+  @@map("eval_runs")
 }
