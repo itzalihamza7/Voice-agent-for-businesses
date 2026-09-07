@@ -2,7 +2,7 @@ import { AgentConfigSchema } from "@voice-agent/shared";
 import { createPrismaClient } from "../src/client";
 import type { Prisma } from "../src/generated/prisma/client";
 import { DEFAULT_BUSINESS_ID } from "../src/constants";
-import { DEMO_AGENT_DRAFT } from "./demo-agent";
+import { DEMO_AGENT_DRAFT, DEMO_EVAL_CASES } from "./demo-agent";
 
 // Creates the demo business and the "demo" agent (a Q&A agent, see demo-agent.ts). Safe to run
 // many times: it only creates what is missing and never touches existing versions.
@@ -25,6 +25,7 @@ async function main() {
     if (existing) {
       // Demo agents seeded before the Q&A flow existed have only a Start step: add the Q&A flow
       // as a new version. Anything else was built by someone, so it is left alone.
+      await seedEvalCases(prisma);
       const latest = existing.versions[0];
       const stored = latest && AgentConfigSchema.safeParse(latest.config);
       if (latest && stored?.success && stored.data.flow.nodes.length <= 1) {
@@ -55,9 +56,25 @@ async function main() {
       },
     });
     console.log('Seed: created demo business and agent "demo".');
+    await seedEvalCases(prisma);
   } finally {
     await prisma.$disconnect();
   }
+}
+
+/** The demo agent's eval cases, while it has neither cases nor runs (deleted ones stay deleted). */
+async function seedEvalCases(prisma: ReturnType<typeof createPrismaClient>) {
+  const where = { agentId: DEMO_AGENT_ID };
+  if ((await prisma.evalCase.count({ where })) || (await prisma.evalRun.count({ where }))) return;
+  await prisma.evalCase.createMany({
+    data: DEMO_EVAL_CASES.map((c) => ({
+      agentId: DEMO_AGENT_ID,
+      name: c.name,
+      definition: c.definition as Prisma.InputJsonObject,
+      criteria: c.criteria,
+    })),
+  });
+  console.log(`Seed: added ${DEMO_EVAL_CASES.length} eval cases to the demo agent.`);
 }
 
 function demoConfig(version: number) {
