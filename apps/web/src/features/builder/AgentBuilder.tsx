@@ -30,6 +30,7 @@ import {
 } from "@xyflow/react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import { EvalsPanel } from "./EvalsPanel";
 import { CanvasHighlightContext, FlowNodeCard } from "./FlowNodeCard";
 import {
   fromReactFlow,
@@ -91,7 +92,7 @@ function Builder({ agentId, initial, versions: initialVersions }: Props) {
   const [toolConfig, setToolConfig] = useState(initial.tools);
   const toolList = useToolList(toolConfig);
   // "flow" = the canvas; "prompt" = the prompt studio (shown on top of the canvas).
-  const [mode, setMode] = useState<"flow" | "prompt" | "tools">("flow");
+  const [mode, setMode] = useState<"flow" | "prompt" | "tools" | "evals">("flow");
   const [initialCanvas] = useState(() => toReactFlow(initial.flow));
   const [nodes, setNodes, onNodesChange] = useNodesState<BuilderNode>(initialCanvas.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialCanvas.edges);
@@ -273,7 +274,7 @@ function Builder({ agentId, initial, versions: initialVersions }: Props) {
           {issues.length ? `${issues.length} issue(s)` : "Ready to run ✓"}
         </span>
         <div className="flex overflow-hidden rounded border border-gray-300 text-sm" role="tablist">
-          {(["flow", "prompt", "tools"] as const).map((tab) => (
+          {(["flow", "prompt", "tools", "evals"] as const).map((tab) => (
             <button
               key={tab}
               type="button"
@@ -285,7 +286,7 @@ function Builder({ agentId, initial, versions: initialVersions }: Props) {
               }}
               className={`px-3 py-1 ${mode === tab ? "bg-gray-800 text-white" : "hover:bg-gray-100"}`}
             >
-              {{ flow: "Flow", prompt: "Prompt", tools: "Tools" }[tab]}
+              {{ flow: "Flow", prompt: "Prompt", tools: "Tools", evals: "Evals" }[tab]}
             </button>
           ))}
         </div>
@@ -320,6 +321,11 @@ function Builder({ agentId, initial, versions: initialVersions }: Props) {
       </header>
 
       <div className="relative flex min-h-0 flex-1">
+        {mode === "evals" && (
+          <div className="absolute inset-0 z-10 flex bg-white">
+            <EvalsPanel agentId={agentId} versions={versions.map((v) => v.version)} />
+          </div>
+        )}
         {mode === "tools" && (
           <div className="absolute inset-0 z-10 flex bg-white">
             <ToolsPanel
