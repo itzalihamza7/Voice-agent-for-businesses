@@ -4,6 +4,7 @@ import type { LlmCallInfo } from "@voice-agent/shared";
 import { useEffect, useState } from "react";
 import { formatCost } from "../builder/LlmMeta";
 import { toModelSpec, useModelOptions } from "../builder/ModelPicker";
+import { RetrievalEval } from "./RetrievalEval";
 
 // Search playground: one search shows keyword, vector and final (hybrid, optionally rewritten
 // and reranked) results side by side, to see what each method finds.
@@ -161,6 +162,7 @@ export function SearchPlayground() {
           </div>
         </>
       )}
+      <RetrievalEval embeddingModel={embeddingModel} />
     </section>
   );
 }
