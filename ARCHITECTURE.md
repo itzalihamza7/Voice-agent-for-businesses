@@ -80,8 +80,9 @@ through the API. Only `apps/web/src/server/` creates the database client and the
 | `packages/agent-config/` | Storing and versioning agent configs. `AgentConfigStore` is the interface, with two implementations: `InMemoryAgentConfigStore` (tests) and `PrismaAgentConfigStore` (Postgres). `store.contract.ts` holds the tests both must pass. `versioning.ts` is the placeholder for rollback / A/B logic.                      |
 | `packages/orchestrator/` | The "glue": agent use cases (create, list, save a version) and sessions (load the agent's config, build its providers). Later it drives the conversation and saves call logs. Has no HTTP code.                                                                                                                        |
 | `packages/rag/`          | The knowledge base (RAG): text extraction from web pages and PDFs, chunking, embedding, the business-scoped `KnowledgeStore` (pgvector + full-text search) and `searchKnowledge()` (hybrid search, rewriting, reranking).                                                                                              |
+| `packages/evals/`        | Evals: running test cases (scripted or simulated callers) against an agent version, the AI judge, retrieval metrics and the go-live gate.                                                                                                                                                                              |
 | `packages/tools/`        | Tools agents can call: built-in booking tools (mock), webhook tools, MCP client, argument checks against JSON Schema, SSRF guard.                                                                                                                                                                                      |
-| `packages/db/`           | Database access with **Prisma 7** and PostgreSQL. `prisma/schema.prisma` (tables: businesses, agents, agent_config_versions, calls, transcript_turns, knowledge_documents, knowledge_chunks, knowledge_embeddings, caller_memories), `prisma/migrations/`, and an idempotent `prisma/seed.ts`.                         |
+| `packages/db/`           | Database access with **Prisma 7** and PostgreSQL. `prisma/schema.prisma` (tables: businesses, agents, agent_config_versions, calls, transcript_turns, knowledge_documents, knowledge_chunks, knowledge_embeddings, caller_memories, eval_cases, eval_runs), `prisma/migrations/`, and an idempotent `prisma/seed.ts`.  |
 | `.ddev/`                 | DDEV config: the Docker-based development environment (Node 22 + PostgreSQL 17). Our settings live in `config.voice-agent.yaml`, because `ddev config` rewrites `config.yaml`.                                                                                                                                         |
 
 ## How "swap a vendor without code changes" works
@@ -371,6 +372,26 @@ them: only facts the AI marked as about the caller (not the business), at most 8
 `caller_memories` table, per business and normalized phone number. The test chat shows them
 with a **Forget this caller** button (`DELETE /api/callers/:phone/memory`).
 
+## How evals work
+
+Code: `packages/evals`, the builder's **Evals** tab, and `apps/web/src/server/evals.ts`.
+
+- **Cases per agent** (`eval_cases`). A _scripted_ case has fixed caller lines and code checks:
+  how the call ends, saved answers, phrases the agent must or must never say ("£30|thirty" means
+  either), steps it must pass. A _simulated_ case gives a model a persona and a goal, and it plays
+  the caller for up to N turns.
+- **AI judge.** A (preferably stronger) model grades every call against a rubric: helpful,
+  grounded (no invented facts; it sees the notes the agent saw), on script, phone manner, plus
+  case-specific lines ("never promises a discount"). Each line gets a reason, then 0/1/2.
+- **Score.** A case's score averages the share of checks passed and of judge points; it fails if
+  a check fails or the judge gives a 0. A run's score is the average, 0–100.
+- **Runs** (`eval_runs`) are started for a saved version and models; the browser then runs each
+  case with its own request, and the server computes and stores the result.
+- **Regression gate.** `POST /api/agents/:id/live` makes a version live only if it has a finished
+  run and its score isn't more than 3 points below the live version's.
+- **Retrieval test.** On the knowledge page: recall@1, recall@3 and MRR of keyword, vector and
+  hybrid search on 18 spoken questions about the example documents.
+
 ## How a test call works
 
 The builder's **Test** button opens a chat where you play the caller. It lets you check a flow's
@@ -506,4 +527,4 @@ There are two kinds of tests:
 | **Versioned configs** (rollback, A/B)                                 | Schema: `packages/shared/src/agent-config.ts`. Storage (done): `PrismaAgentConfigStore` in `packages/agent-config/`, using the `agent_config_versions` table. Rollback / A/B logic: `packages/agent-config/src/versioning.ts`.            |
 | **Orchestration**                                                     | `packages/orchestrator/` holds the logic. `apps/web/src/app/api/` is its HTTP door today. A future `apps/voice-gateway/` (WebSocket server for phone calls) would be a second door into the same package.                                 |
 | **Sentiment analysis**                                                | A new provider interface in `packages/pipeline/src/providers/sentiment/` when it is needed. The `Sentiment` type already exists in `shared`.                                                                                              |
-| **AI features** (prompts, LLM harness, tools, RAG, evals, guardrails) | See [docs/ROADMAP.md](docs/ROADMAP.md). `packages/rag` and `packages/tools` exist; `packages/evals` is planned. Every LLM feature runs against both a local model (Ollama) and the OpenAI API, so they can be compared.                   |
+| **AI features** (prompts, LLM harness, tools, RAG, evals, guardrails) | See [docs/ROADMAP.md](docs/ROADMAP.md). `packages/rag`, `packages/tools` and `packages/evals` exist. Every LLM feature runs against both a local model (Ollama) and the OpenAI API, so they can be compared.                              |

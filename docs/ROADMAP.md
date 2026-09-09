@@ -51,7 +51,7 @@ feature support when building each phase. It changes often.
 | 5   | Structured outputs & tools      | JSON schema output, intents, function calling, agentic loop, MCP               | 6   | ✅ Done |
 | 6   | RAG knowledge base              | Ingestion, chunking, embeddings, pgvector, hybrid search, reranking, citations | 9   | ✅ Done |
 | 7   | Memory & context                | Context budgets, rolling summaries, long-term caller memory                    | 3   | ✅ Done |
-| 8   | Evals                           | Golden sets, simulated callers, LLM-as-judge, RAG metrics, regression gate     | 7   |         |
+| 8   | Evals                           | Golden sets, simulated callers, LLM-as-judge, RAG metrics, regression gate     | 7   | ✅ Done |
 | 9   | Guardrails & safety             | Prompt injection, PII redaction, output checks, grounding, escalation          | 5   |         |
 | 10  | Voice in the browser            | Streaming STT → LLM → TTS, VAD, barge-in, latency budgets, LLM token streaming | 8   |         |
 | 11  | Phone calls                     | Twilio media streams, routing, human transfer                                  | 5   |         |
@@ -283,11 +283,35 @@ feature support when building each phase. It changes often.
   - It wrote "her daughter" about a caller whose pronouns nobody gave: memory can store
     assumptions, and the next call reads them as facts.
 
-### 8. Evals
+### 8. Evals ✅
 
-- Test cases per agent; LLM-simulated caller personas (including attackers).
-- LLM-as-judge rubrics; RAG metrics (recall@k, faithfulness, relevance).
-- Regression gate: a version can't go live if its eval score drops. New package: `packages/evals`.
+- ✅ Test cases per agent: scripted callers checked by code, and simulated callers (personas,
+  including one trying to get a discount and the agent's instructions). Seven for the demo agent.
+- ✅ LLM-as-judge rubric (helpful, grounded, on script, phone manner, plus per-case lines).
+- ✅ Retrieval metrics (recall@1, recall@3, MRR) on 18 questions; faithfulness is the judge's
+  "grounded" line.
+- ✅ Regression gate on "Go live". New package: `packages/evals`.
+
+  **Findings.**
+  - The first run of the demo agent (gpt-4.1-nano, judged by gpt-4.1-mini) scored 94.6. The
+    judge caught what the code checks couldn't: the agent said "I'm not sure about the price"
+    while the passage it was given said £180. Asked 5 times each, nano gave the Saturday closing
+    time 2/5 and the bridal price 0/5, with the right passage in front of it.
+  - Cause: the answer step's instructions led with the fallback ("if they don't contain the
+    answer, say you're not sure..."), and nano copied it. Rewritten to "answer directly with the
+    fact; only if it's missing, say you're not sure": Saturday 5/5, and v4 scored 100. The gate
+    let v4 go live and refused a version that had never been evaluated.
+  - Retrieval on the harder question set (nomic-embed-text, no reranking):
+
+    | Search  | Recall@1 | Recall@3 | MRR  |
+    | ------- | -------- | -------- | ---- |
+    | Keyword | 67%      | 67%      | 0.68 |
+    | Vector  | 83%      | 94%      | 0.87 |
+    | Hybrid  | 78%      | 83%      | 0.83 |
+
+    Rank fusion pulled vector search down here: keyword matches on common words outranked
+    paraphrases ("do I have to pay anything up front" → deposit). Reranking (on by default in
+    calls) is what fixes this.
 
 ### 9. Guardrails & safety
 
