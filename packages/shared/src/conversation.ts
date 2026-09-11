@@ -40,24 +40,34 @@ export const ConversationStateSchema = z.object({
   callerMemory: z.array(z.string()).default([]),
 });
 
+const PhoneNumberSchema = z
+  .string()
+  .trim()
+  .regex(/^\+?[0-9 ()-]{6,20}$/, "Not a phone number");
+
+// What the caller says: an answer to an Ask step, or a message the AI routes at a Branch.
+const ReplyActionSchema = z.object({
+  type: z.literal("reply"),
+  text: z.string().trim().min(1).max(2000),
+});
+// Pick a Branch path by hand (a condition id or "else"), optionally with what the caller said.
+const ChoosePathActionSchema = z.object({
+  type: z.literal("choosePath"),
+  handle: z.string().min(1),
+  callerText: z.string().trim().max(2000).optional(),
+});
+
 export const ConversationActionSchema = z.discriminatedUnion("type", [
   // callerPhone: the number the call comes from, for the caller's long-term memory.
-  z.object({
-    type: z.literal("start"),
-    callerPhone: z
-      .string()
-      .trim()
-      .regex(/^\+?[0-9 ()-]{6,20}$/, "Not a phone number")
-      .optional(),
-  }),
-  // What the caller says: an answer to an Ask step, or a message the AI routes at a Branch.
-  z.object({ type: z.literal("reply"), text: z.string().trim().min(1).max(2000) }),
-  // Pick a Branch path by hand (a condition id or "else"), optionally with what the caller said.
-  z.object({
-    type: z.literal("choosePath"),
-    handle: z.string().min(1),
-    callerText: z.string().trim().max(2000).optional(),
-  }),
+  z.object({ type: z.literal("start"), callerPhone: PhoneNumberSchema.optional() }),
+  ReplyActionSchema,
+  ChoosePathActionSchema,
+]);
+
+/** What can happen once a call is going: the caller speaks, or a path is picked by hand. */
+export const CallerActionSchema = z.discriminatedUnion("type", [
+  ReplyActionSchema,
+  ChoosePathActionSchema,
 ]);
 
 /** A language model: provider name plus, optionally, a specific model, e.g. ollama + "qwen3:8b". */
@@ -86,6 +96,25 @@ export const SimulateRequestSchema = z.object({
   tools: AgentToolsSchema.optional(),
   // Tokens the conversation part of each prompt may use (see orchestrator/context.ts).
   contextBudget: z.number().int().min(200).max(50_000).optional(),
+});
+
+/** The models and per-request settings every test-call request sends (they can change mid-call). */
+const CallSettingsSchema = SimulateRequestSchema.pick({
+  models: true,
+  prompt: true,
+  tools: true,
+  contextBudget: true,
+});
+
+/** Starts a test call kept on the server (LangGraph thread). */
+export const StartTestCallSchema = CallSettingsSchema.extend({
+  flow: AgentFlowSchema,
+  callerPhone: PhoneNumberSchema.optional(),
+});
+
+/** The caller speaks (or a path is picked by hand) in a test call. */
+export const TestCallActionSchema = CallSettingsSchema.extend({
+  action: CallerActionSchema,
 });
 
 /** Prompt playground: one AI reply with the given prompt settings, to compare two versions. */
@@ -226,5 +255,7 @@ export type CallSummary = z.infer<typeof CallSummarySchema>;
 export type ConversationState = z.infer<typeof ConversationStateSchema>;
 export type ConversationAction = z.infer<typeof ConversationActionSchema>;
 export type SimulateRequest = z.infer<typeof SimulateRequestSchema>;
+export type StartTestCall = z.infer<typeof StartTestCallSchema>;
+export type TestCallAction = z.infer<typeof TestCallActionSchema>;
 export type ModelSpec = z.infer<typeof ModelSpecSchema>;
 export type PromptPlaygroundRequest = z.infer<typeof PromptPlaygroundRequestSchema>;
