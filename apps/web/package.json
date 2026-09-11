@@ -10,6 +10,7 @@
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
+    "@langchain/langgraph-checkpoint-postgres": "^1.1.0",
     "@modelcontextprotocol/sdk": "^1.32.1",
     "@voice-agent/agent-config": "*",
     "@voice-agent/db": "*",

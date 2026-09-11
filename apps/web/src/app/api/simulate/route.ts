@@ -1,49 +1,28 @@
-// POST /api/simulate { flow, state, action, models, prompt, tools }: runs one turn of a test call.
-// The browser keeps the state between turns; nothing is stored. Used by the builder's test chat.
+// POST /api/simulate { flow, state, action, models, prompt, tools }: runs one turn of a call with
+// the state sent by the client; nothing is stored. The builder's test chat uses /api/test-calls
+// (kept on the server by LangGraph); this stateless variant is handy for scripts.
 // Language models run here on the server, so API keys never reach the browser.
 import { ConversationError, runTurn } from "@voice-agent/orchestrator";
-import {
-  createLanguageModel,
-  FallbackLanguageModel,
-  ProviderConfigError,
-  type LanguageModelProvider,
-} from "@voice-agent/pipeline";
-import { SimulateRequestSchema, type ModelSpec } from "@voice-agent/shared";
-import { getCallerMemoryStore } from "@/server/caller-memory";
+import { ProviderConfigError } from "@voice-agent/pipeline";
+import { SimulateRequestSchema } from "@voice-agent/shared";
+import { conversationDeps } from "@/server/conversation";
 import { parseJsonBody } from "@/server/http";
-import { knowledgeSearcher } from "@/server/knowledge";
-import { loadTools } from "@/server/tools";
 
 export async function POST(request: Request) {
   const parsed = await parseJsonBody(request, SimulateRequestSchema);
   if ("response" in parsed) return parsed.response;
-
-  const { flow, state, action, models, prompt, tools: toolConfig, contextBudget } = parsed.data;
-  const resolved = await loadTools(toolConfig);
+  const { flow, state, action, ...settings } = parsed.data;
+  let close = async () => {};
   try {
-    const fallback = models.fallback ? createLanguageModel(models.fallback) : null;
-    const build = (spec: ModelSpec | null): LanguageModelProvider | null => {
-      if (!spec) return null;
-      const model = createLanguageModel(spec);
-      return fallback ? new FallbackLanguageModel(model, fallback) : model;
-    };
-    const deps = {
-      decisions: build(models.decisions),
-      replies: build(models.replies),
-      ...(prompt ? { prompt } : {}),
-      tools: resolved.tools,
-      knowledge: knowledgeSearcher(),
-      memory: getCallerMemoryStore(),
-      ...(contextBudget ? { contextBudget } : {}),
-    };
-    return Response.json(await runTurn(flow, state, action, deps));
+    const built = await conversationDeps(settings);
+    close = built.close;
+    return Response.json(await runTurn(flow, state, action, built.deps));
   } catch (error) {
     if (error instanceof ConversationError || error instanceof ProviderConfigError) {
       return Response.json({ error: error.message }, { status: 400 });
     }
     throw error;
   } finally {
-    // Disconnect from MCP servers.
-    await resolved.close();
+    await close();
   }
 }
