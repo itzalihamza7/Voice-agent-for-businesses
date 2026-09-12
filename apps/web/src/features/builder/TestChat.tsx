@@ -21,7 +21,8 @@ import {
 } from "./ModelPicker";
 import { formatCost, LlmMeta } from "./LlmMeta";
 
-// Test chat: you play the caller, the server walks the flow (POST /api/simulate).
+// Test chat: you play the caller, the server walks the flow. The call is kept on the server as a
+// LangGraph thread (POST /api/test-calls, then /api/test-calls/:callId per turn).
 // The test uses the flow as it was when "Start test call" was pressed; restart after edits.
 // One model can pick Branch paths and another write AI replies (model routing), with a
 // fallback for when a model fails. Every AI request shows its model, time, tokens and cost,
@@ -58,6 +59,7 @@ export function TestChat({ flow, prompt, tools, onActiveNodeChange }: Props) {
   const [paths, setPaths] = useState<{ handle: string; label: string }[]>([]);
   const [input, setInput] = useState("");
   const [pending, setPending] = useState(false);
+  const [callId, setCallId] = useState<string | null>(null);
   const [callerPhone, setCallerPhone] = useState("");
   const [contextBudget, setContextBudget] = useState(DEFAULT_BUDGET);
   const endRef = useRef<HTMLDivElement>(null);
@@ -66,29 +68,36 @@ export function TestChat({ flow, prompt, tools, onActiveNodeChange }: Props) {
     endRef.current?.scrollIntoView({ block: "end" });
   }, [messages]);
 
-  async function send(
-    action: ConversationAction,
-    useFlow: AgentFlow,
-    from: ConversationState | null,
-  ) {
+  // The call lives on the server (a LangGraph thread): starting it returns its id, and every
+  // later request sends only what the caller did. Models and prompt edits apply from the next turn.
+  async function send(action: ConversationAction, useFlow: AgentFlow) {
     setPending(true);
-    const response = await fetch("/api/simulate", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        flow: useFlow,
-        state: from,
-        action,
-        models: {
-          decisions: toModelSpec(choice.decisions),
-          replies: toModelSpec(choice.replies),
-          fallback: toModelSpec(choice.fallback),
-        },
-        prompt,
-        tools,
-        contextBudget,
-      }),
-    });
+    const settings = {
+      models: {
+        decisions: toModelSpec(choice.decisions),
+        replies: toModelSpec(choice.replies),
+        fallback: toModelSpec(choice.fallback),
+      },
+      prompt,
+      tools,
+      contextBudget,
+    };
+    const response =
+      action.type === "start"
+        ? await fetch("/api/test-calls", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              ...settings,
+              flow: useFlow,
+              ...(action.callerPhone ? { callerPhone: action.callerPhone } : {}),
+            }),
+          })
+        : await fetch(`/api/test-calls/${callId}`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ ...settings, action }),
+          });
     setPending(false);
     if (!response.ok) {
       const body = (await response.json().catch(() => null)) as { error?: string } | null;
@@ -96,7 +105,8 @@ export function TestChat({ flow, prompt, tools, onActiveNodeChange }: Props) {
       setMessages((current) => [...current, { kind: "note", tone: "error", text }]);
       return;
     }
-    const result = (await response.json()) as TurnResult;
+    const result = (await response.json()) as TurnResult & { callId?: string };
+    if (result.callId) setCallId(result.callId);
     setMessages((current) => [...current, ...result.events.flatMap(toMessages)]);
     setState(result.state);
     const lastBranch = result.events.findLast((event) => event.type === "branch");
@@ -111,7 +121,8 @@ export function TestChat({ flow, prompt, tools, onActiveNodeChange }: Props) {
     setState(null);
     setInput("");
     const phone = callerPhone.trim();
-    void send({ type: "start", ...(phone ? { callerPhone: phone } : {}) }, flow, null);
+    setCallId(null);
+    void send({ type: "start", ...(phone ? { callerPhone: phone } : {}) }, flow);
   }
 
   function sendReply(event: FormEvent) {
@@ -120,7 +131,7 @@ export function TestChat({ flow, prompt, tools, onActiveNodeChange }: Props) {
     if (!testedFlow || !text) return;
     setMessages((current) => [...current, { kind: "caller", text }]);
     setInput("");
-    void send({ type: "reply", text }, testedFlow, state);
+    void send({ type: "reply", text }, testedFlow);
   }
 
   function choosePath(handle: string) {
@@ -128,11 +139,7 @@ export function TestChat({ flow, prompt, tools, onActiveNodeChange }: Props) {
     const text = input.trim();
     if (text) setMessages((current) => [...current, { kind: "caller", text }]);
     setInput("");
-    void send(
-      { type: "choosePath", handle, ...(text ? { callerText: text } : {}) },
-      testedFlow,
-      state,
-    );
+    void send({ type: "choosePath", handle, ...(text ? { callerText: text } : {}) }, testedFlow);
   }
 
   async function forgetCaller(phone: string) {
