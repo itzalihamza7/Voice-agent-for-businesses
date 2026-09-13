@@ -398,18 +398,25 @@ The builder's **Test** button opens a chat where you play the caller. It lets yo
 logic before any speech or phone line exists.
 
 ```
-Browser (TestChat)                        Server
-  flow + state + action  ── POST /api/simulate ──▶  runTurn()  (packages/orchestrator)
-  new state + events     ◀─────────────────────────  walks the flow until it needs the caller
+Browser (TestChat)                          Server
+  start: flow + settings ── POST /api/test-calls ──────────▶ new LangGraph thread (call id)
+  caller's words         ── POST /api/test-calls/:callId ──▶ resume the thread
+  new state + events     ◀───────────────────────────────── runs until it needs the caller
 ```
 
+- **LangGraph keeps the call** (`packages/orchestrator/src/call-graph.ts`). Each call is a
+  thread; a small graph runs a turn, then waits for the caller with `interrupt()`; the next
+  request resumes it with `Command({ resume })`. Postgres keeps every step (the
+  `@langchain/langgraph-checkpoint-postgres` saver, in its own `langgraph` schema), so a call
+  survives restarts and can be inspected later. The graph is compiled per request with that
+  request's models and tools, so no API client or key is ever saved in a checkpoint.
+  (`/api/simulate` is a stateless variant that takes the state in the request, for scripts.)
 - **The conversation engine** (`packages/orchestrator/src/conversation.ts`) runs each turn step
   after step until the flow needs the caller: an **Ask** step (waits for an answer, stores it in
   its variable) or a **Branch**. Say, Tool, Knowledge lookup and AI response steps don't wait.
-- **Nothing is stored on the server.** The browser sends the flow, the current state (the step
-  it is waiting at, the answers so far, and the transcript) and the action (start / reply /
-  choose a path). The server answers with the new state and a list of events ("said X", "AI
-  chose path Y in 0.8 s"), which the chat turns into messages.
+- **Each response** carries the new state (the step it is waiting at, the answers so far, the
+  transcript) and a list of events ("said X", "AI chose path Y in 0.8 s"), which the chat turns
+  into messages.
 - **Models are picked in the chat**, one per job (**model routing**): a model for **Branch
   decisions**, a model for **AI replies**, and an optional **fallback**. The list comes from
   `GET /api/models`: every model installed in Ollama (asked live) plus the allowed OpenAI models.

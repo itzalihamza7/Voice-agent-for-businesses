@@ -313,6 +313,15 @@ feature support when building each phase. It changes often.
     paraphrases ("do I have to pay anything up front" → deposit). Reranking (on by default in
     calls) is what fixes this.
 
+### LangGraph call sessions (between phases 8 and 9) ✅
+
+- ✅ Test calls run as LangGraph threads: a graph of "turn → wait for the caller (`interrupt()`)
+  → turn", with Postgres checkpoints, instead of the browser sending the whole call state on
+  every turn. Voice and phone calls (phases 10–11) and multi-agent handoffs (phase 13) build
+  on it.
+- Our own model, structured-output, tool and RAG code stays: it is what the earlier phases
+  measured. LangChain packages come in only where they save real work.
+
 ### 9. Guardrails & safety
 
 - Prompt-injection detection, PII redaction, output policy checks, grounding check.

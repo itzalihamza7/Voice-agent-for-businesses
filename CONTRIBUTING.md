@@ -122,6 +122,10 @@ settle before testing in the browser.
   `.default(...)` so states from older browsers still parse.
 - Caller memory facts are written by the AI and checked by code (`checkFacts`): never store
   payment details, and keep the Forget button working (callers can ask to be forgotten).
+- LangGraph runs the call lifecycle (`call-graph.ts`: one thread per call, `interrupt()` to wait
+  for the caller, Postgres checkpoints); our engine (`runTurn`) runs the flow's steps. Model and
+  RAG code stay our own on purpose. Never put API clients or keys into graph state or
+  `configurable`: compile the graph per request with them in a closure.
 - Unit tests never call a real language model: use a scripted fake (see `conversation.test.ts`).
   Model behaviour is checked by hand or with live runs against both Ollama and OpenAI.
 - Pinned on purpose: TypeScript 6.0 (typescript-eslint does not support 7 yet), ESLint 9
