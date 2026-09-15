@@ -236,6 +236,16 @@ export type ConversationEvent =
   | { type: "memoryLoaded"; phoneNumber: string; facts: string[]; callCount: number }
   | { type: "memorySaved"; phoneNumber: string; facts: string[]; llm?: LlmCallInfo }
   | { type: "memoryError"; phoneNumber: string; message: string }
+  // A guardrail stepped in: card number removed, injection attempt, escalation to a person,
+  // or an AI reply that stated unknown facts (ungrounded) or broke a rule (policy).
+  | {
+      type: "guardrail";
+      nodeId: string;
+      kind: "redacted" | "injection" | "escalation" | "ungrounded" | "policy";
+      detail: string;
+      /** The reply that was stopped, for the person testing. */
+      original?: string;
+    }
   // Explanations for the person testing, e.g. why a path has to be picked by hand.
   | { type: "note"; nodeId: string; message: string }
   // The language model failed. The call goes on without it where it can.

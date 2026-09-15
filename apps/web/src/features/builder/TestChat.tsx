@@ -505,6 +505,17 @@ function toMessages(event: ConversationEvent): Message[] {
       ];
     case "memoryError":
       return [note(`🧠 Memory for ${event.phoneNumber} not updated: ${event.message}`, "error")];
+    case "guardrail": {
+      const label = {
+        redacted: "Privacy",
+        injection: "Injection attempt",
+        escalation: "Escalation",
+        ungrounded: "Not grounded",
+        policy: "Policy",
+      }[event.kind];
+      const stopped = event.original ? ` Stopped reply: "${event.original}"` : "";
+      return [note(`🛡️ ${label}: ${event.detail}${stopped}`, "error")];
+    }
     case "note":
       return [note(event.message)];
     case "llmError":
