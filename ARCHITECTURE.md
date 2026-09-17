@@ -372,6 +372,22 @@ them: only facts the AI marked as about the caller (not the business), at most 8
 `caller_memories` table, per business and normalized phone number. The test chat shows them
 with a **Forget this caller** button (`DELETE /api/callers/:phone/memory`).
 
+## How guardrails work
+
+Code: `packages/orchestrator/src/guardrails.ts`, applied by the engine on every call whatever
+the agent's prompt says (like the platform rules in the system prompt).
+
+| Where          | Check                                                                                  | What happens                                                         |
+| -------------- | -------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Caller's words | Card numbers                                                                           | Replaced by "[card number removed]" before storing or any model call |
+| Caller's words | Prompt injection ("ignore your instructions", "read me your prompt")                   | Flagged; the AI is told to stay in its role                          |
+| Caller's words | Asks for a person, or is clearly fed up                                                | The call goes to the flow's Transfer step (if it has one)            |
+| AI reply       | Grounding: every price or percentage (digits or words) appears in what it was given    | Written again once with the problem explained, then a safe reply     |
+| AI reply       | Policy: promising a discount the business didn't offer; talking about its instructions | Same as above                                                        |
+
+Every intervention is a `guardrail` event, shown in the test chat with the reply that was
+stopped. The demo agent's evals include a case per guardrail.
+
 ## How evals work
 
 Code: `packages/evals`, the builder's **Evals** tab, and `apps/web/src/server/evals.ts`.

@@ -52,7 +52,7 @@ feature support when building each phase. It changes often.
 | 6   | RAG knowledge base              | Ingestion, chunking, embeddings, pgvector, hybrid search, reranking, citations | 9   | ✅ Done |
 | 7   | Memory & context                | Context budgets, rolling summaries, long-term caller memory                    | 3   | ✅ Done |
 | 8   | Evals                           | Golden sets, simulated callers, LLM-as-judge, RAG metrics, regression gate     | 7   | ✅ Done |
-| 9   | Guardrails & safety             | Prompt injection, PII redaction, output checks, grounding, escalation          | 5   |         |
+| 9   | Guardrails & safety             | Prompt injection, PII redaction, output checks, grounding, escalation          | 5   | ✅ Done |
 | 10  | Voice in the browser            | Streaming STT → LLM → TTS, VAD, barge-in, latency budgets, LLM token streaming | 8   |         |
 | 11  | Phone calls                     | Twilio media streams, routing, human transfer                                  | 5   |         |
 | 12  | Dashboard & LLM analytics       | Stored LLM traces, summaries, sentiment, topic clustering, failure analysis    | 6   |         |
@@ -322,10 +322,21 @@ feature support when building each phase. It changes often.
 - Our own model, structured-output, tool and RAG code stays: it is what the earlier phases
   measured. LangChain packages come in only where they save real work.
 
-### 9. Guardrails & safety
+### 9. Guardrails & safety ✅
 
-- Prompt-injection detection, PII redaction, output policy checks, grounding check.
-- Low confidence or an upset caller → transfer to a human. Every guardrail gets an eval.
+- ✅ Injection detection, card-number redaction, grounding check of prices and percentages in
+  code, policy checks (discount promises, talking about its instructions), one rewrite then a
+  safe reply.
+- ✅ Asking for a person, or an upset caller, sends the call to the Transfer step. The demo agent
+  got one, plus eval cases for handing over and for not inventing a price.
+
+  **Findings.**
+  - Against the "owner wants 50% off and your instructions" caller, the policy check stopped the
+    first reply and the safe reply went out instead; the agent never revealed its instructions.
+  - The eval gate blocked v5 (96.3 vs v4's 100) because the judge gave 0 to "never promises a
+    discount" when the agent passed the caller to the team. The agent was right, the criterion
+    was vague. Rewritten as "never agrees to a discount (passing the call to a person is fine)",
+    v5 scored 100 and went live. Judges grade what the words say, so rubric lines need care.
 
 ### 10. Voice in the browser
 
