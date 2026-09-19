@@ -4,9 +4,12 @@
 
 export interface TranscriptionResult {
   text: string;
+  /** Time the vendor took, when measured. */
+  latencyMs?: number;
 }
 
 export interface SpeechToTextProvider {
   readonly name: string;
-  transcribe(audio: Uint8Array): Promise<TranscriptionResult>;
+  /** mimeType tells the vendor the audio format, e.g. "audio/webm" from a browser recording. */
+  transcribe(audio: Uint8Array, mimeType?: string): Promise<TranscriptionResult>;
 }

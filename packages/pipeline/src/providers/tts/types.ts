@@ -5,6 +5,8 @@
 export interface SynthesisResult {
   audio: Uint8Array;
   mimeType: string;
+  /** Time the vendor took, when measured. */
+  latencyMs?: number;
 }
 
 export interface TextToSpeechProvider {

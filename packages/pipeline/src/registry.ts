@@ -6,8 +6,10 @@ import type { EmbeddingProvider } from "./providers/embeddings/types";
 import { openAiCostUsd } from "./providers/llm/pricing";
 import type { LanguageModelProvider } from "./providers/llm/types";
 import { MockSpeechToTextProvider } from "./providers/stt/mock";
+import { OpenAISpeechToText } from "./providers/stt/openai";
 import type { SpeechToTextProvider } from "./providers/stt/types";
 import { MockTextToSpeechProvider } from "./providers/tts/mock";
+import { OpenAITextToSpeech } from "./providers/tts/openai";
 import type { TextToSpeechProvider } from "./providers/tts/types";
 
 // Maps provider names (from an agent config) to implementations.
@@ -81,13 +83,42 @@ const llmProviders: Record<string, (env: Env, model?: string) => LanguageModelPr
   },
 };
 
+function openAiKey(env: Env): string {
+  if (!env.OPENAI_API_KEY) {
+    throw new ProviderConfigError("OPENAI_API_KEY is not set (put it in .ddev/.env.web).");
+  }
+  return env.OPENAI_API_KEY;
+}
+
 const sttProviders: Record<string, (env: Env) => SpeechToTextProvider> = {
   mock: () => new MockSpeechToTextProvider(),
+  openai: (env) =>
+    new OpenAISpeechToText({
+      apiKey: openAiKey(env),
+      model: env.OPENAI_STT_MODEL ?? "gpt-4o-mini-transcribe",
+    }),
 };
 
 const ttsProviders: Record<string, (env: Env) => TextToSpeechProvider> = {
   mock: () => new MockTextToSpeechProvider(),
+  openai: (env) =>
+    new OpenAITextToSpeech({
+      apiKey: openAiKey(env),
+      model: env.OPENAI_TTS_MODEL ?? "gpt-4o-mini-tts",
+      voice: env.OPENAI_TTS_VOICE ?? "coral",
+      instructions: "A warm, friendly receptionist on the phone. Natural pace, not rushed.",
+    }),
 };
+
+/** Speech-to-text by provider name ("openai", "mock"). Default: VOICE_STT, else "openai". */
+export function createSpeechToText(name?: string, env: Env = process.env): SpeechToTextProvider {
+  return factoryFor("stt", sttProviders, name ?? env.VOICE_STT ?? "openai")(env);
+}
+
+/** Text-to-speech by provider name ("openai", "mock"). Default: VOICE_TTS, else "openai". */
+export function createTextToSpeech(name?: string, env: Env = process.env): TextToSpeechProvider {
+  return factoryFor("tts", ttsProviders, name ?? env.VOICE_TTS ?? "openai")(env);
+}
 
 function factoryFor<T>(kind: string, factories: Record<string, T>, name: string): T {
   const factory = factories[name];

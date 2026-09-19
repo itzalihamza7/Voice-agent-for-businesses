@@ -19,6 +19,9 @@ web_environment:
     # Embedding models for the knowledge base: documents are embedded with each; the first is used
     # in calls. Ollama's needs `ollama pull nomic-embed-text`.
     - EMBEDDING_MODELS=ollama/nomic-embed-text,openai/text-embedding-3-small
+    # Speech for voice calls (speech-to-text and text-to-speech providers).
+    - VOICE_STT=openai
+    - VOICE_TTS=openai
 
 # Runs the Next.js dev server inside the web container. On every `ddev start` it first
 # installs dependencies, applies database migrations, seeds demo data and, while the knowledge
