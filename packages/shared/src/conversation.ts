@@ -269,3 +269,24 @@ export type StartTestCall = z.infer<typeof StartTestCallSchema>;
 export type TestCallAction = z.infer<typeof TestCallActionSchema>;
 export type ModelSpec = z.infer<typeof ModelSpecSchema>;
 export type PromptPlaygroundRequest = z.infer<typeof PromptPlaygroundRequestSchema>;
+
+/** What the agent says aloud during a turn, in order (for text-to-speech). */
+export function spokenLines(events: ConversationEvent[]): string[] {
+  return events.flatMap((event) => {
+    switch (event.type) {
+      case "say":
+        return [event.text];
+      case "ask":
+        return [event.question];
+      case "reask":
+        return [event.question];
+      case "aiResponse":
+        return event.text ? [event.text] : [];
+      case "transfer":
+      case "end":
+        return event.message ? [event.message] : [];
+      default:
+        return [];
+    }
+  });
+}
