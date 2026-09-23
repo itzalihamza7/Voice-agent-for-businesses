@@ -10,7 +10,7 @@ import type {
   PromptSettings,
   TurnResult,
 } from "@voice-agent/shared";
-import { estimateTokens } from "@voice-agent/shared";
+import { estimateTokens, spokenLines } from "@voice-agent/shared";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   defaultModelChoice,
@@ -20,6 +20,7 @@ import {
   type ModelChoice,
 } from "./ModelPicker";
 import { formatCost, LlmMeta } from "./LlmMeta";
+import { useVoice } from "./useVoice";
 
 // Test chat: you play the caller, the server walks the flow. The call is kept on the server as a
 // LangGraph thread (POST /api/test-calls, then /api/test-calls/:callId per turn).
@@ -70,25 +71,92 @@ export function TestChat({ flow, prompt, tools, onActiveNodeChange }: Props) {
 
   // The call lives on the server (a LangGraph thread): starting it returns its id, and every
   // later request sends only what the caller did. Models and prompt edits apply from the next turn.
+  const settings = () => ({
+    models: {
+      decisions: toModelSpec(choice.decisions),
+      replies: toModelSpec(choice.replies),
+      fallback: toModelSpec(choice.fallback),
+    },
+    prompt,
+    tools,
+    contextBudget,
+  });
+
+  /** Shows a turn's result: messages, state, paths and the active step. */
+  function showResult(result: TurnResult) {
+    setMessages((current) => [...current, ...result.events.flatMap(toMessages)]);
+    setState(result.state);
+    const lastBranch = result.events.findLast((event) => event.type === "branch");
+    if (lastBranch?.type === "branch") setPaths(lastBranch.paths);
+    // Highlight the step we're waiting at, or the step the call ended on.
+    onActiveNodeChange(result.state.nodeId ?? lastNodeId(result.events));
+  }
+
+  // Voice: each utterance is sent as audio; the server transcribes it, runs the turn and sends
+  // the agent's reply back as speech.
+  const voice = useVoice(async (audio) => {
+    if (!callId) return null;
+    const form = new FormData();
+    form.append("audio", audio, "speech.webm");
+    form.append("settings", JSON.stringify(settings()));
+    const response = await fetch(`/api/test-calls/${callId}/voice`, { method: "POST", body: form });
+    const body = (await response.json()) as {
+      heard?: string;
+      result?: TurnResult;
+      audio?: string | null;
+      mimeType?: string | null;
+      timings?: { sttMs: number; agentMs?: number; ttsMs?: number; totalMs?: number };
+      error?: string;
+    };
+    if (!response.ok || body.error) {
+      setMessages((c) => [
+        ...c,
+        { kind: "note", tone: "error", text: body.error ?? "Voice turn failed." },
+      ]);
+      return null;
+    }
+    if (!body.heard) return null;
+    setMessages((c) => [...c, { kind: "caller", text: body.heard! }]);
+    if (body.result) showResult(body.result);
+    const t = body.timings;
+    if (t?.totalMs) {
+      const s = (ms = 0) => `${(ms / 1000).toFixed(1)} s`;
+      setMessages((c) => [
+        ...c,
+        {
+          kind: "note",
+          tone: "info",
+          text: `🎙️ Speech to text ${s(t.sttMs)} · agent ${s(t.agentMs)} · text to speech ${s(t.ttsMs)} · total ${s(t.totalMs)}`,
+        },
+      ]);
+    }
+    if (!body.audio || !body.mimeType) return null;
+    const bytes = Uint8Array.from(atob(body.audio), (ch) => ch.charCodeAt(0));
+    return new Blob([bytes], { type: body.mimeType });
+  });
+
+  /** Speaks the agent's lines (for typed turns and the greeting while voice is on). */
+  async function speak(result: TurnResult) {
+    const lines = spokenLines(result.events);
+    if (voice.status === "off" || lines.length === 0) return;
+    const response = await fetch("/api/voice/speak", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text: lines.join(" ") }),
+    });
+    if (response.ok) await voice.play(await response.blob());
+  }
+
   async function send(action: ConversationAction, useFlow: AgentFlow) {
     setPending(true);
-    const settings = {
-      models: {
-        decisions: toModelSpec(choice.decisions),
-        replies: toModelSpec(choice.replies),
-        fallback: toModelSpec(choice.fallback),
-      },
-      prompt,
-      tools,
-      contextBudget,
-    };
+    const current = settings();
     const response =
       action.type === "start"
         ? await fetch("/api/test-calls", {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({
-              ...settings,
+              ...current,
               flow: useFlow,
               ...(action.callerPhone ? { callerPhone: action.callerPhone } : {}),
             }),
@@ -96,7 +164,7 @@ export function TestChat({ flow, prompt, tools, onActiveNodeChange }: Props) {
         : await fetch(`/api/test-calls/${callId}`, {
             method: "POST",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ ...settings, action }),
+            body: JSON.stringify({ ...current, action }),
           });
     setPending(false);
     if (!response.ok) {
@@ -107,12 +175,8 @@ export function TestChat({ flow, prompt, tools, onActiveNodeChange }: Props) {
     }
     const result = (await response.json()) as TurnResult & { callId?: string };
     if (result.callId) setCallId(result.callId);
-    setMessages((current) => [...current, ...result.events.flatMap(toMessages)]);
-    setState(result.state);
-    const lastBranch = result.events.findLast((event) => event.type === "branch");
-    if (lastBranch?.type === "branch") setPaths(lastBranch.paths);
-    // Highlight the step we're waiting at, or the step the call ended on.
-    onActiveNodeChange(result.state.nodeId ?? lastNodeId(result.events));
+    showResult(result);
+    await speak(result);
   }
 
   function start() {
@@ -173,6 +237,26 @@ export function TestChat({ flow, prompt, tools, onActiveNodeChange }: Props) {
         </button>
       </div>
       <ModelPicker options={options} problems={problems} choice={choice} onChange={setUserChoice} />
+      <div className="flex items-center gap-2 text-xs" data-testid="voice">
+        <button
+          type="button"
+          onClick={() => (voice.status === "off" ? void voice.start() : voice.stop())}
+          className={`rounded border px-2 py-1 ${voice.status === "off" ? "border-gray-300" : "border-rose-500 bg-rose-50 text-rose-700"}`}
+        >
+          {voice.status === "off" ? "🎙️ Voice off" : "🎙️ Voice on"}
+        </button>
+        {voice.status !== "off" && (
+          <>
+            <span className="h-2 w-16 overflow-hidden rounded bg-gray-200">
+              <span
+                className="block h-full bg-rose-500"
+                style={{ width: `${Math.min(100, voice.level * 800)}%` }}
+              />
+            </span>
+            <span className="text-gray-500">{voice.status}…</span>
+          </>
+        )}
+      </div>
       <div className="grid grid-cols-2 gap-2 text-xs">
         <label>
           <span className="text-gray-600">Caller&apos;s number (memory)</span>
