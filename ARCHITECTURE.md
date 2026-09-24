@@ -336,6 +336,22 @@ every redirect checked again.
 no fixed size (models differ), so there is no ANN index: exact search is fast enough for a
 business's few hundred chunks.
 
+## How voice works (browser)
+
+The test chat has a **Voice** switch. In the browser (`useVoice.ts`) the microphone is watched
+with an audio level meter: speech starts a recording, ~0.9 s of silence ends it, and talking
+over the agent stops its audio (barge-in). Each recording goes to
+`POST /api/test-calls/:callId/voice`, which runs one voice turn on the server:
+
+```
+recording ─▶ speech-to-text ─▶ the call's next turn (LangGraph) ─▶ text-to-speech ─▶ MP3 back
+```
+
+The reply carries what was heard, the turn's events, the audio and the time each step took.
+Speech providers sit behind the pipeline's `SpeechToTextProvider` / `TextToSpeechProvider`
+interfaces (`VOICE_STT` / `VOICE_TTS`, default `openai`: `gpt-4o-mini-transcribe` and
+`gpt-4o-mini-tts`). Local providers (whisper.cpp, Piper) fit the same interfaces later.
+
 ## How memory and context work
 
 Code: `packages/orchestrator/src/context.ts`, `summary.ts` and `memory.ts`.

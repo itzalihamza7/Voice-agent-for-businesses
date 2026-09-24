@@ -53,7 +53,7 @@ feature support when building each phase. It changes often.
 | 7   | Memory & context                | Context budgets, rolling summaries, long-term caller memory                    | 3   | ✅ Done |
 | 8   | Evals                           | Golden sets, simulated callers, LLM-as-judge, RAG metrics, regression gate     | 7   | ✅ Done |
 | 9   | Guardrails & safety             | Prompt injection, PII redaction, output checks, grounding, escalation          | 5   | ✅ Done |
-| 10  | Voice in the browser            | Streaming STT → LLM → TTS, VAD, barge-in, latency budgets, LLM token streaming | 8   |         |
+| 10  | Voice in the browser            | Streaming STT → LLM → TTS, VAD, barge-in, latency budgets, LLM token streaming | 8   | ✅ Done |
 | 11  | Phone calls                     | Twilio media streams, routing, human transfer                                  | 5   |         |
 | 12  | Dashboard & LLM analytics       | Stored LLM traces, summaries, sentiment, topic clustering, failure analysis    | 6   |         |
 | 13  | Multi-agent & AI flow generator | Router + specialists, handoffs, reasoning, LLM-generated flows                 | 4   |         |
@@ -338,10 +338,19 @@ feature support when building each phase. It changes often.
     was vague. Rewritten as "never agrees to a discount (passing the call to a person is fine)",
     v5 scored 100 and went live. Judges grade what the words say, so rubric lines need care.
 
-### 10. Voice in the browser
+### 10. Voice in the browser ✅
 
-- `apps/voice-gateway` WebSocket server, real STT/TTS providers, sentence-level streaming.
-- Voice activity detection, barge-in, latency budget per step.
+- ✅ OpenAI speech-to-text and text-to-speech behind the pipeline interfaces; one voice turn per
+  utterance on top of the LangGraph call sessions.
+- ✅ Voice activity detection by audio level, barge-in, and the time of each step per turn.
+- Later: streaming (speak the first sentence while the rest is written), local whisper.cpp and
+  Piper providers.
+
+  **Findings: where a voice turn's time goes** (demo agent, gpt-4.1-nano, "How much is a men's
+  haircut?"): speech-to-text 0.6 s, the agent 6.6 s, text-to-speech 1.5 s, 8.7 s in all. The
+  agent's share is the knowledge lookup (query rewrite + embedding + rerank) plus the Branch
+  decision and the reply: four model calls in a row. On the phone, that is the part to cut
+  first (skip rewriting for short questions, stream the reply, start speaking sooner).
 
 ### 11. Phone calls
 
