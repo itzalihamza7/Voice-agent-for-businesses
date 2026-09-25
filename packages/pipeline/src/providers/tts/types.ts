@@ -9,7 +9,10 @@ export interface SynthesisResult {
   latencyMs?: number;
 }
 
+/** "mp3" for browsers; "pcm" (raw 16-bit, 24 kHz, mono) for phone audio conversion. */
+export type SpeechFormat = "mp3" | "pcm";
+
 export interface TextToSpeechProvider {
   readonly name: string;
-  synthesize(text: string): Promise<SynthesisResult>;
+  synthesize(text: string, format?: SpeechFormat): Promise<SynthesisResult>;
 }

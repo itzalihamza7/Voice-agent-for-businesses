@@ -1,4 +1,4 @@
-import type { SynthesisResult, TextToSpeechProvider } from "./types";
+import type { SpeechFormat, SynthesisResult, TextToSpeechProvider } from "./types";
 
 // OpenAI text-to-speech (POST /v1/audio/speech): the agent's words in, MP3 out.
 
@@ -19,7 +19,7 @@ export class OpenAITextToSpeech implements TextToSpeechProvider {
 
   constructor(private readonly config: OpenAITextToSpeechConfig) {}
 
-  async synthesize(text: string): Promise<SynthesisResult> {
+  async synthesize(text: string, format: SpeechFormat = "mp3"): Promise<SynthesisResult> {
     const started = performance.now();
     const response = await (this.config.fetch ?? fetch)("https://api.openai.com/v1/audio/speech", {
       method: "POST",
@@ -31,7 +31,7 @@ export class OpenAITextToSpeech implements TextToSpeechProvider {
         model: this.config.model,
         voice: this.config.voice,
         input: text,
-        response_format: "mp3",
+        response_format: format,
         ...(this.config.instructions ? { instructions: this.config.instructions } : {}),
       }),
       signal: AbortSignal.timeout(this.config.timeoutMs ?? 30_000),
@@ -43,7 +43,8 @@ export class OpenAITextToSpeech implements TextToSpeechProvider {
     }
     return {
       audio: new Uint8Array(await response.arrayBuffer()),
-      mimeType: "audio/mpeg",
+      // OpenAI's "pcm" is 16-bit little-endian at 24 kHz, mono.
+      mimeType: format === "pcm" ? "audio/pcm;rate=24000" : "audio/mpeg",
       latencyMs: Math.round(performance.now() - started),
     };
   }
