@@ -22,6 +22,11 @@ web_environment:
     # Speech for voice calls (speech-to-text and text-to-speech providers).
     - VOICE_STT=openai
     - VOICE_TTS=openai
+    # Phone calls: the voice gateway (apps/voice-gateway) talks to this app with a shared secret.
+    # Local value only; set a long random one in production.
+    - GATEWAY_SECRET=local-dev-gateway-secret
+    - PHONE_MODEL=openai/gpt-4.1-nano
+    - WEB_URL=http://localhost:3000
 
 # Runs the Next.js dev server inside the web container. On every `ddev start` it first
 # installs dependencies, applies database migrations, seeds demo data and, while the knowledge
@@ -31,10 +36,19 @@ web_extra_daemons:
     - name: next-dev
       command: bash -c 'npm install && npm run db:setup && npm run kb:seed && npm run dev -w @voice-agent/web -- --hostname 0.0.0.0 --port 3000'
       directory: /var/www/html
+    # Phone calls (Twilio media streams). Waits for the web app's npm install to finish.
+    - name: voice-gateway
+      command: bash -c 'until [ -f node_modules/.bin/tsx ]; do sleep 2; done; npm run dev -w @voice-agent/voice-gateway'
+      directory: /var/www/html
 
-# Sends https://voice-agent.ddev.site straight to the Next.js dev server.
+# Sends https://voice-agent.ddev.site straight to the Next.js dev server, and port 8443 to the
+# voice gateway (for Twilio through a tunnel such as ngrok).
 web_extra_exposed_ports:
     - name: next
       container_port: 3000
       http_port: 80
       https_port: 443
+    - name: voice-gateway
+      container_port: 8080
+      http_port: 8080
+      https_port: 8443
