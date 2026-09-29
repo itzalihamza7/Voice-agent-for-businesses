@@ -8,6 +8,7 @@ import { DEMO_AGENT_DRAFT, DEMO_EVAL_CASES } from "./demo-agent";
 // many times: it only creates what is missing and never touches existing versions.
 
 const DEMO_AGENT_ID = "demo";
+const DEMO_PHONE_NUMBER = "+441632960001";
 
 async function main() {
   const prisma = createPrismaClient();
@@ -51,6 +52,8 @@ async function main() {
         id: DEMO_AGENT_ID,
         businessId: DEFAULT_BUSINESS_ID,
         name: config.name,
+        // A number from the range kept for drama and testing (never a real line).
+        phoneNumber: DEMO_PHONE_NUMBER,
         // AgentConfig is plain JSON (validated above), so this cast is safe.
         versions: { create: { version: 1, config: config as Prisma.InputJsonObject } },
       },

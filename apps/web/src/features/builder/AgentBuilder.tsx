@@ -42,6 +42,7 @@ import {
 import { createNode, newId } from "./node-catalog";
 import { DRAG_MIME_TYPE, NodePalette } from "./NodePalette";
 import { NodeSettingsPanel } from "./NodeSettingsPanel";
+import { PhoneNumber } from "./PhoneNumber";
 import { PromptStudio } from "./PromptStudio";
 import { useToolList } from "./tool-list";
 import { ToolsPanel } from "./ToolsPanel";
@@ -273,6 +274,7 @@ function Builder({ agentId, initial, versions: initialVersions }: Props) {
         >
           {issues.length ? `${issues.length} issue(s)` : "Ready to run ✓"}
         </span>
+        <PhoneNumber agentId={agentId} />
         <div className="flex overflow-hidden rounded border border-gray-300 text-sm" role="tablist">
           {(["flow", "prompt", "tools", "evals"] as const).map((tab) => (
             <button
