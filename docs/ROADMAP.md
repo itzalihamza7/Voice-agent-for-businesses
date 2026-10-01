@@ -54,7 +54,7 @@ feature support when building each phase. It changes often.
 | 8   | Evals                           | Golden sets, simulated callers, LLM-as-judge, RAG metrics, regression gate     | 7   | ✅ Done |
 | 9   | Guardrails & safety             | Prompt injection, PII redaction, output checks, grounding, escalation          | 5   | ✅ Done |
 | 10  | Voice in the browser            | Streaming STT → LLM → TTS, VAD, barge-in, latency budgets, LLM token streaming | 8   | ✅ Done |
-| 11  | Phone calls                     | Twilio media streams, routing, human transfer                                  | 5   |         |
+| 11  | Phone calls                     | Twilio media streams, routing, human transfer                                  | 5   | ✅ Done |
 | 12  | Dashboard & LLM analytics       | Stored LLM traces, summaries, sentiment, topic clustering, failure analysis    | 6   |         |
 | 13  | Multi-agent & AI flow generator | Router + specialists, handoffs, reasoning, LLM-generated flows                 | 4   |         |
 | 14  | Rollback & A/B experiments      | Rollback, traffic splits, comparing versions                                   | 3   |         |
@@ -352,9 +352,18 @@ feature support when building each phase. It changes often.
   decision and the reply: four model calls in a row. On the phone, that is the part to cut
   first (skip rewriting for short questions, stream the reply, start speaking sooner).
 
-### 11. Phone calls
+### 11. Phone calls ✅
 
-- Twilio number → media stream → voice gateway; number-to-agent routing; human transfer.
+- ✅ `apps/voice-gateway`: Twilio webhook and media stream, μ-law audio, utterance detection,
+  barge-in, transfer through Twilio's REST API, hang-up after the goodbye.
+- ✅ A phone number per agent; calls use the live version and the caller's memory.
+- ✅ A simulated Twilio call for testing without a number.
+
+  **Findings.** In the first simulated call the gateway heard only "Hi." of "Hi, how much is a
+  men's haircut?": the pause after "Hi," ended the utterance, and the rest arrived while that
+  turn was running and was dropped. Speech that arrives during a turn is now kept and handled
+  next, and a pause must last 0.9 s to end an utterance. Then the whole sentence came through,
+  the agent answered "thirty pounds", and "Can I speak to a real person?" was transferred.
 
 ### 12. Dashboard & LLM analytics
 

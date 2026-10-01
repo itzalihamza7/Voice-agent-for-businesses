@@ -83,6 +83,7 @@ through the API. Only `apps/web/src/server/` creates the database client and the
 | `packages/evals/`        | Evals: running test cases (scripted or simulated callers) against an agent version, the AI judge, retrieval metrics and the go-live gate.                                                                                                                                                                              |
 | `packages/tools/`        | Tools agents can call: built-in booking tools (mock), webhook tools, MCP client, argument checks against JSON Schema, SSRF guard.                                                                                                                                                                                      |
 | `packages/db/`           | Database access with **Prisma 7** and PostgreSQL. `prisma/schema.prisma` (tables: businesses, agents, agent_config_versions, calls, transcript_turns, knowledge_documents, knowledge_chunks, knowledge_embeddings, caller_memories, eval_cases, eval_runs), `prisma/migrations/`, and an idempotent `prisma/seed.ts`.  |
+| `apps/voice-gateway/`    | The phone door: a WebSocket server for Twilio media streams (audio conversion, utterances, barge-in, transfers). Runs the agent through the web app's phone API.                                                                                                                                                       |
 | `.ddev/`                 | DDEV config: the Docker-based development environment (Node 22 + PostgreSQL 17). Our settings live in `config.voice-agent.yaml`, because `ddev config` rewrites `config.yaml`.                                                                                                                                         |
 
 ## How "swap a vendor without code changes" works
@@ -351,6 +352,31 @@ The reply carries what was heard, the turn's events, the audio and the time each
 Speech providers sit behind the pipeline's `SpeechToTextProvider` / `TextToSpeechProvider`
 interfaces (`VOICE_STT` / `VOICE_TTS`, default `openai`: `gpt-4o-mini-transcribe` and
 `gpt-4o-mini-tts`). Local providers (whisper.cpp, Piper) fit the same interfaces later.
+
+## How phone calls work
+
+```
+caller ─▶ Twilio number ─▶ POST /twilio/voice (TwiML: stream the audio)
+                           wss /twilio/stream ◀──▶ apps/voice-gateway ──▶ web app phone API
+                             μ-law 8 kHz frames      utterances, barge-in    agent, STT, TTS
+```
+
+- **`apps/voice-gateway`** is a small Node server (`ws`) that speaks Twilio's media-stream
+  protocol. It converts audio (μ-law 8 kHz ↔ 16-bit PCM, 24 kHz text-to-speech down to 8 kHz),
+  cuts the caller's audio into utterances by loudness, clears Twilio's audio queue when the
+  caller talks over the agent (barge-in), and keeps speech that arrives while a turn is running.
+- **The web app runs the agent.** The gateway calls `POST /api/phone/calls` (start: the agent for
+  the dialled number, its live version, caller memory by the caller's number) and
+  `POST /api/phone/calls/:callId/turn` (one utterance as WAV). Both need the shared
+  `GATEWAY_SECRET`.
+- **Numbers to agents:** each agent can have one phone number (builder header; `agents.phone_number`).
+- **Transfer and hang-up:** a Transfer step moves the live call to a person through Twilio's REST
+  API (`TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN`; without them it is only logged); an End step
+  hangs up after the goodbye has played.
+- **Testing without Twilio:** `npm run fake-call -w @voice-agent/voice-gateway` plays Twilio's
+  part: it speaks the caller's lines with text-to-speech, sends them as μ-law frames and saves
+  the agent's side as `agent-audio.wav`. For a real number: expose port 8080 (e.g. ngrok), set
+  `PUBLIC_HOST`, and point the Twilio number's voice webhook at `https://<host>/twilio/voice`.
 
 ## How memory and context work
 

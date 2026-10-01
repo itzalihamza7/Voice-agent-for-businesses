@@ -26,6 +26,7 @@ container, so plain `npm ...` on macOS will fail on native binaries.
 | Create + apply a DB migration after editing `schema.prisma` | `ddev npm run db:migrate -- --name <change>` |
 | Apply migrations + seed demo data (idempotent) | `ddev npm run db:setup` |
 | Add the example knowledge documents (only while the knowledge base is empty) | `ddev npm run kb:seed` |
+| Simulated phone call through the voice gateway | `ddev exec -d /var/www/html/apps/voice-gateway npm run fake-call` |
 | Postgres shell | `ddev psql` |
 | Dev server logs | `ddev logs -s web -f` |
 | Stop (DB data is kept) | `ddev stop` |
