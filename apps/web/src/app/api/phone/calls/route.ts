@@ -29,7 +29,12 @@ export async function POST(request: Request) {
     const caller = /^\+?[0-9 ()-]{6,20}$/.test(from) ? from : undefined;
     const result = await (
       await getCallSessions()
-    ).start(callId, agent.config.flow, built.deps, caller);
+    ).start(callId, agent.config.flow, built.deps, {
+      source: "phone",
+      agentId: agent.config.agentId,
+      agentVersion: agent.config.version,
+      ...(caller ? { callerPhone: caller } : {}),
+    });
     const speech = await speakEvents(result, "pcm");
     return Response.json({
       callId,

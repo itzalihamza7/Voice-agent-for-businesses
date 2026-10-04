@@ -83,6 +83,22 @@ model Call {
   startedAt    DateTime   @default(now()) @map("started_at")
   endedAt      DateTime?  @map("ended_at")
   sentiment    Sentiment?
+  // "test" (builder test chat) or "phone" (voice gateway).
+  source       String     @default("test")
+  // The LangGraph thread the call ran in.
+  threadId     String?    @unique @map("thread_id")
+  callerPhone  String?    @map("caller_phone")
+  // Every event of the call with its time (ms since the start): what the dashboard traces.
+  trace        Json?
+  // Language model cost, summed from the trace.
+  costUsd      Float?     @map("cost_usd")
+  // Post-call analysis by a language model.
+  summary      String?
+  intent       String?
+  // "resolved", "transferred", "unresolved" or "failed".
+  outcome      String?
+  // Problems found in the trace (guardrails, model errors, a stuck flow).
+  flags        Json?
 
   business Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
   agent    Agent            @relation(fields: [agentId], references: [id], onDelete: Cascade)

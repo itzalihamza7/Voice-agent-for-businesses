@@ -1,6 +1,7 @@
 import type { ConversationDeps } from "@voice-agent/orchestrator";
 import { createSpeechToText, createTextToSpeech, type SpeechFormat } from "@voice-agent/pipeline";
 import { spokenLines, type TurnResult } from "@voice-agent/shared";
+import { recordIfEnded } from "./call-log";
 import { getCallSessions } from "./calls";
 
 // One voice turn: what the caller said (audio) → text → the call's next turn → the agent's reply
@@ -32,6 +33,7 @@ export async function voiceTurn(
     await getCallSessions()
   ).send(callId, { type: "reply", text: heard.text }, deps);
   const agentMs = Math.round(performance.now() - agentStarted);
+  await recordIfEnded(callId, result);
 
   const ttsStarted = performance.now();
   const speech = await speakEvents(result, format);

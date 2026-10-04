@@ -110,6 +110,9 @@ const CallSettingsSchema = SimulateRequestSchema.pick({
 export const StartTestCallSchema = CallSettingsSchema.extend({
   flow: AgentFlowSchema,
   callerPhone: PhoneNumberSchema.optional(),
+  // The agent version being tested, for the call log (unsaved edits still log as that version).
+  agentId: z.string().min(1).optional(),
+  agentVersion: z.number().int().positive().optional(),
 });
 
 /** The caller speaks (or a path is picked by hand) in a test call. */

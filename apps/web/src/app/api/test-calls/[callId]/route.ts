@@ -4,6 +4,7 @@
 import { ConversationError } from "@voice-agent/orchestrator";
 import { ProviderConfigError } from "@voice-agent/pipeline";
 import { TestCallActionSchema } from "@voice-agent/shared";
+import { recordIfEnded } from "@/server/call-log";
 import { getCallSessions } from "@/server/calls";
 import { conversationDeps } from "@/server/conversation";
 import { parseJsonBody } from "@/server/http";
@@ -18,7 +19,9 @@ export async function POST(request: Request, { params }: Context) {
   try {
     const built = await conversationDeps(settings);
     close = built.close;
-    const result = await (await getCallSessions()).send((await params).callId, action, built.deps);
+    const callId = (await params).callId;
+    const result = await (await getCallSessions()).send(callId, action, built.deps);
+    await recordIfEnded(callId, result);
     return Response.json(result);
   } catch (error) {
     if (error instanceof ConversationError || error instanceof ProviderConfigError) {

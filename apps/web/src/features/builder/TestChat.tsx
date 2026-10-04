@@ -47,9 +47,19 @@ interface Props {
   /** The agent's webhook tools and MCP servers (possibly unsaved). */
   tools: AgentTools;
   onActiveNodeChange: (nodeId: string | null) => void;
+  /** The agent and version being tested, for the call log. */
+  agentId?: string;
+  agentVersion?: number;
 }
 
-export function TestChat({ flow, prompt, tools, onActiveNodeChange }: Props) {
+export function TestChat({
+  flow,
+  prompt,
+  tools,
+  onActiveNodeChange,
+  agentId,
+  agentVersion,
+}: Props) {
   const { options, problems } = useModelOptions();
   // Until the user changes it, the default follows the loaded model list.
   const [userChoice, setUserChoice] = useState<ModelChoice | null>(null);
@@ -158,6 +168,8 @@ export function TestChat({ flow, prompt, tools, onActiveNodeChange }: Props) {
             body: JSON.stringify({
               ...current,
               flow: useFlow,
+              ...(agentId ? { agentId } : {}),
+              ...(agentVersion ? { agentVersion } : {}),
               ...(action.callerPhone ? { callerPhone: action.callerPhone } : {}),
             }),
           })

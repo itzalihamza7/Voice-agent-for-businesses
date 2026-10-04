@@ -1,6 +1,7 @@
-// GET /api/calls: call logs for the dashboard.
-// It stays thin: parse the request, call @voice-agent/orchestrator, return JSON.
+// GET /api/calls: the business's recent calls with their analysis, newest first.
+import { callStats, listCalls } from "@/server/call-log";
 
-export function GET() {
-  return Response.json({ error: "Not implemented yet" }, { status: 501 });
+export async function GET() {
+  const calls = await listCalls();
+  return Response.json({ calls, stats: callStats(calls) });
 }

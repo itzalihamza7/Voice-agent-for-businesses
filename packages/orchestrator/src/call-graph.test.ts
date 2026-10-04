@@ -37,6 +37,9 @@ describe("CallSessions (LangGraph)", () => {
     );
     expect(second.state.nodeId).toBeNull();
     expect(second.events.map((e) => e.type)).toEqual(["answer", "say", "end"]);
+    const history = await new CallSessions(saver).history("call-1");
+    expect(history?.meta.source).toBe("test");
+    expect(history?.trace.map((t) => t.event.type)).toEqual(["ask", "answer", "say", "end"]);
     expect(second.state.transcript.map((e) => e.text)).toEqual([
       "Your name?",
       "Ali",

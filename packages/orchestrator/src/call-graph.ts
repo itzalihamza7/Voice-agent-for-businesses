@@ -9,9 +9,11 @@ import {
 } from "@langchain/langgraph";
 import type {
   AgentFlow,
+  CallMeta,
   ConversationAction,
   ConversationEvent,
   ConversationState,
+  TraceEntry,
   TurnResult,
 } from "@voice-agent/shared";
 import { ConversationError, runTurn, type ConversationDeps } from "./conversation";
@@ -37,6 +39,13 @@ const CallState = Annotation.Root({
   events: Annotation<ConversationEvent[]>(),
   /** The caller's next action, set when the call resumes. */
   pending: Annotation<ConversationAction | null>(),
+  /** Where the call came from and which agent version handled it. */
+  meta: Annotation<CallMeta>(),
+  /** Every event of the call with its time, for the call log and dashboard. */
+  trace: Annotation<TraceEntry[]>({
+    reducer: (all, added) => all.concat(added),
+    default: () => [],
+  }),
 });
 
 type CallStateValues = typeof CallState.State;
@@ -45,9 +54,15 @@ function buildCallGraph(deps: ConversationDeps, checkpointer: BaseCheckpointSave
   return new StateGraph(CallState)
     .addNode("turn", async (state: CallStateValues) => {
       const action = state.pending ?? { type: "start" };
+      const atMs = Date.now() - state.meta.startedAt;
       try {
         const result = await runTurn(state.flow, state.conversation, action, deps);
-        return { conversation: result.state, events: result.events, pending: null };
+        return {
+          conversation: result.state,
+          events: result.events,
+          pending: null,
+          trace: result.events.map((event) => ({ atMs, event })),
+        };
       } catch (error) {
         // An action that doesn't fit (e.g. an answer while a path must be picked) leaves the
         // call where it was and explains why.
@@ -80,13 +95,34 @@ export class CallSessions {
     callId: string,
     flow: AgentFlow,
     deps: ConversationDeps,
-    callerPhone?: string,
+    meta: Omit<CallMeta, "startedAt"> = { source: "test" },
   ): Promise<TurnResult> {
     const graph = buildCallGraph(deps, this.checkpointer);
     const config = { configurable: { thread_id: callId } };
+    const { callerPhone } = meta;
     const action: ConversationAction = { type: "start", ...(callerPhone ? { callerPhone } : {}) };
-    await graph.invoke({ flow, conversation: null, events: [], pending: action }, config);
+    await graph.invoke(
+      {
+        flow,
+        conversation: null,
+        events: [],
+        pending: action,
+        meta: { ...meta, startedAt: Date.now() },
+      },
+      config,
+    );
     return this.result(graph, config);
+  }
+
+  /** A call's metadata, state and full trace (for the call log), or null if there is no such call. */
+  async history(
+    callId: string,
+  ): Promise<{ meta: CallMeta; state: ConversationState; trace: TraceEntry[] } | null> {
+    const graph = buildCallGraph({ decisions: null, replies: null }, this.checkpointer);
+    const values = (await graph.getState({ configurable: { thread_id: callId } }))
+      .values as Partial<CallStateValues>;
+    if (!values.meta || !values.conversation) return null;
+    return { meta: values.meta, state: values.conversation, trace: values.trace ?? [] };
   }
 
   /** The caller speaks (or a path is picked): resumes the call until it needs the caller again. */

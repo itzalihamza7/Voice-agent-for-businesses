@@ -20,3 +20,19 @@ export interface CallLog {
   transcript: TranscriptTurn[];
   sentiment: Sentiment | null;
 }
+
+/** Where a call came from and which agent version handled it. */
+export interface CallMeta {
+  source: "test" | "phone";
+  agentId?: string;
+  agentVersion?: number;
+  callerPhone?: string;
+  /** Epoch milliseconds when the call started. */
+  startedAt: number;
+}
+
+/** One event of a call and when it happened (milliseconds since the start). */
+export interface TraceEntry {
+  atMs: number;
+  event: import("./conversation").ConversationEvent;
+}

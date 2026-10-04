@@ -390,6 +390,8 @@ function Builder({ agentId, initial, versions: initialVersions }: Props) {
               prompt={prompt}
               tools={toolConfig}
               onActiveNodeChange={setActiveNodeId}
+              agentId={agentId}
+              agentVersion={openVersion}
             />
           ) : selectedNode ? (
             <NodeSettingsPanel

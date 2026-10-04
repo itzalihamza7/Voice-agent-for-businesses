@@ -11,13 +11,20 @@ import { parseJsonBody } from "@/server/http";
 export async function POST(request: Request) {
   const parsed = await parseJsonBody(request, StartTestCallSchema);
   if ("response" in parsed) return parsed.response;
-  const { flow, callerPhone, ...settings } = parsed.data;
+  const { flow, callerPhone, agentId, agentVersion, ...settings } = parsed.data;
   let close = async () => {};
   try {
     const built = await conversationDeps(settings);
     close = built.close;
     const callId = crypto.randomUUID();
-    const result = await (await getCallSessions()).start(callId, flow, built.deps, callerPhone);
+    const result = await (
+      await getCallSessions()
+    ).start(callId, flow, built.deps, {
+      source: "test",
+      ...(agentId ? { agentId } : {}),
+      ...(agentVersion ? { agentVersion } : {}),
+      ...(callerPhone ? { callerPhone } : {}),
+    });
     return Response.json({ callId, ...result }, { status: 201 });
   } catch (error) {
     if (error instanceof ConversationError || error instanceof ProviderConfigError) {
