@@ -1,16 +1,11 @@
-import type { TranscriptTurn } from "@voice-agent/shared";
-
-// Placeholder for a call transcript, one line per turn (caller / agent).
-// Later: per-turn sentiment and audio playback.
-export function TranscriptView({ turns }: { turns: TranscriptTurn[] }) {
-  if (turns.length === 0) {
-    return <p className="mt-4 text-gray-500">No transcript yet.</p>;
-  }
+// A call's transcript, one line per turn.
+export function TranscriptView({ turns }: { turns: { speaker: string; text: string }[] }) {
+  if (turns.length === 0) return <p className="mt-4 text-gray-500">No transcript.</p>;
   return (
-    <ol className="mt-4 space-y-2">
-      {turns.map((turn) => (
-        <li key={turn.atMs}>
-          <strong>{turn.speaker}:</strong> {turn.text}
+    <ol className="space-y-1.5 text-sm" data-testid="transcript">
+      {turns.map((turn, i) => (
+        <li key={i} className={turn.speaker === "agent" ? "" : "text-blue-800"}>
+          <strong>{turn.speaker === "agent" ? "Agent" : "Caller"}:</strong> {turn.text}
         </li>
       ))}
     </ol>
