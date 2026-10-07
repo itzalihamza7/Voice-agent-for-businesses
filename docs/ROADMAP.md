@@ -55,7 +55,7 @@ feature support when building each phase. It changes often.
 | 9   | Guardrails & safety             | Prompt injection, PII redaction, output checks, grounding, escalation          | 5   | ✅ Done |
 | 10  | Voice in the browser            | Streaming STT → LLM → TTS, VAD, barge-in, latency budgets, LLM token streaming | 8   | ✅ Done |
 | 11  | Phone calls                     | Twilio media streams, routing, human transfer                                  | 5   | ✅ Done |
-| 12  | Dashboard & LLM analytics       | Stored LLM traces, summaries, sentiment, topic clustering, failure analysis    | 6   |         |
+| 12  | Dashboard & LLM analytics       | Stored LLM traces, summaries, sentiment, topic clustering, failure analysis    | 6   | ✅ Done |
 | 13  | Multi-agent & AI flow generator | Router + specialists, handoffs, reasoning, LLM-generated flows                 | 4   |         |
 | 14  | Rollback & A/B experiments      | Rollback, traffic splits, comparing versions                                   | 3   |         |
 | 15  | Businesses & auth               | Login, roles, tenant isolation, encrypted vendor keys                          | 3   |         |
@@ -365,10 +365,17 @@ feature support when building each phase. It changes often.
   next, and a pause must last 0.9 s to end an utterance. Then the whole sentence came through,
   the agent answered "thirty pounds", and "Can I speak to a real person?" was transferred.
 
-### 12. Dashboard & LLM analytics
+### 12. Dashboard & LLM analytics ✅
 
-- Call list, transcripts, trace view per call.
-- Post-call summary, sentiment, intent; topic clustering with embeddings; failure analysis.
+- ✅ Every finished call is logged with its transcript, trace and AI cost; post-call summary,
+  sentiment, intent and outcome; flags for calls that need a look.
+- ✅ Dashboard with totals, topics, flagged calls and a page per call with its trace.
+
+  **Findings.** Clustering calls by the embeddings of their summaries didn't work for one
+  business: at a similarity of 0.75 five different intents (prices, hours, parking, nails)
+  landed in one topic, at 0.9 two "price question" calls ended up apart. Grouping by the
+  model's intent label and merging only labels that mean the same gave clean topics. Six demo
+  calls cost about $0.0002 each in AI (gpt-4.1-nano).
 
 ### 13. Multi-agent & AI flow generator
 

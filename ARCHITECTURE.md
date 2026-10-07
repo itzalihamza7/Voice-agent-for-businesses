@@ -378,6 +378,21 @@ caller ─▶ Twilio number ─▶ POST /twilio/voice (TwiML: stream the audio)
   the agent's side as `agent-audio.wav`. For a real number: expose port 8080 (e.g. ngrok), set
   `PUBLIC_HOST`, and point the Twilio number's voice webhook at `https://<host>/twilio/voice`.
 
+## How the call log and dashboard work
+
+- **Recording.** Each call is a LangGraph thread whose state keeps every event with its time
+  (the trace). When a call ends (test chat, browser voice or phone), `recordIfEnded`
+  (`apps/web/src/server/call-log.ts`) saves it once: transcript, trace, AI cost summed from the
+  trace, and flags for problems (guardrails, model errors, a stuck flow, re-asks, cut prompts).
+- **Post-call analysis** (`packages/orchestrator/src/analysis.ts`) runs in the background: a
+  summary plus sentiment, intent and outcome as structured output. What the trace shows wins
+  over the model's reading (a transfer is "transferred", a model error is "failed").
+- **Dashboard** (`/dashboard/calls`): totals (resolved, transferred, average length and AI cost),
+  topics, calls that need a look, and the log. Each call has a page with its analysis,
+  transcript and trace (every step with model, time, tokens and cost).
+- **Topics** group calls by intent label, then merge labels that mean the same by the
+  similarity of their embeddings (`clusterByEmbedding`).
+
 ## How memory and context work
 
 Code: `packages/orchestrator/src/context.ts`, `summary.ts` and `memory.ts`.
