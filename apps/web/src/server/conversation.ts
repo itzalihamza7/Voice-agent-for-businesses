@@ -6,6 +6,7 @@ import {
 } from "@voice-agent/pipeline";
 import type { AgentTools, ModelSpec, PromptSettings } from "@voice-agent/shared";
 import { getCallerMemoryStore } from "./caller-memory";
+import { getAgentConfigStore, getPrisma } from "./store";
 import { knowledgeSearcher } from "./knowledge";
 import { loadTools } from "./tools";
 
@@ -39,8 +40,23 @@ export async function conversationDeps(
       tools: resolved.tools,
       knowledge: knowledgeSearcher(),
       memory: getCallerMemoryStore(),
+      loadAgent: loadLiveAgent,
       ...(contextBudget ? { contextBudget } : {}),
     },
     close: resolved.close,
   };
+}
+
+/** An agent of the business for Hand off steps: its live version, or the latest. */
+async function loadLiveAgent(agentId: string) {
+  const store = getAgentConfigStore();
+  const agent = await getPrisma().agent.findUnique({
+    where: { id: agentId },
+    select: { liveVersion: true },
+  });
+  if (!agent) return null;
+  const config =
+    (agent.liveVersion ? await store.getVersion(agentId, agent.liveVersion) : null) ??
+    (await store.getLatest(agentId));
+  return config ? { name: config.name, flow: config.flow, prompt: config.prompt } : null;
 }

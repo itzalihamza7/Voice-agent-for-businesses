@@ -34,6 +34,7 @@ const state = (patch: Partial<ConversationState>): ConversationState => ({
   summary: null,
   callerPhone: null,
   callerMemory: [],
+  agentId: null,
   ...patch,
 });
 

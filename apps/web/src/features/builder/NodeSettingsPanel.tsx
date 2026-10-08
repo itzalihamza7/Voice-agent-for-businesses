@@ -7,7 +7,7 @@ import {
   type FlowNode,
   type ToolInfo,
 } from "@voice-agent/shared";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { NODE_CATALOG, newId } from "./node-catalog";
 import { toolParameters } from "./tool-list";
 
@@ -404,6 +404,24 @@ function Form({ node, tools, onChange }: Pick<Props, "node" | "tools" | "onChang
           />
         </>
       );
+    case "handoff":
+      return (
+        <>
+          <AgentPicker
+            value={node.data.agentId}
+            onChange={(agentId) => onChange({ ...node.data, agentId })}
+          />
+          <TextArea
+            label="Message before handing off (optional)"
+            value={node.data.message}
+            onChange={(message) => onChange({ ...node.data, message })}
+          />
+          <p className="text-xs text-gray-500">
+            The other agent continues the call with its live version: same caller, same transcript
+            and memory.
+          </p>
+        </>
+      );
     case "end":
       return (
         <TextArea
@@ -453,6 +471,37 @@ function TextArea({ label, value, onChange, rows = 3 }: InputProps & { rows?: nu
         value={value}
         onChange={(event) => onChange(event.target.value)}
       />
+    </Field>
+  );
+}
+
+/** The agents a Hand off step can pass the call to. */
+function AgentPicker({ value, onChange }: { value: string; onChange: (agentId: string) => void }) {
+  const [agents, setAgents] = useState<{ agentId: string; name: string }[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/agents")
+      .then((r) => r.json() as Promise<{ agents: { agentId: string; name: string }[] }>)
+      .then((body) => !cancelled && setAgents(body.agents))
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return (
+    <Field label="Agent">
+      <select
+        className="mt-1 w-full rounded border border-gray-300 px-2 py-1"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        <option value="">Choose an agent…</option>
+        {agents.map((a) => (
+          <option key={a.agentId} value={a.agentId}>
+            {a.name}
+          </option>
+        ))}
+      </select>
     </Field>
   );
 }

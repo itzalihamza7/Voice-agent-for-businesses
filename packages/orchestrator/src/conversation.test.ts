@@ -709,6 +709,63 @@ describe("runTurn memory and context", () => {
   });
 });
 
+describe("runTurn hand off (multi-agent)", () => {
+  // Reception: greet → hand off to "bookings"; bookings: ask name → say thanks → end.
+  const reception: AgentFlow = {
+    nodes: [
+      node("start", "start", {}),
+      node("hi", "say", { text: "Reception here." }),
+      node("pass", "handoff", { agentId: "bookings", message: "Putting you through to bookings." }),
+    ],
+    edges: [
+      { id: "e1", source: "start", target: "hi" },
+      { id: "e2", source: "hi", target: "pass" },
+    ],
+  };
+  const bookings: AgentFlow = {
+    nodes: [
+      node("start", "start", {}),
+      node("name", "ask", { question: "Bookings: your name?", variable: "caller_name" }),
+      node("thanks", "end", { message: "Thanks {{caller_name}}, from {{business_name}}." }),
+    ],
+    edges: [
+      { id: "b1", source: "start", target: "name" },
+      { id: "b2", source: "name", target: "thanks" },
+    ],
+  };
+  const deps = {
+    decisions: null,
+    replies: null,
+    loadAgent: async (id: string) =>
+      id === "bookings"
+        ? {
+            name: "Bookings",
+            flow: bookings,
+            prompt: { ...DEFAULT_PROMPT_SETTINGS, businessName: "Bookings Ltd" },
+          }
+        : null,
+  };
+
+  it("continues the call in the other agent's flow, on this turn and the next", async () => {
+    const first = await runTurn(reception, null, { type: "start" }, deps);
+    expect(first.events.map((e) => e.type)).toEqual(["say", "handoff", "ask"]);
+    expect(first.state).toMatchObject({ agentId: "bookings", nodeId: "name" });
+    // The caller's next turn runs in the bookings flow, with its prompt settings.
+    const done = await runTurn(reception, first.state, { type: "reply", text: "Ali" }, deps);
+    expect(done.state.transcript.at(-1)?.text).toBe("Thanks Ali, from Bookings Ltd.");
+  });
+
+  it("stops politely when the other agent doesn't exist", async () => {
+    const lonely = await runTurn(
+      reception,
+      null,
+      { type: "start" },
+      { ...deps, loadAgent: async () => null },
+    );
+    expect(lonely.events.at(-1)).toMatchObject({ type: "stuck" });
+  });
+});
+
 describe("runTurn errors", () => {
   it("rejects actions that don't fit the current step", async () => {
     const base = {
@@ -718,6 +775,7 @@ describe("runTurn errors", () => {
       summary: null,
       callerPhone: null,
       callerMemory: [],
+      agentId: null,
     };
     const atBranch: ConversationState = { ...base, nodeId: "intent", waitingFor: "path" };
     const atAsk: ConversationState = { ...base, nodeId: "ask-name", waitingFor: "answer" };

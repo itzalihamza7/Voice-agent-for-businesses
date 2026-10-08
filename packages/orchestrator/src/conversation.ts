@@ -84,6 +84,15 @@ export interface ConversationDeps {
   contextBudget?: number;
   /** Long-term memory per caller number. Without it, calls have no memory. */
   memory?: CallerMemoryStore;
+  /** Loads another agent for Hand off steps (its live flow and prompt). */
+  loadAgent?: (agentId: string) => Promise<HandoffAgent | null>;
+}
+
+/** What a Hand off step needs from the agent it passes the call to. */
+export interface HandoffAgent {
+  name: string;
+  flow: AgentFlow;
+  prompt: PromptSettings;
 }
 
 type BranchNode = Extract<FlowNode, { type: "branch" }>;
@@ -105,15 +114,23 @@ interface Turn {
   summary: CallSummary | null;
   callerPhone: string | null;
   callerMemory: string[];
+  /** The agent the call was handed off to, if any. */
+  agentId: string | null;
   context(nodeId: string): CallContext;
   /** The caller just tried to change or reveal the agent's instructions (guardrails). */
   injection: boolean;
+  loadAgent: ConversationDeps["loadAgent"];
 }
 
 /** What a turn carries over from the previous one. */
-type Carried = Pick<ConversationState, "summary" | "callerPhone" | "callerMemory">;
+type Carried = Pick<ConversationState, "summary" | "callerPhone" | "callerMemory" | "agentId">;
 
-const NOTHING_CARRIED: Carried = { summary: null, callerPhone: null, callerMemory: [] };
+const NOTHING_CARRIED: Carried = {
+  summary: null,
+  callerPhone: null,
+  callerMemory: [],
+  agentId: null,
+};
 
 function newTurn(
   flow: AgentFlow,
@@ -138,6 +155,7 @@ function newTurn(
     transcript,
     events: [],
     injection: false,
+    loadAgent: deps.loadAgent,
     ...carried,
     context(nodeId) {
       const context = buildContext(turn.transcript, turn.summary, budget);
@@ -188,14 +206,21 @@ async function runSteps(
     summary: state.summary,
     callerPhone: state.callerPhone,
     callerMemory: state.callerMemory,
+    agentId: state.agentId,
   });
-  const node = flow.nodes.find((n) => n.id === state.nodeId);
+  // After a Hand off, the call runs the other agent's flow and prompt.
+  if (state.agentId) {
+    const agent = await deps.loadAgent?.(state.agentId);
+    if (!agent) throw new ConversationError(`The agent "${state.agentId}" isn't available.`);
+    switchAgent(turn, agent);
+  }
+  const node = turn.flow.nodes.find((n) => n.id === state.nodeId);
 
   // Guardrails on what the caller said, before any step sees it.
   const said = action.type === "reply" ? action.text : action.callerText;
   const heard = said === undefined ? undefined : hearCaller(turn, state.nodeId, said);
   if (heard?.wantsHuman) {
-    const transfer = flow.nodes.find((n) => n.type === "transfer");
+    const transfer = turn.flow.nodes.find((n) => n.type === "transfer");
     turn.events.push({
       type: "guardrail",
       nodeId: state.nodeId,
@@ -333,6 +358,34 @@ async function runFrom(
           message,
         });
         return finished(turn);
+      }
+      case "handoff": {
+        const message = fill(current.data.message);
+        const agent = await turn.loadAgent?.(current.data.agentId);
+        if (!agent) {
+          turn.events.push({
+            type: "stuck",
+            nodeId: current.id,
+            message: `Hand off: the agent "${current.data.agentId}" isn't available.`,
+          });
+          return finished(turn);
+        }
+        if (message) agentSays(turn, message);
+        turn.events.push({
+          type: "handoff",
+          nodeId: current.id,
+          agentId: current.data.agentId,
+          agentName: agent.name,
+          message,
+        });
+        switchAgent(turn, agent);
+        turn.agentId = current.data.agentId;
+        const start = turn.flow.nodes.find((n) => n.type === "start");
+        if (!start) {
+          turn.events.push({ type: "stuck", message: `${agent.name} has no Start step.` });
+          return finished(turn);
+        }
+        return continueAfter(turn, start, undefined);
       }
       case "end": {
         const message = fill(current.data.message);
@@ -573,6 +626,13 @@ async function writeAiResponse(turn: Turn, node: Extract<FlowNode, { type: "aiRe
   }
 }
 
+/** From now on the turn runs another agent's flow and prompt (Hand off). */
+function switchAgent(turn: Turn, agent: HandoffAgent) {
+  turn.flow = agent.flow;
+  turn.prompt = agent.prompt;
+  turn.builtIns = builtInVariables(agent.prompt, turn.now);
+}
+
 /** Card numbers out, injection attempts flagged, and whether the caller wants a person. */
 function hearCaller(turn: Turn, nodeId: string, said: string) {
   const { text, redacted } = redactCaller(said);
@@ -715,7 +775,12 @@ function waiting(
 }
 
 function carriedFrom(turn: Turn): Carried {
-  return { summary: turn.summary, callerPhone: turn.callerPhone, callerMemory: turn.callerMemory };
+  return {
+    summary: turn.summary,
+    callerPhone: turn.callerPhone,
+    callerMemory: turn.callerMemory,
+    agentId: turn.agentId,
+  };
 }
 
 function finished(turn: Turn): TurnResult {

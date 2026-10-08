@@ -616,6 +616,11 @@ function toMessages(event: ConversationEvent): Message[] {
       return [note(event.message)];
     case "llmError":
       return [note(`AI error: ${event.message}`, "error")];
+    case "handoff":
+      return [
+        ...(event.message ? [{ kind: "agent" as const, text: event.message }] : []),
+        note(`🔀 Handed off to ${event.agentName}, which continues the call.`, "data"),
+      ];
     case "transfer":
       return [
         ...(event.message ? [{ kind: "agent" as const, text: event.message }] : []),

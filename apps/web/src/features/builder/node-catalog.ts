@@ -73,6 +73,13 @@ export const NODE_CATALOG: Catalog = {
     defaultData: () => ({ phoneNumber: "", message: "" }),
     summary: (data) => data.phoneNumber,
   },
+  handoff: {
+    label: "Hand off",
+    description: "Pass the call to another agent.",
+    accent: "border-violet-500 bg-violet-50",
+    defaultData: () => ({ agentId: "", message: "" }),
+    summary: (data) => (data.agentId ? `→ ${data.agentId}` : "Choose an agent"),
+  },
   end: {
     label: "End",
     description: "Hang up, optionally with a goodbye.",
@@ -91,6 +98,7 @@ export const PALETTE_TYPES: FlowNodeType[] = [
   "tool",
   "knowledgeLookup",
   "transfer",
+  "handoff",
   "end",
 ];
 

@@ -17,7 +17,7 @@ const VARIABLE_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 // International (E.164) format, e.g. +14155550123.
 const PHONE_NUMBER = /^\+[1-9]\d{6,14}$/;
 
-const TERMINAL_TYPES = new Set<FlowNode["type"]>(["end", "transfer"]);
+const TERMINAL_TYPES = new Set<FlowNode["type"]>(["end", "transfer", "handoff"]);
 
 export function validateFlow(flow: AgentFlow): FlowIssue[] {
   const issues: FlowIssue[] = [];
@@ -119,6 +119,7 @@ function templateText(node: FlowNode): string {
     case "knowledgeLookup":
       return node.data.query;
     case "transfer":
+    case "handoff":
     case "end":
       return node.data.message;
     default:
@@ -168,6 +169,10 @@ function checkSettings(node: FlowNode, askVariables: Map<string, string>): FlowI
     }
     case "knowledgeLookup":
       return node.data.query.trim() ? [] : issue("Knowledge lookup: describe what to look up.");
+    case "handoff":
+      return node.data.agentId.trim()
+        ? []
+        : issue("Hand off: choose the agent to pass the call to.");
     case "transfer":
       return PHONE_NUMBER.test(node.data.phoneNumber)
         ? []

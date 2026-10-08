@@ -38,6 +38,8 @@ export const ConversationStateSchema = z.object({
   // The caller's number (caller ID) and what is remembered about them from earlier calls.
   callerPhone: z.string().nullable().default(null),
   callerMemory: z.array(z.string()).default([]),
+  // The agent the call was handed off to (multi-agent), whose flow runs from then on.
+  agentId: z.string().nullable().default(null),
 });
 
 const PhoneNumberSchema = z
@@ -254,6 +256,8 @@ export type ConversationEvent =
   // The language model failed. The call goes on without it where it can.
   | { type: "llmError"; nodeId: string; message: string }
   | { type: "transfer"; nodeId: string; phoneNumber: string; message: string }
+  // The call was passed to another agent, which continues it with its own flow.
+  | { type: "handoff"; nodeId: string; agentId: string; agentName: string; message: string }
   | { type: "end"; nodeId: string; message: string }
   // The flow can't continue, e.g. a step with nothing connected after it.
   | { type: "stuck"; nodeId?: string; message: string };
@@ -286,6 +290,7 @@ export function spokenLines(events: ConversationEvent[]): string[] {
       case "aiResponse":
         return event.text ? [event.text] : [];
       case "transfer":
+      case "handoff":
       case "end":
         return event.message ? [event.message] : [];
       default:

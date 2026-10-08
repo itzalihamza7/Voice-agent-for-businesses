@@ -98,6 +98,8 @@ export const FlowNodeSchema = z.discriminatedUnion("type", [
   ),
   // Hands the call to a human. Ends the agent's part of the call.
   nodeSchema("transfer", z.object({ phoneNumber: z.string(), message: z.string() })),
+  // Pass the call to another agent (multi-agent): it continues with that agent's live flow.
+  nodeSchema("handoff", z.object({ agentId: z.string(), message: z.string().default("") })),
   // Hangs up, optionally after a goodbye message.
   nodeSchema("end", z.object({ message: z.string() })),
 ]);
