@@ -2,6 +2,7 @@ import { listAgents } from "@voice-agent/orchestrator";
 import Link from "next/link";
 import { connection } from "next/server";
 import { CreateAgentForm } from "@/features/agents/CreateAgentForm";
+import { GenerateAgentForm } from "@/features/agents/GenerateAgentForm";
 import { getAgentConfigStore } from "@/server/store";
 
 // Home page: the business's agents.
@@ -25,6 +26,7 @@ export default async function HomePage() {
       </div>
 
       <CreateAgentForm />
+      <GenerateAgentForm />
 
       {agents.length === 0 ? (
         <p className="mt-6 text-gray-500">No agents yet. Create your first one above.</p>

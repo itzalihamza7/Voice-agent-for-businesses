@@ -3,6 +3,7 @@ export * from "./agents";
 export * from "./analysis";
 export * from "./call-graph";
 export * from "./context";
+export * from "./flow-generator";
 export * from "./conversation";
 export * from "./knowledge";
 export * from "./memory";
