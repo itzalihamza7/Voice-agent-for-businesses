@@ -71,7 +71,7 @@ settle before testing in the browser.
 - Flow checks have two levels. Zod schemas (`packages/shared/src/flow.ts`) check *shape* only and accept
   unfinished drafts, so work in progress can always be saved. `validateFlow()` (`flow-validation.ts`)
   checks the flow is *complete enough to run*; the builder shows its issues live.
-- Adding a node type touches four places: schema in `flow.ts`, rules in `flow-validation.ts`,
+- Adding a node type (latest: Hand off) touches four places: schema in `flow.ts`, rules in `flow-validation.ts`,
   catalog entry in `apps/web/src/features/builder/node-catalog.ts`, form in `NodeSettingsPanel.tsx`.
   Exhaustive `switch`es and the catalog's mapped type make TypeScript point at any you miss.
 - Agent configs are validated with `AgentConfigSchema` (Zod) on save and on read. Versions are

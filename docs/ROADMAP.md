@@ -56,7 +56,7 @@ feature support when building each phase. It changes often.
 | 10  | Voice in the browser            | Streaming STT → LLM → TTS, VAD, barge-in, latency budgets, LLM token streaming | 8   | ✅ Done |
 | 11  | Phone calls                     | Twilio media streams, routing, human transfer                                  | 5   | ✅ Done |
 | 12  | Dashboard & LLM analytics       | Stored LLM traces, summaries, sentiment, topic clustering, failure analysis    | 6   | ✅ Done |
-| 13  | Multi-agent & AI flow generator | Router + specialists, handoffs, reasoning, LLM-generated flows                 | 4   |         |
+| 13  | Multi-agent & AI flow generator | Router + specialists, handoffs, reasoning, LLM-generated flows                 | 4   | ✅ Done |
 | 14  | Rollback & A/B experiments      | Rollback, traffic splits, comparing versions                                   | 3   |         |
 | 15  | Businesses & auth               | Login, roles, tenant isolation, encrypted vendor keys                          | 3   |         |
 | 16  | Production hardening            | CI, Playwright, deploy, error tracking, rate limits, cost per call             | 4   |         |
@@ -377,11 +377,18 @@ feature support when building each phase. It changes often.
   model's intent label and merging only labels that mean the same gave clean topics. Six demo
   calls cost about $0.0002 each in AI (gpt-4.1-nano).
 
-### 13. Multi-agent & AI flow generator
+### 13. Multi-agent & AI flow generator ✅
 
-- Router agent with specialist agents and handoffs; reasoning mode (latency vs. quality).
-- Generate a full builder flow from a plain-English description (Zod-validated JSON).
-- Flow mode vs. autonomous agent mode, and when to use which.
+- ✅ Hand off step: a reception agent passes the call to specialist agents, which continue it
+  with their own flow and prompt.
+- ✅ "Generate agent": a description becomes a flow (outline as structured output, built and
+  validated in code, one repair round).
+
+  **Findings.** The first generated pizza agent kept two issues after the repair round: the
+  model named its greeting step "start", the id of the Start node, so the flow looped into
+  Start. Prefixing generated ids fixed it; the next two runs gave valid flows of 12 and 17
+  steps, one after a repair round. Letting the model describe steps and code build the graph
+  (ids, edges, layout) is far more reliable than asking for node and edge JSON directly.
 
 ### 14. Rollback & A/B experiments
 

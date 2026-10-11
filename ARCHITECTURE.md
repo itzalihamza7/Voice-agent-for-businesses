@@ -393,6 +393,22 @@ caller ─▶ Twilio number ─▶ POST /twilio/voice (TwiML: stream the audio)
 - **Topics** group calls by intent label, then merge labels that mean the same by the
   similarity of their embeddings (`clusterByEmbedding`).
 
+## How multi-agent hand-offs and the flow generator work
+
+- **Hand off step** (multi-agent): passes the call to another agent of the business. The engine
+  loads that agent's live version (`loadAgent`), says the hand-off message and continues at the
+  other agent's Start, in the same call: same caller, transcript, variables and memory. The
+  call's state remembers the agent (`agentId`), so later turns run its flow and prompt. A
+  reception agent with a Branch and a few Hand off steps routes callers to specialists.
+- **AI flow generator** (`packages/orchestrator/src/flow-generator.ts`, "Generate agent" on the
+  home page): the model fills in a simple outline (steps with their text, answer types, paths
+  and next steps) as structured output; code turns it into nodes and edges, lays them out by
+  distance from the Start, and checks the flow with `validateFlow`. If issues remain, the model
+  gets them and one more try. The agent opens in the builder for review.
+- **Flow mode vs. agent mode:** flows keep the call on rails (bookings, anything with rules);
+  AI response steps with tools act as small autonomous agents inside a flow, for the parts that
+  need judgement.
+
 ## How memory and context work
 
 Code: `packages/orchestrator/src/context.ts`, `summary.ts` and `memory.ts`.
