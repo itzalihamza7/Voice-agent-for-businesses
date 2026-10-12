@@ -15,7 +15,8 @@ export async function POST(request: Request) {
   const parsed = await parseJsonBody(request, StartPhoneCallSchema);
   if ("response" in parsed) return parsed.response;
   const { to, from } = parsed.data;
-  const agent = await agentForNumber(to);
+  const callId = crypto.randomUUID();
+  const agent = await agentForNumber(to, { callId });
   if (!agent) return Response.json({ error: `No agent answers ${to}.` }, { status: 404 });
 
   const model = phoneModel();
@@ -25,7 +26,6 @@ export async function POST(request: Request) {
     tools: agent.config.tools,
   });
   try {
-    const callId = crypto.randomUUID();
     const caller = /^\+?[0-9 ()-]{6,20}$/.test(from) ? from : undefined;
     const result = await (
       await getCallSessions()

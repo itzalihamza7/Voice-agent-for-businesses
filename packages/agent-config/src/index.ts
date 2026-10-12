@@ -2,3 +2,4 @@
 export * from "./store";
 export * from "./memory-store";
 export * from "./prisma-store";
+export * from "./versioning";

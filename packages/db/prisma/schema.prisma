@@ -35,6 +35,9 @@ model Agent {
   liveVersion Int?     @map("live_version")
   // The phone number callers dial to reach this agent (E.164, e.g. +441632960000).
   phoneNumber String?  @unique @map("phone_number")
+  // A/B test: this share (0-100) of new calls gets abVersion instead of the live version.
+  abVersion   Int?     @map("ab_version")
+  abPercent   Int?     @map("ab_percent")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
@@ -43,6 +46,7 @@ model Agent {
   calls     Call[]
   evalCases EvalCase[]
   evalRuns  EvalRun[]
+  releases  Release[]
 
   @@index([businessId])
   @@map("agents")
@@ -241,4 +245,23 @@ model EvalRun {
 
   @@index([agentId, createdAt])
   @@map("eval_runs")
+}
+
+// ----- Releases (roadmap phase 14) ------------------------------------------------------------
+// Every change to what callers get: a version going live, a rollback, an A/B split starting or
+// stopping. The history is what a rollback goes back to.
+
+model Release {
+  id        String   @id @default(uuid())
+  agentId   String   @map("agent_id")
+  version   Int?
+  // "live", "rollback", "split" or "split-stopped".
+  kind      String
+  note      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([agentId, createdAt])
+  @@map("releases")
 }
