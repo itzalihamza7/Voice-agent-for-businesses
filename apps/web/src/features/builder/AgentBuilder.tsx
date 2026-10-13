@@ -44,6 +44,7 @@ import { DRAG_MIME_TYPE, NodePalette } from "./NodePalette";
 import { NodeSettingsPanel } from "./NodeSettingsPanel";
 import { PhoneNumber } from "./PhoneNumber";
 import { PromptStudio } from "./PromptStudio";
+import { ReleasesPanel } from "./ReleasesPanel";
 import { useToolList } from "./tool-list";
 import { ToolsPanel } from "./ToolsPanel";
 import { TestChat } from "./TestChat";
@@ -93,7 +94,7 @@ function Builder({ agentId, initial, versions: initialVersions }: Props) {
   const [toolConfig, setToolConfig] = useState(initial.tools);
   const toolList = useToolList(toolConfig);
   // "flow" = the canvas; "prompt" = the prompt studio (shown on top of the canvas).
-  const [mode, setMode] = useState<"flow" | "prompt" | "tools" | "evals">("flow");
+  const [mode, setMode] = useState<"flow" | "prompt" | "tools" | "evals" | "releases">("flow");
   const [initialCanvas] = useState(() => toReactFlow(initial.flow));
   const [nodes, setNodes, onNodesChange] = useNodesState<BuilderNode>(initialCanvas.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialCanvas.edges);
@@ -276,7 +277,7 @@ function Builder({ agentId, initial, versions: initialVersions }: Props) {
         </span>
         <PhoneNumber agentId={agentId} />
         <div className="flex overflow-hidden rounded border border-gray-300 text-sm" role="tablist">
-          {(["flow", "prompt", "tools", "evals"] as const).map((tab) => (
+          {(["flow", "prompt", "tools", "evals", "releases"] as const).map((tab) => (
             <button
               key={tab}
               type="button"
@@ -288,7 +289,15 @@ function Builder({ agentId, initial, versions: initialVersions }: Props) {
               }}
               className={`px-3 py-1 ${mode === tab ? "bg-gray-800 text-white" : "hover:bg-gray-100"}`}
             >
-              {{ flow: "Flow", prompt: "Prompt", tools: "Tools", evals: "Evals" }[tab]}
+              {
+                {
+                  flow: "Flow",
+                  prompt: "Prompt",
+                  tools: "Tools",
+                  evals: "Evals",
+                  releases: "Releases",
+                }[tab]
+              }
             </button>
           ))}
         </div>
@@ -323,6 +332,11 @@ function Builder({ agentId, initial, versions: initialVersions }: Props) {
       </header>
 
       <div className="relative flex min-h-0 flex-1">
+        {mode === "releases" && (
+          <div className="absolute inset-0 z-10 flex bg-white">
+            <ReleasesPanel agentId={agentId} versions={versions.map((v) => v.version)} />
+          </div>
+        )}
         {mode === "evals" && (
           <div className="absolute inset-0 z-10 flex bg-white">
             <EvalsPanel agentId={agentId} versions={versions.map((v) => v.version)} />
