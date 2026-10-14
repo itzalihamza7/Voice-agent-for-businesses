@@ -57,7 +57,7 @@ feature support when building each phase. It changes often.
 | 11  | Phone calls                     | Twilio media streams, routing, human transfer                                  | 5   | ✅ Done |
 | 12  | Dashboard & LLM analytics       | Stored LLM traces, summaries, sentiment, topic clustering, failure analysis    | 6   | ✅ Done |
 | 13  | Multi-agent & AI flow generator | Router + specialists, handoffs, reasoning, LLM-generated flows                 | 4   | ✅ Done |
-| 14  | Rollback & A/B experiments      | Rollback, traffic splits, comparing versions                                   | 3   |         |
+| 14  | Rollback & A/B experiments      | Rollback, traffic splits, comparing versions                                   | 3   | ✅ Done |
 | 15  | Businesses & auth               | Login, roles, tenant isolation, encrypted vendor keys                          | 3   |         |
 | 16  | Production hardening            | CI, Playwright, deploy, error tracking, rate limits, cost per call             | 4   |         |
 
@@ -390,9 +390,10 @@ feature support when building each phase. It changes often.
   steps, one after a repair round. Letting the model describe steps and code build the graph
   (ids, edges, layout) is far more reliable than asking for node and edge JSON directly.
 
-### 14. Rollback & A/B experiments
+### 14. Rollback & A/B experiments ✅
 
-- One-click rollback; traffic split between versions; compare evals and live metrics.
+- ✅ Release history, one-click rollback, A/B traffic split for phone calls (stable per call,
+  candidate must have passed evals), and a per-version comparison of eval scores and live calls.
 
 ### 15. Businesses & auth
 

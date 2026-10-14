@@ -409,6 +409,22 @@ caller ─▶ Twilio number ─▶ POST /twilio/voice (TwiML: stream the audio)
   AI response steps with tools act as small autonomous agents inside a flow, for the parts that
   need judgement.
 
+## How releases, rollback and A/B tests work
+
+Versions are never edited; what callers get is a pointer. The builder's **Releases** tab:
+
+- **Live version:** set from the Evals tab through the eval gate. Every change is a row in
+  `releases` (live, rollback, split, split-stopped).
+- **Rollback:** one click back to the version that was live before (`rollbackTarget`), without
+  the gate, because it is for when something is wrong right now.
+- **A/B test:** a share of new phone calls (5–50%) gets a candidate version, which needs a
+  finished eval run. `versionForCall` hashes the call id, so the choice is stable for a call
+  and evenly spread; each later turn keeps the version the call started with.
+- **Compare versions:** per version, the latest eval score next to live numbers from the call
+  log (calls, resolved, transferred, unhappy callers, AI cost per call).
+
+Code: `packages/agent-config/src/versioning.ts`, `apps/web/src/server/releases.ts`.
+
 ## How memory and context work
 
 Code: `packages/orchestrator/src/context.ts`, `summary.ts` and `memory.ts`.
