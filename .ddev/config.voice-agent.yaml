@@ -27,6 +27,10 @@ web_environment:
     - GATEWAY_SECRET=local-dev-gateway-secret
     - PHONE_MODEL=openai/gpt-4.1-nano
     - WEB_URL=http://localhost:3000
+    # Encrypts businesses' own API keys (local value only; a long random one in production).
+    - APP_SECRET=local-dev-app-secret-change-me
+    # The demo owner's password (demo@example.com), local only.
+    - DEMO_PASSWORD=demo-password
 
 # Runs the Next.js dev server inside the web container. On every `ddev start` it first
 # installs dependencies, applies database migrations, seeds demo data and, while the knowledge

@@ -21,6 +21,8 @@ model Business {
   calls              Call[]
   knowledgeDocuments KnowledgeDocument[]
   callerMemories     CallerMemory[]
+  users              User[]
+  secrets            BusinessSecret[]
 
   @@map("businesses")
 }
@@ -264,4 +266,59 @@ model Release {
 
   @@index([agentId, createdAt])
   @@map("releases")
+}
+
+// ----- Users and access (roadmap phase 15) ----------------------------------------------------
+
+enum Role {
+  // Everything, including users and API keys.
+  owner
+  // Builds agents, knowledge and evals.
+  editor
+  // Looks and runs test calls; changes nothing.
+  viewer
+}
+
+model User {
+  id           String   @id @default(uuid())
+  businessId   String   @map("business_id")
+  email        String   @unique
+  name         String
+  // scrypt: "salt:hash", both hex.
+  passwordHash String   @map("password_hash")
+  role         Role     @default(editor)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  sessions Session[]
+
+  @@index([businessId])
+  @@map("users")
+}
+
+// A signed-in browser. The cookie holds a random token; only its SHA-256 is stored.
+model Session {
+  id        String   @id
+  userId    String   @map("user_id")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+// A business's own vendor keys (e.g. OPENAI_API_KEY), encrypted with AES-256-GCM (APP_SECRET).
+model BusinessSecret {
+  businessId String   @map("business_id")
+  name       String
+  // base64 of iv (12 bytes) + auth tag (16 bytes) + ciphertext.
+  value      String
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@id([businessId, name])
+  @@map("business_secrets")
 }

@@ -1,4 +1,5 @@
 import { AgentNotFoundError } from "@voice-agent/orchestrator";
+import { UnauthorizedError } from "./business";
 import type { z } from "zod";
 
 // Small helpers that keep the API route handlers thin and consistent.
@@ -30,6 +31,9 @@ export async function parseJsonBody<T extends z.ZodType>(
 export function errorResponse(error: unknown): Response {
   if (error instanceof AgentNotFoundError) {
     return Response.json({ error: error.message }, { status: 404 });
+  }
+  if (error instanceof UnauthorizedError) {
+    return Response.json({ error: error.message }, { status: 401 });
   }
   throw error;
 }

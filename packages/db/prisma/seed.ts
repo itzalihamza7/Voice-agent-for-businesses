@@ -1,3 +1,4 @@
+import { randomBytes, scryptSync } from "node:crypto";
 import { AgentConfigSchema } from "@voice-agent/shared";
 import { createPrismaClient } from "../src/client";
 import type { Prisma } from "../src/generated/prisma/client";
@@ -18,6 +19,7 @@ async function main() {
       create: { id: DEFAULT_BUSINESS_ID, name: "Demo Business" },
       update: {},
     });
+    await seedDemoOwner(prisma);
 
     const existing = await prisma.agent.findUnique({
       where: { id: DEMO_AGENT_ID },
@@ -82,6 +84,26 @@ async function seedEvalCases(prisma: ReturnType<typeof createPrismaClient>) {
 
 function demoConfig(version: number) {
   return AgentConfigSchema.parse({ ...DEMO_AGENT_DRAFT, agentId: DEMO_AGENT_ID, version });
+}
+
+/**
+ * The demo business's owner, while it has no users. Password: DEMO_PASSWORD (local default
+ * "demo-password"). The hash format matches apps/web/src/server/passwords.ts.
+ */
+async function seedDemoOwner(prisma: ReturnType<typeof createPrismaClient>) {
+  if (await prisma.user.count({ where: { businessId: DEFAULT_BUSINESS_ID } })) return;
+  const salt = randomBytes(16);
+  const hash = scryptSync(process.env.DEMO_PASSWORD ?? "demo-password", salt, 64);
+  await prisma.user.create({
+    data: {
+      businessId: DEFAULT_BUSINESS_ID,
+      email: "demo@example.com",
+      name: "Demo Owner",
+      passwordHash: `${salt.toString("hex")}:${hash.toString("hex")}`,
+      role: "owner",
+    },
+  });
+  console.log("Seed: created demo@example.com (owner of the demo business).");
 }
 
 main().catch((error: unknown) => {
