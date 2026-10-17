@@ -8,7 +8,7 @@ type Context = { params: Promise<{ agentId: string }> };
 
 export async function GET(_request: Request, { params }: Context) {
   try {
-    return Response.json({ cases: await getEvalStore().listCases((await params).agentId) });
+    return Response.json({ cases: await (await getEvalStore()).listCases((await params).agentId) });
   } catch (error) {
     return errorResponse(error);
   }
@@ -18,7 +18,7 @@ export async function POST(request: Request, { params }: Context) {
   const parsed = await parseJsonBody(request, NewEvalCaseSchema);
   if ("response" in parsed) return parsed.response;
   try {
-    const evalCase = await getEvalStore().addCase((await params).agentId, parsed.data);
+    const evalCase = await (await getEvalStore()).addCase((await params).agentId, parsed.data);
     return Response.json({ case: evalCase }, { status: 201 });
   } catch (error) {
     return errorResponse(error);

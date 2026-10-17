@@ -1,6 +1,7 @@
-import { DEFAULT_BUSINESS_ID, type Prisma, type PrismaClient } from "@voice-agent/db";
+import type { Prisma, PrismaClient } from "@voice-agent/db";
 import type { CallerMemory, CallerMemoryStore } from "@voice-agent/orchestrator";
 import { z } from "zod";
+import { currentBusinessId } from "./business";
 import { getPrisma } from "./store";
 
 // Caller memories in Postgres, one row per business and phone number.
@@ -53,7 +54,6 @@ function toMemory(row: {
   };
 }
 
-// Every request uses the demo business until auth exists (roadmap phase 15).
-export function getCallerMemoryStore(): CallerMemoryStore {
-  return new PrismaCallerMemoryStore(getPrisma(), DEFAULT_BUSINESS_ID);
+export async function getCallerMemoryStore(businessId?: string): Promise<CallerMemoryStore> {
+  return new PrismaCallerMemoryStore(getPrisma(), businessId ?? (await currentBusinessId()));
 }

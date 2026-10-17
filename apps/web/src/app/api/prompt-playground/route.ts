@@ -9,6 +9,8 @@ import {
 } from "@voice-agent/pipeline";
 import { PromptPlaygroundRequestSchema } from "@voice-agent/shared";
 import { parseJsonBody } from "@/server/http";
+import { modelEnv } from "@/server/auth";
+import { currentBusinessId } from "@/server/business";
 
 export async function POST(request: Request) {
   const parsed = await parseJsonBody(request, PromptPlaygroundRequestSchema);
@@ -16,7 +18,12 @@ export async function POST(request: Request) {
 
   const { model, ...input } = parsed.data;
   try {
-    return Response.json(await runPromptPlayground(createLanguageModel(model), input));
+    return Response.json(
+      await runPromptPlayground(
+        createLanguageModel(model, await modelEnv(await currentBusinessId())),
+        input,
+      ),
+    );
   } catch (error) {
     if (error instanceof ProviderConfigError) {
       return Response.json({ error: error.message }, { status: 400 });

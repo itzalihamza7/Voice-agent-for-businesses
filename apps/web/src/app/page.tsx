@@ -3,18 +3,24 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { CreateAgentForm } from "@/features/agents/CreateAgentForm";
 import { GenerateAgentForm } from "@/features/agents/GenerateAgentForm";
+import { UserMenu } from "@/features/auth/UserMenu";
+import { currentUser } from "@/server/auth";
 import { getAgentConfigStore } from "@/server/store";
 
 // Home page: the business's agents.
 export default async function HomePage() {
   // Read the database on every request (not once at build time).
   await connection();
-  const agents = await listAgents(getAgentConfigStore());
+  const [agents, user] = await Promise.all([
+    listAgents(await getAgentConfigStore()),
+    currentUser(),
+  ]);
 
   return (
     <main className="mx-auto max-w-2xl p-8">
       <div className="flex items-baseline justify-between">
         <h1 className="text-2xl font-semibold">Your agents</h1>
+        {user && <UserMenu name={user.name} role={user.role} />}
         <span className="flex gap-4">
           <Link className="text-sm text-blue-600 underline" href="/knowledge">
             Knowledge base

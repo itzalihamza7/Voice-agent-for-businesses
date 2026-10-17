@@ -58,7 +58,7 @@ feature support when building each phase. It changes often.
 | 12  | Dashboard & LLM analytics       | Stored LLM traces, summaries, sentiment, topic clustering, failure analysis    | 6   | ✅ Done |
 | 13  | Multi-agent & AI flow generator | Router + specialists, handoffs, reasoning, LLM-generated flows                 | 4   | ✅ Done |
 | 14  | Rollback & A/B experiments      | Rollback, traffic splits, comparing versions                                   | 3   | ✅ Done |
-| 15  | Businesses & auth               | Login, roles, tenant isolation, encrypted vendor keys                          | 3   |         |
+| 15  | Businesses & auth               | Login, roles, tenant isolation, encrypted vendor keys                          | 3   | ✅ Done |
 | 16  | Production hardening            | CI, Playwright, deploy, error tracking, rate limits, cost per call             | 4   |         |
 
 ## Phase details
@@ -395,9 +395,10 @@ feature support when building each phase. It changes often.
 - ✅ Release history, one-click rollback, A/B traffic split for phone calls (stable per call,
   candidate must have passed evals), and a per-version comparison of eval scores and live calls.
 
-### 15. Businesses & auth
+### 15. Businesses & auth ✅
 
-- Login, businesses, roles, every query scoped by business, encrypted per-business vendor keys.
+- ✅ Sign-in with sessions, owner/editor/viewer roles, a proxy that scopes every request to the
+  user's business, encrypted per-business OpenAI keys, and a Settings page for people and keys.
 
 ### 16. Production hardening
 

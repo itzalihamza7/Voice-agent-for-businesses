@@ -15,10 +15,26 @@ const caller = lines.length
 const gateway = process.env.GATEWAY_WS ?? "ws://localhost:8080/twilio/stream";
 const web = process.env.WEB_URL ?? "http://localhost:3000";
 
-async function speech(text: string): Promise<Uint8Array> {
-  const response = await fetch(`${web}/api/voice/speak`, {
+// The caller's voice comes from the web app's text-to-speech, which needs a signed-in user.
+let cookie = "";
+async function signIn() {
+  const response = await fetch(`${web}/api/auth/login`, {
     method: "POST",
     headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      email: process.env.DEMO_EMAIL ?? "demo@example.com",
+      password: process.env.DEMO_PASSWORD ?? "demo-password",
+    }),
+  });
+  if (!response.ok) throw new Error(`sign-in: HTTP ${response.status}`);
+  cookie = (response.headers.get("set-cookie") ?? "").split(";")[0]!;
+}
+
+async function speech(text: string): Promise<Uint8Array> {
+  if (!cookie) await signIn();
+  const response = await fetch(`${web}/api/voice/speak`, {
+    method: "POST",
+    headers: { "content-type": "application/json", cookie },
     body: JSON.stringify({ text, format: "pcm" }),
   });
   if (!response.ok) throw new Error(`speak: HTTP ${response.status}`);

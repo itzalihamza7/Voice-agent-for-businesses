@@ -1,4 +1,3 @@
-import { DEFAULT_BUSINESS_ID } from "@voice-agent/db";
 import type { KnowledgeSearcher } from "@voice-agent/orchestrator";
 import {
   configuredEmbeddingModels,
@@ -6,13 +5,13 @@ import {
   type EmbeddingProvider,
 } from "@voice-agent/pipeline";
 import { KnowledgeStore, searchKnowledge } from "@voice-agent/rag";
+import { currentBusinessId } from "./business";
 import { getPrisma } from "./store";
 
-// Server-only wiring for the knowledge base. Every request uses the demo business until auth
-// exists (roadmap phase 15); the store filters every query by it.
+// Server-only wiring for the knowledge base. The store filters every query by the business.
 
-export function getKnowledgeStore(): KnowledgeStore {
-  return new KnowledgeStore(getPrisma(), DEFAULT_BUSINESS_ID);
+export async function getKnowledgeStore(businessId?: string): Promise<KnowledgeStore> {
+  return new KnowledgeStore(getPrisma(), businessId ?? (await currentBusinessId()));
 }
 
 /** Every configured embedding model (documents are embedded with all of them). */
@@ -25,9 +24,9 @@ export function defaultEmbeddingModel(): EmbeddingProvider {
   return createEmbeddingModel(configuredEmbeddingModels()[0]!);
 }
 
-/** The knowledge base as the conversation engine sees it. */
-export function knowledgeSearcher(): KnowledgeSearcher {
-  const store = getKnowledgeStore();
+/** A business's knowledge base as the conversation engine sees it. */
+export function knowledgeSearcher(businessId: string): KnowledgeSearcher {
+  const store = new KnowledgeStore(getPrisma(), businessId);
   const embedding = defaultEmbeddingModel();
   return { search: (options) => searchKnowledge(store, { ...options, embedding }) };
 }

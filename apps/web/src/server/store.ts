@@ -1,5 +1,6 @@
 import { PrismaAgentConfigStore, type AgentConfigStore } from "@voice-agent/agent-config";
-import { createPrismaClient, DEFAULT_BUSINESS_ID, type PrismaClient } from "@voice-agent/db";
+import { createPrismaClient, type PrismaClient } from "@voice-agent/db";
+import { currentBusinessId } from "./business";
 
 // Server-only wiring: one Prisma client per server process.
 // In dev, Next.js re-runs modules on every hot reload. Keeping the client on globalThis
@@ -12,7 +13,7 @@ export function getPrisma(): PrismaClient {
   return globalForPrisma.prisma;
 }
 
-// Every request uses the demo business until auth exists (roadmap phase 15).
-export function getAgentConfigStore(): AgentConfigStore {
-  return new PrismaAgentConfigStore(getPrisma(), DEFAULT_BUSINESS_ID);
+/** Agent configs of a business: the signed-in user's, unless one is given (e.g. phone calls). */
+export async function getAgentConfigStore(businessId?: string): Promise<AgentConfigStore> {
+  return new PrismaAgentConfigStore(getPrisma(), businessId ?? (await currentBusinessId()));
 }

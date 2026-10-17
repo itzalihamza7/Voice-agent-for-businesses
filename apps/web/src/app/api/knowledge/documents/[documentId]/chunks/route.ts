@@ -6,5 +6,5 @@ export async function GET(
   { params }: { params: Promise<{ documentId: string }> },
 ) {
   const { documentId } = await params;
-  return Response.json({ chunks: await getKnowledgeStore().getChunks(documentId) });
+  return Response.json({ chunks: await (await getKnowledgeStore()).getChunks(documentId) });
 }

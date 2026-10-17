@@ -10,6 +10,8 @@ import { ModelSpecSchema } from "@voice-agent/shared";
 import { z } from "zod";
 import { parseJsonBody } from "@/server/http";
 import { getKnowledgeStore } from "@/server/knowledge";
+import { modelEnv } from "@/server/auth";
+import { currentBusinessId } from "@/server/business";
 
 const RetrievalEvalSchema = z.object({
   mode: z.enum(["hybrid", "vector", "keyword"]),
@@ -28,10 +30,12 @@ export async function POST(request: Request) {
     );
   }
   try {
-    const report = await evaluateRetrieval(getKnowledgeStore(), EXAMPLE_RETRIEVAL_QUESTIONS, {
+    const report = await evaluateRetrieval(await getKnowledgeStore(), EXAMPLE_RETRIEVAL_QUESTIONS, {
       mode,
       embedding: mode === "keyword" ? null : createEmbeddingModel(embeddingModel),
-      rerankWith: rerank ? createLanguageModel(rerank) : null,
+      rerankWith: rerank
+        ? createLanguageModel(rerank, await modelEnv(await currentBusinessId()))
+        : null,
     });
     return Response.json({ report });
   } catch (error) {

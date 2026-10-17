@@ -7,7 +7,7 @@ type Context = { params: Promise<{ phone: string }> };
 
 export async function GET(_request: Request, { params }: Context) {
   const phone = normalizePhoneNumber(decodeURIComponent((await params).phone));
-  const memory = await getCallerMemoryStore().get(phone);
+  const memory = await (await getCallerMemoryStore()).get(phone);
   if (!memory)
     return Response.json({ error: "Nothing remembered for this number." }, { status: 404 });
   return Response.json({ memory });
@@ -15,7 +15,7 @@ export async function GET(_request: Request, { params }: Context) {
 
 export async function DELETE(_request: Request, { params }: Context) {
   const phone = normalizePhoneNumber(decodeURIComponent((await params).phone));
-  const forgotten = await getCallerMemoryStore().forget(phone);
+  const forgotten = await (await getCallerMemoryStore()).forget(phone);
   return forgotten
     ? new Response(null, { status: 204 })
     : Response.json({ error: "Nothing remembered for this number." }, { status: 404 });

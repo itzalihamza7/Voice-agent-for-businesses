@@ -5,6 +5,7 @@
 import { ConversationError } from "@voice-agent/orchestrator";
 import { ProviderConfigError } from "@voice-agent/pipeline";
 import { TestCallActionSchema } from "@voice-agent/shared";
+import { currentBusinessId } from "@/server/business";
 import { conversationDeps } from "@/server/conversation";
 import { voiceTurn } from "@/server/voice";
 
@@ -24,7 +25,7 @@ export async function POST(request: Request, { params }: Context) {
 
   let close = async () => {};
   try {
-    const built = await conversationDeps(settings.data);
+    const built = await conversationDeps(settings.data, await currentBusinessId());
     close = built.close;
     const turn = await voiceTurn(
       (await params).callId,

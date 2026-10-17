@@ -20,11 +20,14 @@ export async function POST(request: Request) {
   if (!agent) return Response.json({ error: `No agent answers ${to}.` }, { status: 404 });
 
   const model = phoneModel();
-  const built = await conversationDeps({
-    models: { decisions: model, replies: model, fallback: null },
-    prompt: agent.config.prompt,
-    tools: agent.config.tools,
-  });
+  const built = await conversationDeps(
+    {
+      models: { decisions: model, replies: model, fallback: null },
+      prompt: agent.config.prompt,
+      tools: agent.config.tools,
+    },
+    agent.businessId,
+  );
   try {
     const caller = /^\+?[0-9 ()-]{6,20}$/.test(from) ? from : undefined;
     const result = await (

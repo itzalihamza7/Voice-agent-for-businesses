@@ -1,7 +1,8 @@
-import { DEFAULT_BUSINESS_ID, type Prisma } from "@voice-agent/db";
+import type { Prisma } from "@voice-agent/db";
 import { analyzeCall, callCost, callFlags, clusterByEmbedding } from "@voice-agent/orchestrator";
 import { createLanguageModel } from "@voice-agent/pipeline";
 import type { TraceEntry, TurnResult } from "@voice-agent/shared";
+import { currentBusinessId } from "./business";
 import { getCallSessions } from "./calls";
 import { defaultEmbeddingModel } from "./knowledge";
 import { phoneModel } from "./phone";
@@ -98,9 +99,10 @@ export interface CallRow {
 const flagsOf = (value: Prisma.JsonValue | null) =>
   Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [];
 
-export async function listCalls(businessId = DEFAULT_BUSINESS_ID, take = 200): Promise<CallRow[]> {
+export async function listCalls(businessId?: string, take = 200): Promise<CallRow[]> {
+  const business = businessId ?? (await currentBusinessId());
   const rows = await getPrisma().call.findMany({
-    where: { businessId },
+    where: { businessId: business },
     orderBy: { startedAt: "desc" },
     take,
     include: { agent: { select: { name: true } }, _count: { select: { turns: true } } },
@@ -124,14 +126,15 @@ export async function listCalls(businessId = DEFAULT_BUSINESS_ID, take = 200): P
   }));
 }
 
-export async function getCall(id: string, businessId = DEFAULT_BUSINESS_ID) {
+export async function getCall(id: string, businessId?: string) {
+  const business = businessId ?? (await currentBusinessId());
   const row = await getPrisma().call.findFirst({
-    where: { id, businessId },
+    where: { id, businessId: business },
     include: { agent: { select: { name: true } }, turns: { orderBy: { atMs: "asc" } } },
   });
   if (!row) return null;
   return {
-    ...(await listCalls(businessId)).find((c) => c.id === id)!,
+    ...(await listCalls(business)).find((c) => c.id === id)!,
     transcript: row.turns.map((t) => ({ speaker: t.speaker, text: t.text })),
     trace: (row.trace ?? []) as unknown as TraceEntry[],
   };

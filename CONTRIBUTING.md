@@ -12,7 +12,7 @@ container, so plain `npm ...` on macOS will fail on native binaries.
 | Task | Command |
 |---|---|
 | Start everything (installs deps, migrates + seeds DB, runs Next.js) | `ddev start` |
-| Open the app | https://voice-agent.ddev.site |
+| Open the app (sign in as demo@example.com / demo-password) | https://voice-agent.ddev.site |
 | Unit tests (Vitest, all workspaces, no DB) | `ddev npm test` |
 | DB integration tests (`*.db.test.ts`, real Postgres) | `ddev npm run test:db` |
 | Lint (ESLint) | `ddev npm run lint` |
@@ -76,8 +76,9 @@ settle before testing in the browser.
   Exhaustive `switch`es and the catalog's mapped type make TypeScript point at any you miss.
 - Agent configs are validated with `AgentConfigSchema` (Zod) on save and on read. Versions are
   never edited in place: every save creates a new version.
-- Every database query is scoped by `businessId` (`PrismaAgentConfigStore` is created per business).
-  Until auth exists, everything uses `DEFAULT_BUSINESS_ID` (`demo-business`).
+- Every database query is scoped by `businessId`. Server code gets it with `currentBusinessId()`
+  (set by the proxy from the session) or explicitly (phone calls: the agent's business). Never
+  read a business id from the request body or the client's headers.
 - Database tables and columns are snake_case (`@@map` / `@map`); Prisma models are PascalCase.
 - API route handlers stay thin: validate the body with a shared Zod schema (`parseJsonBody`),
   call the orchestrator, return JSON. Known errors map to status codes in `errorResponse`.

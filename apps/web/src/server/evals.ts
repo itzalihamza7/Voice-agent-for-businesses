@@ -1,4 +1,4 @@
-import { DEFAULT_BUSINESS_ID, type Prisma, type PrismaClient } from "@voice-agent/db";
+import type { Prisma, PrismaClient } from "@voice-agent/db";
 import { runEvalCase, scoreRun } from "@voice-agent/evals";
 import { AgentNotFoundError, runTurn } from "@voice-agent/orchestrator";
 import { createLanguageModel } from "@voice-agent/pipeline";
@@ -12,6 +12,8 @@ import {
   type NewEvalCase,
 } from "@voice-agent/shared";
 import { z } from "zod";
+import { modelEnv } from "./auth";
+import { currentBusinessId } from "./business";
 import { knowledgeSearcher } from "./knowledge";
 import { getAgentConfigStore, getPrisma } from "./store";
 import { loadTools } from "./tools";
@@ -177,9 +179,8 @@ function toRun(row: {
   };
 }
 
-// Every request uses the demo business until auth exists (roadmap phase 15).
-export function getEvalStore(): PrismaEvalStore {
-  return new PrismaEvalStore(getPrisma(), DEFAULT_BUSINESS_ID);
+export async function getEvalStore(businessId?: string): Promise<PrismaEvalStore> {
+  return new PrismaEvalStore(getPrisma(), businessId ?? (await currentBusinessId()));
 }
 
 /** Runs one case against a saved version of the agent, with the run's models. */
@@ -188,10 +189,12 @@ export async function runCaseAgainstVersion(
   version: number,
   evalCase: EvalCase,
   models: EvalModels,
+  businessId: string,
 ): Promise<EvalCaseResult> {
-  const config = await getAgentConfigStore().getVersion(agentId, version);
+  const config = await (await getAgentConfigStore(businessId)).getVersion(agentId, version);
   if (!config) throw new AgentNotFoundError(`${agentId} v${version}`);
-  const agentModel = createLanguageModel(models.agent);
+  const env = await modelEnv(businessId);
+  const agentModel = createLanguageModel(models.agent, env);
   const tools = await loadTools(config.tools);
   try {
     const deps = {
@@ -199,14 +202,14 @@ export async function runCaseAgainstVersion(
       replies: agentModel,
       prompt: config.prompt,
       tools: tools.tools,
-      knowledge: knowledgeSearcher(),
+      knowledge: knowledgeSearcher(businessId),
     };
     return await runEvalCase(
       evalCase,
       (state, action) => runTurn(config.flow, state, action, deps),
       {
-        caller: createLanguageModel(models.caller),
-        judge: models.judge ? createLanguageModel(models.judge) : null,
+        caller: createLanguageModel(models.caller, env),
+        judge: models.judge ? createLanguageModel(models.judge, env) : null,
       },
       { businessName: config.prompt.businessName, rules: config.prompt.rules },
     );

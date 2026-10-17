@@ -12,7 +12,7 @@ type Context = { params: Promise<{ agentId: string }> };
 export async function GET(_request: Request, { params }: Context) {
   const { agentId } = await params;
   try {
-    const store = getEvalStore();
+    const store = await getEvalStore();
     return Response.json({
       runs: await store.listRuns(agentId),
       liveVersion: await store.liveVersion(agentId),
@@ -28,10 +28,10 @@ export async function POST(request: Request, { params }: Context) {
   const { agentId } = await params;
   const { version, models } = parsed.data;
   try {
-    if (!(await getAgentConfigStore().getVersion(agentId, version))) {
+    if (!(await (await getAgentConfigStore()).getVersion(agentId, version))) {
       return Response.json({ error: `There is no v${version}.` }, { status: 404 });
     }
-    const run = await getEvalStore().startRun(agentId, version, models);
+    const run = await (await getEvalStore()).startRun(agentId, version, models);
     return Response.json({ run }, { status: 201 });
   } catch (error) {
     return errorResponse(error);

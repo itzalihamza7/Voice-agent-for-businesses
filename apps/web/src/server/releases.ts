@@ -1,13 +1,14 @@
 import { rollbackTarget, type ReleaseEntry } from "@voice-agent/agent-config";
-import { DEFAULT_BUSINESS_ID } from "@voice-agent/db";
 import { AgentNotFoundError } from "@voice-agent/orchestrator";
+import { currentBusinessId } from "./business";
 import { getEvalStore } from "./evals";
 import { getPrisma } from "./store";
 
 // Releases: what callers get (the live version, an A/B split), the history of changes, and a
 // per-version comparison of live calls and eval scores.
 
-async function agentOf(agentId: string, businessId = DEFAULT_BUSINESS_ID) {
+async function agentOf(agentId: string) {
+  const businessId = await currentBusinessId();
   const agent = await getPrisma().agent.findFirst({ where: { id: agentId, businessId } });
   if (!agent) throw new AgentNotFoundError(agentId);
   return agent;
@@ -79,7 +80,7 @@ export async function releaseOverview(agentId: string) {
       where: { agentId },
       select: { agentVersion: true, outcome: true, sentiment: true, costUsd: true },
     }),
-    getEvalStore().listRuns(agentId),
+    getEvalStore().then((store) => store.listRuns(agentId)),
   ]);
   const versions = [
     ...new Set([...calls.map((c) => c.agentVersion), ...runs.map((r) => r.agentVersion)]),

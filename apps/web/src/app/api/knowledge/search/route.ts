@@ -10,6 +10,8 @@ import { ModelSpecSchema } from "@voice-agent/shared";
 import { z } from "zod";
 import { parseJsonBody } from "@/server/http";
 import { getKnowledgeStore } from "@/server/knowledge";
+import { modelEnv } from "@/server/auth";
+import { currentBusinessId } from "@/server/business";
 
 const SearchSchema = z.object({
   query: z.string().trim().min(1).max(1_000),
@@ -27,13 +29,17 @@ export async function POST(request: Request) {
   const { query, mode, limit, embeddingModel, rewrite, rerank } = parsed.data;
   try {
     return Response.json(
-      await searchKnowledge(getKnowledgeStore(), {
+      await searchKnowledge(await getKnowledgeStore(), {
         query,
         mode,
         limit,
         embedding: createEmbeddingModel(embeddingModel),
-        rewriteWith: rewrite ? createLanguageModel(rewrite) : null,
-        rerankWith: rerank ? createLanguageModel(rerank) : null,
+        rewriteWith: rewrite
+          ? createLanguageModel(rewrite, await modelEnv(await currentBusinessId()))
+          : null,
+        rerankWith: rerank
+          ? createLanguageModel(rerank, await modelEnv(await currentBusinessId()))
+          : null,
       }),
     );
   } catch (error) {

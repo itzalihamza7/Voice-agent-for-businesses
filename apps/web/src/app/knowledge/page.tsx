@@ -9,7 +9,7 @@ export const metadata: Metadata = { title: "Knowledge base" };
 // The business's knowledge base: documents agents can search in Knowledge lookup steps.
 export default async function KnowledgePage() {
   await connection();
-  const documents = await getKnowledgeStore().listDocuments();
+  const documents = await (await getKnowledgeStore()).listDocuments();
   return (
     <div className="flex h-screen flex-col">
       <header className="flex items-center gap-4 border-b border-gray-200 px-6 py-3">

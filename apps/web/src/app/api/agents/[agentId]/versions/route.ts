@@ -12,7 +12,7 @@ interface Context {
 export async function GET(_request: Request, { params }: Context) {
   const { agentId } = await params;
   try {
-    const versions = await listAgentVersions(getAgentConfigStore(), agentId);
+    const versions = await listAgentVersions(await getAgentConfigStore(), agentId);
     return Response.json({ versions });
   } catch (error) {
     return errorResponse(error);
@@ -25,7 +25,7 @@ export async function POST(request: Request, { params }: Context) {
   if ("response" in parsed) return parsed.response;
 
   try {
-    const version = await saveAgentVersion(getAgentConfigStore(), agentId, parsed.data);
+    const version = await saveAgentVersion(await getAgentConfigStore(), agentId, parsed.data);
     return Response.json({ version }, { status: 201 });
   } catch (error) {
     return errorResponse(error);

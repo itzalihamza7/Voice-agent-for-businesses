@@ -5,6 +5,7 @@
 import { ConversationError, runTurn } from "@voice-agent/orchestrator";
 import { ProviderConfigError } from "@voice-agent/pipeline";
 import { SimulateRequestSchema } from "@voice-agent/shared";
+import { currentBusinessId } from "@/server/business";
 import { conversationDeps } from "@/server/conversation";
 import { parseJsonBody } from "@/server/http";
 
@@ -14,7 +15,7 @@ export async function POST(request: Request) {
   const { flow, state, action, ...settings } = parsed.data;
   let close = async () => {};
   try {
-    const built = await conversationDeps(settings);
+    const built = await conversationDeps(settings, await currentBusinessId());
     close = built.close;
     return Response.json(await runTurn(flow, state, action, built.deps));
   } catch (error) {

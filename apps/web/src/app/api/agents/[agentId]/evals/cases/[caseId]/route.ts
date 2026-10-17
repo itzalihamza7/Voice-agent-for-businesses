@@ -7,7 +7,7 @@ type Context = { params: Promise<{ agentId: string; caseId: string }> };
 export async function DELETE(_request: Request, { params }: Context) {
   const { agentId, caseId } = await params;
   try {
-    const deleted = await getEvalStore().deleteCase(agentId, caseId);
+    const deleted = await (await getEvalStore()).deleteCase(agentId, caseId);
     return deleted
       ? new Response(null, { status: 204 })
       : Response.json({ error: "No such eval case." }, { status: 404 });

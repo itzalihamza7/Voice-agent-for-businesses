@@ -15,7 +15,7 @@ const NewDocumentSchema = z.object({
 });
 
 export async function GET() {
-  return Response.json({ documents: await getKnowledgeStore().listDocuments() });
+  return Response.json({ documents: await (await getKnowledgeStore()).listDocuments() });
 }
 
 export async function POST(request: Request) {
@@ -27,7 +27,9 @@ export async function POST(request: Request) {
     const chunks = await chunkText(text, chunking, defaultEmbeddingModel());
     if (chunks.length === 0) return Response.json({ error: "No text to store." }, { status: 400 });
     const { embeddings, stats } = await embedChunks(chunks, embeddingModels());
-    const saved = await getKnowledgeStore().addDocument({
+    const saved = await (
+      await getKnowledgeStore()
+    ).addDocument({
       ...document,
       chunking,
       content: text,

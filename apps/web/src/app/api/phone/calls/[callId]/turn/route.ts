@@ -22,11 +22,14 @@ export async function POST(request: Request, { params }: Context) {
   if (audio.length === 0) return Response.json({ error: "No audio." }, { status: 400 });
 
   const model = phoneModel();
-  const built = await conversationDeps({
-    models: { decisions: model, replies: model, fallback: null },
-    prompt: agent.config.prompt,
-    tools: agent.config.tools,
-  });
+  const built = await conversationDeps(
+    {
+      models: { decisions: model, replies: model, fallback: null },
+      prompt: agent.config.prompt,
+      tools: agent.config.tools,
+    },
+    agent.businessId,
+  );
   try {
     const turn = await voiceTurn(callId, audio, "audio/wav", built.deps, "pcm");
     return Response.json({

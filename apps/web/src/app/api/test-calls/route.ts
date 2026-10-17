@@ -5,6 +5,7 @@ import { ConversationError } from "@voice-agent/orchestrator";
 import { ProviderConfigError } from "@voice-agent/pipeline";
 import { StartTestCallSchema } from "@voice-agent/shared";
 import { getCallSessions } from "@/server/calls";
+import { currentBusinessId } from "@/server/business";
 import { conversationDeps } from "@/server/conversation";
 import { parseJsonBody } from "@/server/http";
 
@@ -14,7 +15,7 @@ export async function POST(request: Request) {
   const { flow, callerPhone, agentId, agentVersion, ...settings } = parsed.data;
   let close = async () => {};
   try {
-    const built = await conversationDeps(settings);
+    const built = await conversationDeps(settings, await currentBusinessId());
     close = built.close;
     const callId = crypto.randomUUID();
     const result = await (

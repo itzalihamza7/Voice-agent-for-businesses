@@ -18,7 +18,7 @@ export async function PUT(request: Request, { params }: Context) {
   const { agentId } = await params;
   const { version, percent } = parsed.data;
   try {
-    if (percent > 0 && !(await getEvalStore().latestFinishedRun(agentId, version))) {
+    if (percent > 0 && !(await (await getEvalStore()).latestFinishedRun(agentId, version))) {
       return Response.json(
         { error: `Run the evals on v${version} before testing it on callers.` },
         { status: 409 },

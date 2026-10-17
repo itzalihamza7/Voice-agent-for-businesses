@@ -119,8 +119,8 @@ switching an agent from one vendor to another is a config change, not a code cha
   `(agent_id, version)` is the safety net, and a short retry covers two saves creating the
   same new agent at once.
 - Every query is scoped by `businessId`. A store instance belongs to one business, so one
-  business can never read or overwrite another's agents. Until login exists, everything uses the
-  seeded `demo-business`.
+  business can never read or overwrite another's agents. The business comes from the signed-in
+  user (see "How sign-in and businesses work").
 - `schemaVersion` records the version of the JSON _format_ itself, so old configs can be
   upgraded if the format changes.
 - **Rollback** = make an old version live again. **A/B test** = send some calls to version A
@@ -424,6 +424,24 @@ Versions are never edited; what callers get is a pointer. The builder's **Releas
   log (calls, resolved, transferred, unhappy callers, AI cost per call).
 
 Code: `packages/agent-config/src/versioning.ts`, `apps/web/src/server/releases.ts`.
+
+## How sign-in and businesses work
+
+- **Users** belong to one business and have a role: _owner_ (everything, including people and
+  API keys), _editor_ (builds agents, knowledge and evals) or _viewer_ (looks and runs test
+  calls). Passwords are hashed with scrypt.
+- **Sessions:** signing in sets an httpOnly cookie with a random token; the database stores only
+  its SHA-256, so a leaked table can't be used to sign in.
+- **The proxy** (`apps/web/src/proxy.ts`) runs before every page and API request: it checks the
+  session, applies the roles, removes any `x-business-id` header the client sent and sets the
+  real one. Server code gets the business with `currentBusinessId()`; every store is created
+  for it, so every query is scoped by business. Phone routes use the gateway's secret instead,
+  and take the business from the agent that owns the number.
+- **Per-business API keys:** an owner can set the business's own OpenAI key in Settings. It is
+  encrypted with AES-256-GCM (key from `APP_SECRET`), never shown again, and used for that
+  business's language models instead of the platform's key.
+- Locally, the seed creates `demo@example.com` (password `DEMO_PASSWORD`, `demo-password` in
+  DDEV) as the owner of the demo business.
 
 ## How memory and context work
 

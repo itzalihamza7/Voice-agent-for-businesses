@@ -14,7 +14,7 @@ export async function POST(request: Request, { params }: Context) {
   const { agentId } = await params;
   const { version } = parsed.data;
   try {
-    const store = getEvalStore();
+    const store = await getEvalStore();
     const live = await store.liveVersion(agentId);
     const decision = goLiveDecision(
       version,

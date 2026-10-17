@@ -4,7 +4,7 @@ import { embeddingModels, getKnowledgeStore } from "@/server/knowledge";
 
 export async function POST() {
   try {
-    return Response.json(await addExampleDocuments(getKnowledgeStore(), embeddingModels()));
+    return Response.json(await addExampleDocuments(await getKnowledgeStore(), embeddingModels()));
   } catch (error) {
     // Usually an embedding model that isn't reachable (Ollama not running, no API key).
     return Response.json(

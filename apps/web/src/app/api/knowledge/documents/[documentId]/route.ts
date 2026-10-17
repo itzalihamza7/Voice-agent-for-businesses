@@ -6,7 +6,7 @@ export async function DELETE(
   { params }: { params: Promise<{ documentId: string }> },
 ) {
   const { documentId } = await params;
-  const deleted = await getKnowledgeStore().deleteDocument(documentId);
+  const deleted = await (await getKnowledgeStore()).deleteDocument(documentId);
   return deleted
     ? new Response(null, { status: 204 })
     : Response.json({ error: "Document not found" }, { status: 404 });

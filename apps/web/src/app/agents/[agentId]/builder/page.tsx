@@ -10,7 +10,7 @@ export const metadata: Metadata = { title: "Agent builder" };
 
 export default async function BuilderPage({ params }: { params: Promise<{ agentId: string }> }) {
   const { agentId } = await params;
-  const versions = await listAgentVersions(getAgentConfigStore(), agentId).catch(
+  const versions = await listAgentVersions(await getAgentConfigStore(), agentId).catch(
     (error: unknown) => {
       if (error instanceof AgentNotFoundError) notFound();
       throw error;

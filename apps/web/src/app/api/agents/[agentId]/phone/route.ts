@@ -1,7 +1,7 @@
 // GET /api/agents/:agentId/phone: the number that reaches this agent.
 // PUT /api/agents/:agentId/phone { phoneNumber | null }: set or remove it (one agent per number).
-import { DEFAULT_BUSINESS_ID } from "@voice-agent/db";
 import { z } from "zod";
+import { currentBusinessId } from "@/server/business";
 import { parseJsonBody } from "@/server/http";
 import { getPrisma } from "@/server/store";
 
@@ -17,7 +17,7 @@ const PhoneSchema = z.object({
 
 export async function GET(_request: Request, { params }: Context) {
   const agent = await getPrisma().agent.findFirst({
-    where: { id: (await params).agentId, businessId: DEFAULT_BUSINESS_ID },
+    where: { id: (await params).agentId, businessId: await currentBusinessId() },
     select: { phoneNumber: true },
   });
   if (!agent) return Response.json({ error: "Agent not found" }, { status: 404 });
@@ -39,7 +39,7 @@ export async function PUT(request: Request, { params }: Context) {
       );
   }
   const { count } = await prisma.agent.updateMany({
-    where: { id: agentId, businessId: DEFAULT_BUSINESS_ID },
+    where: { id: agentId, businessId: await currentBusinessId() },
     data: { phoneNumber },
   });
   if (!count) return Response.json({ error: "Agent not found" }, { status: 404 });

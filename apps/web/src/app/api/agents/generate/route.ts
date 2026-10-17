@@ -7,6 +7,8 @@ import { DEFAULT_AGENT_TOOLS, ModelSpecSchema } from "@voice-agent/shared";
 import { z } from "zod";
 import { parseJsonBody } from "@/server/http";
 import { getAgentConfigStore } from "@/server/store";
+import { modelEnv } from "@/server/auth";
+import { currentBusinessId } from "@/server/business";
 
 const GenerateSchema = z.object({
   description: z.string().trim().min(20).max(3000),
@@ -18,10 +20,12 @@ export async function POST(request: Request) {
   if ("response" in parsed) return parsed.response;
   try {
     const generated = await generateAgent(
-      createLanguageModel(parsed.data.model),
+      createLanguageModel(parsed.data.model, await modelEnv(await currentBusinessId())),
       parsed.data.description,
     );
-    const agent = await getAgentConfigStore().saveNewVersion({
+    const agent = await (
+      await getAgentConfigStore()
+    ).saveNewVersion({
       schemaVersion: 1,
       agentId: crypto.randomUUID(),
       name: generated.name,

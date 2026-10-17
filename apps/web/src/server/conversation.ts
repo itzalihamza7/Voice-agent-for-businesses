@@ -5,6 +5,7 @@ import {
   type LanguageModelProvider,
 } from "@voice-agent/pipeline";
 import type { AgentTools, ModelSpec, PromptSettings } from "@voice-agent/shared";
+import { modelEnv } from "./auth";
 import { getCallerMemoryStore } from "./caller-memory";
 import { getAgentConfigStore, getPrisma } from "./store";
 import { knowledgeSearcher } from "./knowledge";
@@ -23,12 +24,15 @@ export interface ConversationSettings {
 
 export async function conversationDeps(
   settings: ConversationSettings,
+  /** Whose knowledge base, caller memory, agents and API keys the call uses. */
+  businessId: string,
 ): Promise<{ deps: ConversationDeps; close: () => Promise<void> }> {
   const { models, prompt, tools: toolConfig, contextBudget } = settings;
-  const fallback = models.fallback ? createLanguageModel(models.fallback) : null;
+  const env = await modelEnv(businessId);
+  const fallback = models.fallback ? createLanguageModel(models.fallback, env) : null;
   const build = (spec: ModelSpec | null): LanguageModelProvider | null => {
     if (!spec) return null;
-    const model = createLanguageModel(spec);
+    const model = createLanguageModel(spec, env);
     return fallback ? new FallbackLanguageModel(model, fallback) : model;
   };
   const resolved = await loadTools(toolConfig);
@@ -38,9 +42,9 @@ export async function conversationDeps(
       replies: build(models.replies),
       ...(prompt ? { prompt } : {}),
       tools: resolved.tools,
-      knowledge: knowledgeSearcher(),
-      memory: getCallerMemoryStore(),
-      loadAgent: loadLiveAgent,
+      knowledge: knowledgeSearcher(businessId),
+      memory: await getCallerMemoryStore(businessId),
+      loadAgent: (agentId) => loadLiveAgent(agentId, businessId),
       ...(contextBudget ? { contextBudget } : {}),
     },
     close: resolved.close,
@@ -48,10 +52,10 @@ export async function conversationDeps(
 }
 
 /** An agent of the business for Hand off steps: its live version, or the latest. */
-async function loadLiveAgent(agentId: string) {
-  const store = getAgentConfigStore();
-  const agent = await getPrisma().agent.findUnique({
-    where: { id: agentId },
+async function loadLiveAgent(agentId: string, businessId: string) {
+  const store = await getAgentConfigStore(businessId);
+  const agent = await getPrisma().agent.findFirst({
+    where: { id: agentId, businessId },
     select: { liveVersion: true },
   });
   if (!agent) return null;
