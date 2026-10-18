@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, userForToken } from "@/server/auth";
+import { hit, LIMITS, limitFor } from "@/server/rate-limit";
 
 // Runs before every page and API request: checks the session, applies roles, and passes the
 // user's business on to server code in the x-business-id header (never trusted from the client).
@@ -7,6 +8,7 @@ import { SESSION_COOKIE, userForToken } from "@/server/auth";
 //   - editor: can change agents, knowledge and evals;
 //   - owner: can also manage users and the business's API keys.
 // Phone routes authenticate with the gateway's secret instead; the demo MCP server is public.
+// AI-heavy requests and sign-in attempts are rate limited (server/rate-limit.ts).
 
 const PUBLIC = ["/login", "/api/auth/login", "/api/phone/", "/api/demo-mcp", "/api/health"];
 const VIEWER_WRITES = [
@@ -28,6 +30,11 @@ export async function proxy(request: NextRequest) {
   const forwarded = new Headers(request.headers);
   forwarded.delete("x-business-id");
   forwarded.delete("x-user-role");
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  if (pathname === "/api/auth/login") {
+    const wait = hit(`login:${ip}`, LIMITS.login);
+    if (wait) return tooMany(wait);
+  }
   if (matches(pathname, PUBLIC)) return NextResponse.next({ request: { headers: forwarded } });
 
   const api = pathname.startsWith("/api/");
@@ -49,9 +56,22 @@ export async function proxy(request: NextRequest) {
       : NextResponse.redirect(new URL("/", request.url));
   }
 
+  const kind = limitFor(pathname, request.method);
+  if (kind && kind !== "login") {
+    const wait = hit(`${kind}:${user.userId}`, LIMITS[kind]);
+    if (wait) return tooMany(wait);
+  }
+
   forwarded.set("x-business-id", user.businessId);
   forwarded.set("x-user-role", user.role);
   return NextResponse.next({ request: { headers: forwarded } });
+}
+
+function tooMany(seconds: number) {
+  return NextResponse.json(
+    { error: `Too many requests. Try again in ${seconds} s.` },
+    { status: 429, headers: { "retry-after": String(seconds) } },
+  );
 }
 
 export const config = {
