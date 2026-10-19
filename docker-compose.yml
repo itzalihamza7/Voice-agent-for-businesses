@@ -1,0 +1,45 @@
+# Runs the platform in production mode: `docker compose up --build`.
+# Put secrets in a .env file next to this one (see .env.example): OPENAI_API_KEY, APP_SECRET,
+# GATEWAY_SECRET, and optionally TWILIO_* and PUBLIC_HOST for phone calls.
+
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: voice
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-voice}
+      POSTGRES_DB: voice
+    volumes: [db-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U voice"]
+      interval: 5s
+      retries: 10
+
+  migrate:
+    build: { context: ., target: migrate }
+    environment:
+      DATABASE_URL: postgresql://voice:${POSTGRES_PASSWORD:-voice}@db:5432/voice
+      DEMO_PASSWORD: ${DEMO_PASSWORD:?set DEMO_PASSWORD}
+    depends_on:
+      db: { condition: service_healthy }
+
+  web:
+    build: { context: ., target: web }
+    env_file: [.env]
+    environment:
+      DATABASE_URL: postgresql://voice:${POSTGRES_PASSWORD:-voice}@db:5432/voice
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434/v1}
+    ports: ["3000:3000"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  gateway:
+    build: { context: ., target: gateway }
+    env_file: [.env]
+    environment:
+      WEB_URL: http://web:3000
+    ports: ["8080:8080"]
+    depends_on: [web]
+
+volumes:
+  db-data:

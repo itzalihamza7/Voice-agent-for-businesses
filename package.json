@@ -24,9 +24,11 @@
     "db:migrate": "npm run db:migrate -w @voice-agent/db",
     "db:seed": "npm run db:seed -w @voice-agent/db",
     "db:setup": "npm run db:setup -w @voice-agent/db",
-    "kb:seed": "npm run kb:seed -w @voice-agent/rag"
+    "kb:seed": "npm run kb:seed -w @voice-agent/rag",
+    "test:e2e": "playwright test -c e2e"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "@types/node": "^22.19.0",
     "eslint": "^9.39.5",
     "eslint-config-next": "16.4.0",

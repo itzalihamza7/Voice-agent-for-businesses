@@ -23,3 +23,8 @@ coverage/
 
 # Recordings from simulated phone calls
 *.wav
+
+# Playwright
+e2e/.auth/
+test-results/
+playwright-report/

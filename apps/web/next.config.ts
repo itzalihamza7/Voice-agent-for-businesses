@@ -1,6 +1,11 @@
+import path from "node:path";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Production: a self-contained server in .next/standalone (see Dockerfile). The tracing root is
+  // the monorepo, so workspace packages are included.
+  output: "standalone",
+  outputFileTracingRoot: path.join(import.meta.dirname, "../.."),
   // Workspace packages ship TypeScript source, so Next.js compiles them.
   // Every @voice-agent/* package the web app imports (directly or indirectly) must be listed.
   transpilePackages: [
