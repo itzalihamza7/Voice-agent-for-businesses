@@ -596,6 +596,25 @@ environment variables:
 
 Ollama runs directly on macOS, not in DDEV: Docker on a Mac has no access to the GPU.
 
+## Production
+
+- **CI** (`.github/workflows/ci.yml`): lint, formatting, types, unit tests and the build on every
+  push and pull request; database tests against a `pgvector/pgvector:pg17` service.
+- **Images** (`Dockerfile`, one build, three targets): `web` (Next.js standalone server, runs as
+  a non-root user), `migrate` (migrations and seed), `gateway` (the voice gateway).
+  `docker compose up --build` runs them with Postgres; secrets come from `.env`.
+- **Rate limits** (proxy, `server/rate-limit.ts`): AI-heavy requests (test calls, voice, evals,
+  generation, knowledge search and ingestion) 120 per minute per user; sign-in 10 per minute per
+  IP. In memory, so per server; several servers would share counters in Redis or Postgres.
+- **Errors:** `instrumentation.ts` logs every unhandled error as one JSON line (route, request,
+  digest, stack) for a log service; `GET /api/health` checks the database for load balancers.
+- **Cost per call:** the dashboard sums each call's AI cost from its trace.
+- **Fine-tuning data:** `GET /api/calls/export` downloads resolved, not-unhappy calls as JSONL in
+  OpenAI's chat format.
+- **End-to-end tests** (`e2e/`, Playwright): sign-in, building an agent, the knowledge base;
+  they need no models. `npm run test:e2e` against DDEV, or `E2E_BASE_URL` for another
+  deployment.
+
 ## Development environment: DDEV + Docker + PostgreSQL
 
 `ddev start` creates two Docker containers:

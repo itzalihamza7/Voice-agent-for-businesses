@@ -29,6 +29,8 @@ container, so plain `npm ...` on macOS will fail on native binaries.
 | Simulated phone call through the voice gateway | `ddev exec -d /var/www/html/apps/voice-gateway npm run fake-call` |
 | Postgres shell | `ddev psql` |
 | Dev server logs | `ddev logs -s web -f` |
+| End-to-end tests (Playwright, against DDEV) | `npm run test:e2e` |
+| Production images and stack | `docker compose up --build` |
 | Stop (DB data is kept) | `ddev stop` |
 
 Before saying a task is done: `test`, `test:db`, `lint` and `build` must all pass.

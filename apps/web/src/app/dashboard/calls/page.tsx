@@ -28,6 +28,9 @@ export default async function CallsPage() {
           ← Agents
         </Link>
         <h1 className="text-xl font-semibold">Calls</h1>
+        <a href="/api/calls/export" className="ml-auto text-sm text-blue-600 underline">
+          Export good calls for fine-tuning (JSONL)
+        </a>
       </div>
       <div className="grid grid-cols-6 gap-3" data-testid="call-stats">
         {card("Calls", String(stats.calls))}

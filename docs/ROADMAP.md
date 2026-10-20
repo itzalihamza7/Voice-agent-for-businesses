@@ -59,7 +59,7 @@ feature support when building each phase. It changes often.
 | 13  | Multi-agent & AI flow generator | Router + specialists, handoffs, reasoning, LLM-generated flows                 | 4   | ✅ Done |
 | 14  | Rollback & A/B experiments      | Rollback, traffic splits, comparing versions                                   | 3   | ✅ Done |
 | 15  | Businesses & auth               | Login, roles, tenant isolation, encrypted vendor keys                          | 3   | ✅ Done |
-| 16  | Production hardening            | CI, Playwright, deploy, error tracking, rate limits, cost per call             | 4   |         |
+| 16  | Production hardening            | CI, Playwright, deploy, error tracking, rate limits, cost per call             | 4   | ✅ Done |
 
 ## Phase details
 
@@ -400,7 +400,13 @@ feature support when building each phase. It changes often.
 - ✅ Sign-in with sessions, owner/editor/viewer roles, a proxy that scopes every request to the
   user's business, encrypted per-business OpenAI keys, and a Settings page for people and keys.
 
-### 16. Production hardening
+### 16. Production hardening ✅
 
-- GitHub Actions CI, Playwright end-to-end tests, deployment, error tracking, rate limits, cost per call.
-- Optional: export call data as a fine-tuning dataset.
+- ✅ GitHub Actions CI (with a pgvector database), Playwright end-to-end tests, production Docker
+  images and docker-compose, rate limits, JSON error logs and a health check, cost per call,
+  and a fine-tuning export of good calls.
+- Deployment itself is the next step: the images run anywhere Docker does.
+
+  **Findings.** The new sign-in rate limit failed the first end-to-end run: each test signed
+  in, and together with earlier runs that passed 10 sign-ins a minute. The tests now sign in
+  once and share the session, which is also faster.
