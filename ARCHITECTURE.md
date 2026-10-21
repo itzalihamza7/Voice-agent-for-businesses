@@ -1,8 +1,8 @@
 # Architecture
 
-This document explains how the project is organised and why. Agents and their versioned
-configs are stored in PostgreSQL and served by real API routes. The voice pipeline still uses
-mocks: nothing talks to a real AI vendor or a real phone line yet. The planned phases are in
+This document explains how the project is organised and why. Language models run on Ollama
+(locally) or the OpenAI API; speech uses OpenAI's speech models; phone calls arrive through a
+Twilio media-stream gateway. The phases, with what each one measured, are in
 [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## What we are building

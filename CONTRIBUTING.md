@@ -1,8 +1,8 @@
 # Contributing
 
-Learning project: a platform where businesses build AI voice agents for phone support.
-No real AI vendors or API keys yet: the pipeline uses mocks. Agents and config versions are stored in Postgres.
-See ARCHITECTURE.md for the structure and docs/ROADMAP.md for the planned phases.
+How to work on the Voice Agent Platform: commands, layout and conventions.
+See README.md for an overview, ARCHITECTURE.md for how it fits together and docs/ROADMAP.md for
+the phases and what each one taught.
 
 ## Commands
 
