@@ -1,4 +1,5 @@
 // Public entry point for the orchestration layer.
+export * from "./agent-templates";
 export * from "./agents";
 export * from "./analysis";
 export * from "./call-graph";

@@ -195,7 +195,7 @@ export async function runCaseAgainstVersion(
   if (!config) throw new AgentNotFoundError(`${agentId} v${version}`);
   const env = await modelEnv(businessId);
   const agentModel = createLanguageModel(models.agent, env);
-  const tools = await loadTools(config.tools);
+  const tools = await loadTools(config.tools, businessId);
   try {
     const deps = {
       decisions: agentModel,

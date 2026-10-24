@@ -4,5 +4,6 @@ export * from "./examples";
 export * from "./extract";
 export * from "./ingest";
 export * from "./search";
+export * from "./sitemap";
 export * from "./store";
 export * from "./types";

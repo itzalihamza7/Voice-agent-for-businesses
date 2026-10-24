@@ -23,6 +23,7 @@ model Business {
   callerMemories     CallerMemory[]
   users              User[]
   secrets            BusinessSecret[]
+  connections        Connection[]
 
   @@map("businesses")
 }
@@ -321,4 +322,31 @@ model BusinessSecret {
 
   @@id([businessId, name])
   @@map("business_secrets")
+}
+
+// ----- Connections to the business's own apps --------------------------------------------------
+// A business's app API (e.g. its shop): base URL, how to authenticate, and the actions agents may
+// call as tools. The secret (API key or token) is encrypted like the business's other secrets.
+
+model Connection {
+  id         String   @id @default(uuid())
+  businessId String   @map("business_id")
+  name       String
+  // Prefix for the tools' names, e.g. "chafer" → chafer_check_stock.
+  slug       String
+  baseUrl    String   @map("base_url")
+  // "none", "bearer" (Authorization: Bearer <secret>) or "header" (<authHeader>: <secret>).
+  authType   String   @default("none") @map("auth_type")
+  authHeader String?  @map("auth_header")
+  // base64 of iv + tag + ciphertext (AES-256-GCM with APP_SECRET); null when there is none.
+  secret     String?
+  // [{ name, description, method, path, parameters: [...] }], validated by Zod.
+  actions    Json
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, slug])
+  @@map("connections")
 }

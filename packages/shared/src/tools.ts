@@ -42,7 +42,7 @@ export interface ToolInfo {
   name: string;
   description: string;
   parameters: Record<string, unknown>;
-  source: "builtin" | "webhook" | "mcp";
+  source: "builtin" | "webhook" | "mcp" | "connection";
   /** For built-in tools: the fields of a successful result, usable as {{saveAs_field}}. */
   resultFields?: string[];
 }

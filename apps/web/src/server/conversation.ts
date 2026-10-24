@@ -35,7 +35,7 @@ export async function conversationDeps(
     const model = createLanguageModel(spec, env);
     return fallback ? new FallbackLanguageModel(model, fallback) : model;
   };
-  const resolved = await loadTools(toolConfig);
+  const resolved = await loadTools(toolConfig, businessId);
   return {
     deps: {
       decisions: build(models.decisions),
