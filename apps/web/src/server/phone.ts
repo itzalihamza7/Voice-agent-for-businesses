@@ -35,9 +35,9 @@ export async function agentForNumber(
   return row ? { businessId: agent.businessId, config: AgentConfigSchema.parse(row.config) } : null;
 }
 
-/** The models phone calls use (PHONE_MODEL, e.g. "openai/gpt-4.1-nano"). */
+/** The models phone calls use (PHONE_MODEL, e.g. "openai/gpt-4o-mini"). */
 export function phoneModel(): ModelSpec {
-  const [provider, ...model] = (process.env.PHONE_MODEL ?? "openai/gpt-4.1-nano").split("/");
+  const [provider, ...model] = (process.env.PHONE_MODEL ?? "openai/gpt-4o-mini").split("/");
   return { provider: provider!, ...(model.length ? { model: model.join("/") } : {}) };
 }
 

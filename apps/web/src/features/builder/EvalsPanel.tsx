@@ -63,9 +63,9 @@ export function EvalsPanel({ agentId, versions }: Props) {
       preferred.map((m) => options.find((o) => o.model === m)).find(Boolean) ?? options[0];
     return found ? `${found.provider}|${found.model}` : "";
   };
-  const agentChoice = agentModel || pick(["gpt-4.1-nano", "qwen3:8b"]);
-  const callerChoice = callerModel || pick(["gpt-4.1-nano", "qwen3:8b"]);
-  const judgeChoice = judgeModel || pick(["gpt-4.1-mini", "gpt-4.1-nano"]);
+  const agentChoice = agentModel || pick(["gpt-4o-mini", "qwen3:8b"]);
+  const callerChoice = callerModel || pick(["gpt-4o-mini", "qwen3:8b"]);
+  const judgeChoice = judgeModel || pick(["gpt-4.1-mini", "gpt-4o-mini"]);
 
   async function runEvals() {
     setMessage(null);

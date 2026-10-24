@@ -12,7 +12,7 @@ web_environment:
     - OLLAMA_REASONING_EFFORT=none
     - OPENAI_MODEL=gpt-4.1-mini
     # OpenAI models that may be picked (non-reasoning models; prices in pipeline/pricing.ts).
-    - OPENAI_MODELS=gpt-4.1-mini,gpt-4.1-nano,gpt-4o-mini
+    - OPENAI_MODELS=gpt-4.1-mini,gpt-4o-mini
     # Local development only: lets webhook/MCP tools reach this machine (e.g. the demo MCP server
     # at http://localhost:3000/api/demo-mcp). Never set this in production (SSRF protection).
     - TOOLS_ALLOW_PRIVATE_HOSTS=true
@@ -25,7 +25,7 @@ web_environment:
     # Phone calls: the voice gateway (apps/voice-gateway) talks to this app with a shared secret.
     # Local value only; set a long random one in production.
     - GATEWAY_SECRET=local-dev-gateway-secret
-    - PHONE_MODEL=openai/gpt-4.1-nano
+    - PHONE_MODEL=openai/gpt-4o-mini
     - WEB_URL=http://localhost:3000
     # Encrypts businesses' own API keys (local value only; a long random one in production).
     - APP_SECRET=local-dev-app-secret-change-me
