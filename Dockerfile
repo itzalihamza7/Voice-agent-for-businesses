@@ -7,7 +7,8 @@
 FROM node:22-slim AS build
 WORKDIR /app
 COPY . .
-RUN npm ci && npm run build -w @voice-agent/web
+# Files keep their local permissions; make sure the non-root runtime user can read them.
+RUN chmod -R a+rX . && npm ci && npm run build -w @voice-agent/web
 
 FROM node:22-slim AS web
 WORKDIR /app

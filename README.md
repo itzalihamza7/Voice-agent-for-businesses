@@ -124,3 +124,4 @@ and the voice gateway on port 8080. For real phone calls, expose the gateway pub
 - [ARCHITECTURE.md](ARCHITECTURE.md): how each part works and why.
 - [docs/ROADMAP.md](docs/ROADMAP.md): the sixteen phases and what each experiment showed.
 - [CONTRIBUTING.md](CONTRIBUTING.md): commands, layout and conventions.
+- [deploy/aws/README.md](deploy/aws/README.md): running it on one AWS EC2 server.

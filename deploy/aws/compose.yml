@@ -1,0 +1,62 @@
+# Production stack for one server (see deploy/aws/README.md). Images are built elsewhere and
+# loaded with deploy.sh; secrets come from .env next to this file (created on the server).
+
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: voice
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      POSTGRES_DB: voice
+      # Small server: keep Postgres's memory modest.
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    command: ["postgres", "-c", "shared_buffers=64MB", "-c", "max_connections=40"]
+    volumes: [db-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U voice"]
+      interval: 5s
+      retries: 20
+    restart: unless-stopped
+
+  migrate:
+    image: voice-agent-migrate:aws
+    environment:
+      DATABASE_URL: postgresql://voice:${POSTGRES_PASSWORD}@db:5432/voice
+      DEMO_PASSWORD: ${DEMO_PASSWORD:?}
+    depends_on:
+      db: { condition: service_healthy }
+    restart: "no"
+
+  web:
+    image: voice-agent-web:aws
+    env_file: [.env]
+    environment:
+      DATABASE_URL: postgresql://voice:${POSTGRES_PASSWORD}@db:5432/voice
+      NODE_OPTIONS: --max-old-space-size=384
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    restart: unless-stopped
+
+  gateway:
+    image: voice-agent-gateway:aws
+    env_file: [.env]
+    environment:
+      WEB_URL: http://web:3000
+      NODE_OPTIONS: --max-old-space-size=160
+    depends_on: [web]
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2.10
+    ports: ["80:80", "443:443"]
+    environment:
+      SITE_ADDRESS: ${PUBLIC_HOST:?}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    depends_on: [web, gateway]
+    restart: unless-stopped
+
+volumes:
+  db-data:
+  caddy-data:

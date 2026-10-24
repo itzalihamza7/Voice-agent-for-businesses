@@ -8,3 +8,5 @@
 .env*
 !.env.example
 packages/db/src/generated
+deploy
+e2e

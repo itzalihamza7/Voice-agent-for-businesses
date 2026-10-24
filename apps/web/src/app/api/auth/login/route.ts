@@ -11,7 +11,11 @@ export async function POST(request: Request) {
   const token = await signIn(parsed.data.email, parsed.data.password);
   if (!token) return Response.json({ error: "Wrong email or password." }, { status: 401 });
   const response = Response.json({ ok: true });
-  const secure = new URL(request.url).protocol === "https:" ? "; Secure" : "";
+  // Behind a proxy (Caddy) the app sees plain HTTP; the proxy says what the browser used.
+  const https =
+    request.headers.get("x-forwarded-proto") === "https" ||
+    new URL(request.url).protocol === "https:";
+  const secure = https ? "; Secure" : "";
   response.headers.append(
     "set-cookie",
     `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${14 * 86400}${secure}`,

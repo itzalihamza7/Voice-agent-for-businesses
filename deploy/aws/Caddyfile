@@ -1,0 +1,11 @@
+# HTTPS with a Let's Encrypt certificate for SITE_ADDRESS (e.g. 3-120-1-2.sslip.io).
+# Twilio's webhook and media stream go to the voice gateway, everything else to the web app.
+{$SITE_ADDRESS} {
+	encode gzip
+	handle /twilio/* {
+		reverse_proxy gateway:8080
+	}
+	handle {
+		reverse_proxy web:3000
+	}
+}
