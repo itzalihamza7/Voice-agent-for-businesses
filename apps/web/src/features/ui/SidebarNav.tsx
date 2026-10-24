@@ -46,11 +46,16 @@ export function SidebarNav({ owner, platformAdmin }: { owner: boolean; platformA
           <Link
             key={href}
             href={href}
-            className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition ${
-              active ? "bg-white/10 text-white" : "text-slate-300 hover:bg-white/5 hover:text-white"
+            className={`relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition ${
+              active
+                ? "bg-white/[0.08] text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.06)]"
+                : "text-slate-400 hover:bg-white/[0.04] hover:text-white"
             }`}
           >
-            <Icon className="h-4 w-4" />
+            {active && (
+              <span className="absolute top-2 bottom-2 -left-4 w-1 rounded-r-full bg-brand-400" />
+            )}
+            <Icon className={`h-4 w-4 ${active ? "text-brand-300" : ""}`} />
             {label}
           </Link>
         );

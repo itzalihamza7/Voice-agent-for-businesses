@@ -28,9 +28,9 @@ import {
   type Connection,
   type NodeTypes,
 } from "@xyflow/react";
-import { AudioLines } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import { LogoMark } from "@/features/ui/Logo";
 import { EvalsPanel } from "./EvalsPanel";
 import { CanvasHighlightContext, FlowNodeCard } from "./FlowNodeCard";
 import {
@@ -261,9 +261,7 @@ function Builder({ agentId, initial, versions: initialVersions }: Props) {
           href="/agents"
           className="flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-brand-600"
         >
-          <span className="flex h-7 w-7 items-center justify-center rounded-md bg-gradient-to-br from-brand-500 to-violet-600 text-white">
-            <AudioLines className="h-4 w-4" />
-          </span>
+          <LogoMark className="h-7 w-7" />
           Agents
         </Link>
         <span className="text-slate-300">/</span>

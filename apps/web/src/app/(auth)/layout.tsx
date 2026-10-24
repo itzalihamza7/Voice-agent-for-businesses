@@ -1,40 +1,37 @@
-import { CheckCircle2 } from "lucide-react";
 import type { ReactNode } from "react";
+import { CallDemo } from "@/features/marketing/CallDemo";
 import { Logo } from "@/features/ui/Logo";
 
-const POINTS = [
-  "Connect your website: pages, prices and booking system, unchanged",
-  "Answers calls 24/7, books, and hands over to your team",
-  "Every call transcribed, analysed and checked",
-];
-
-// Sign-in and sign-up: the form on the right, what the product does on the left.
+// Sign-in and sign-up: the form on the right, the product at work on the left.
 export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="grid min-h-screen lg:grid-cols-2">
-      <div className="relative hidden flex-col justify-between overflow-hidden bg-slate-900 p-12 text-white lg:flex">
-        <div className="absolute -top-32 -right-32 h-96 w-96 rounded-full bg-brand-600/30 blur-3xl" />
-        <div className="absolute -bottom-40 -left-20 h-96 w-96 rounded-full bg-violet-600/20 blur-3xl" />
-        <Logo light />
+    <div className="grid min-h-screen lg:grid-cols-[1.1fr_1fr]">
+      <div className="relative hidden flex-col overflow-hidden bg-ink p-12 text-white lg:flex">
+        <div className="grid-lines absolute inset-0" />
+        <div className="absolute -top-40 -left-20 h-[32rem] w-[32rem] rounded-full bg-brand-600/30 blur-[110px]" />
+        <div className="absolute -right-20 -bottom-40 h-96 w-96 rounded-full bg-fuchsia-500/10 blur-[100px]" />
         <div className="relative">
-          <h2 className="text-3xl font-semibold tracking-tight">
-            An AI receptionist that already knows your business.
+          <Logo light />
+        </div>
+        <div className="relative my-auto py-12">
+          <h2 className="max-w-md font-display text-5xl leading-[1.05] tracking-tight">
+            Every call answered, <em className="text-brand-300">beautifully</em>.
           </h2>
-          <ul className="mt-8 space-y-3 text-slate-300">
-            {POINTS.map((point) => (
-              <li key={point} className="flex gap-3">
-                <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-brand-400" />
-                {point}
-              </li>
-            ))}
-          </ul>
+          <div className="mt-10 max-w-md">
+            <CallDemo tabs={false} />
+          </div>
         </div>
         <p className="relative text-sm text-slate-500">
-          Built for service businesses that live on the phone.
+          Answers questions, books through your system, hands over to your team.
         </p>
       </div>
       <div className="flex items-center justify-center bg-white px-6 py-12">
-        <div className="w-full max-w-sm">{children}</div>
+        <div className="w-full max-w-sm">
+          <div className="mb-10 lg:hidden">
+            <Logo />
+          </div>
+          {children}
+        </div>
       </div>
     </div>
   );

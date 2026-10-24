@@ -1,43 +1,128 @@
 @import "tailwindcss";
 
-/* Brand: a deep indigo with a violet accent, on calm slate neutrals. */
+/* Brand: a deep violet on near-black ink, with calm neutrals. */
 @theme {
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --color-brand-50: #eef2ff;
-  --color-brand-100: #e0e7ff;
-  --color-brand-200: #c7d2fe;
-  --color-brand-300: #a5b4fc;
-  --color-brand-400: #818cf8;
-  --color-brand-500: #6366f1;
-  --color-brand-600: #4f46e5;
-  --color-brand-700: #4338ca;
-  --color-brand-800: #3730a3;
-  --color-brand-900: #312e81;
-  --color-brand-950: #1e1b4b;
+  --font-display: var(--font-serif), ui-serif, Georgia, serif;
+
+  --color-brand-50: #f5f2ff;
+  --color-brand-100: #ece6ff;
+  --color-brand-200: #dbd1ff;
+  --color-brand-300: #c0aeff;
+  --color-brand-400: #a48bff;
+  --color-brand-500: #8463ff;
+  --color-brand-600: #6d43f5;
+  --color-brand-700: #5a2fe0;
+  --color-brand-800: #4a27b8;
+  --color-brand-900: #3d2393;
+  --color-brand-950: #231259;
+  --color-ink: #08070d;
+  --color-ink-2: #100e18;
+  --color-canvas: #f7f7fa;
+
+  --animate-wave: wave 1.2s ease-in-out infinite;
+  --animate-float: float 7s ease-in-out infinite;
+  --animate-fade-up: fade-up 0.45s ease-out both;
+  --animate-marquee: marquee 45s linear infinite;
+  --animate-ring: ring 2.2s ease-out infinite;
+
+  @keyframes wave {
+    0%,
+    100% {
+      transform: scaleY(0.3);
+    }
+    50% {
+      transform: scaleY(1);
+    }
+  }
+  @keyframes float {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-10px);
+    }
+  }
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes marquee {
+    to {
+      transform: translateX(-50%);
+    }
+  }
+  @keyframes ring {
+    from {
+      opacity: 0.6;
+      transform: scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: scale(1.9);
+    }
+  }
 }
 
 /* Shared building blocks (Tailwind 4 utilities, so they can build on each other). */
 @utility btn {
-  @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50;
+  @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition duration-150 disabled:cursor-not-allowed disabled:opacity-50;
 }
 @utility btn-primary {
-  @apply btn bg-brand-600 text-white shadow-sm hover:bg-brand-700;
+  @apply btn bg-linear-to-b from-brand-500 to-brand-700 text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.25),0_8px_20px_-8px_rgb(109_67_245/0.7)] hover:from-brand-400 hover:to-brand-600;
 }
 @utility btn-secondary {
-  @apply btn border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-50;
+  @apply btn border border-slate-200 bg-white text-slate-800 shadow-[0_1px_2px_rgb(16_24_40/0.06)] hover:border-slate-300 hover:bg-slate-50;
 }
 @utility btn-ghost {
-  @apply btn text-slate-600 hover:bg-slate-100;
+  @apply btn text-slate-600 hover:bg-slate-900/5 hover:text-slate-900;
+}
+/* On dark backgrounds. */
+@utility btn-light {
+  @apply btn bg-white text-ink shadow-[0_8px_30px_-10px_rgb(255_255_255/0.5)] hover:bg-brand-50;
+}
+@utility btn-glass {
+  @apply btn border border-white/15 bg-white/5 text-white backdrop-blur hover:bg-white/10;
 }
 @utility card {
-  @apply rounded-xl border border-slate-200 bg-white shadow-sm;
+  @apply rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_2px_rgb(16_24_40/0.04),0_12px_32px_-16px_rgb(16_24_40/0.12)];
+}
+@utility glass {
+  @apply rounded-2xl border border-white/10 bg-white/[0.04] shadow-[inset_0_1px_0_rgb(255_255_255/0.06)] backdrop-blur-xl;
 }
 @utility input {
-  @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 focus:outline-none;
+  @apply w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-[0_1px_2px_rgb(16_24_40/0.05)] placeholder:text-slate-400 focus:border-brand-400 focus:ring-4 focus:ring-brand-500/15 focus:outline-none;
 }
 @utility label {
-  @apply mb-1 block text-sm font-medium text-slate-700;
+  @apply mb-1.5 block text-sm font-medium text-slate-700;
 }
 @utility badge {
   @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium;
+}
+@utility eyebrow {
+  @apply text-xs font-semibold tracking-[0.18em] text-brand-600 uppercase;
+}
+/* A faint grid that fades out towards the edges, for dark sections. */
+@utility grid-lines {
+  background-image:
+    linear-gradient(to right, rgb(255 255 255 / 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(255 255 255 / 0.05) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, black, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation: none !important;
+    transition: none !important;
+  }
 }
