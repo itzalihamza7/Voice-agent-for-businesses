@@ -43,6 +43,9 @@ settle before testing in the browser.
 ## Layout
 
 - `apps/web`: Next.js App Router frontend + thin API routes in `src/app/api`.
+  `src/app/page.tsx` is the public landing page; `(auth)` holds sign-in and sign-up, `(app)` the
+  signed-in pages with the sidebar (its layout). Shared UI pieces (logo, page header, buttons as
+  Tailwind utilities in `globals.css`) live in `src/features/ui/`; the product name is in `brand.ts`.
   `src/features/builder/` is the React Flow agent builder; `src/features/agents/` the agent list.
   Server-only wiring (Prisma client, store per business, HTTP helpers) lives in `src/server/`.
 - `packages/shared`: types + Zod schemas used by both the UI and the pipeline.
@@ -51,9 +54,10 @@ settle before testing in the browser.
   Prisma implementations, and `store.contract.ts` (tests every implementation must pass).
 - `packages/orchestrator`: use cases between the web app and the rest (agents, sessions) and the
   conversation engine (`conversation.ts`: walks a flow turn by turn, pure functions). No HTTP code.
-- `packages/tools`: tools agents can call (built-in booking mock, webhooks, MCP client, SSRF guard).
+- `packages/tools`: tools agents can call (built-in booking mock, webhooks, MCP client, app
+  connections and their templates, SSRF guard).
 - `packages/rag`: the knowledge base: extraction, chunking, embedding, `KnowledgeStore` (pgvector +
-  full-text) and `searchKnowledge()` (hybrid, rewrite, rerank). The page is `apps/web/src/app/knowledge`.
+  full-text) and `searchKnowledge()` (hybrid, rewrite, rerank). The page is `apps/web/src/app/(app)/knowledge`.
 - `packages/db`: Prisma 7 + PostgreSQL. Schema, migrations and seed in `prisma/`.
   Generated client goes to `src/generated/` (gitignored).
 - `.ddev/config.voice-agent.yaml`: our DDEV settings. Don't put them in `config.yaml`: `ddev config` rewrites it.
@@ -134,5 +138,9 @@ settle before testing in the browser.
   checks get a `guardrail` event and an eval case.
 - Unit tests never call a real language model: use a scripted fake (see `conversation.test.ts`).
   Model behaviour is checked by hand or with live runs against both Ollama and OpenAI.
+- App connections: each action is a tool named `<slug>_<action>`. Values the business decides
+  (payment method, accepting terms) go in `fixedBody`, never in AI parameters. A new known app is
+  a template in `packages/tools/src/templates.ts` with a GET-only `detect`. Never test actions
+  that create or cancel something against a real business's production API.
 - Pinned on purpose: TypeScript 6.0 (typescript-eslint does not support 7 yet), ESLint 9
   (some eslint-config-next plugins do not support 10 yet), Prisma 7 (8 is still a release candidate).

@@ -30,22 +30,18 @@ export function CreateAgentForm() {
   }
 
   return (
-    <form onSubmit={onSubmit} className="mt-6 flex gap-2">
+    <form onSubmit={onSubmit} className="mt-4 flex flex-wrap gap-2">
       <input
         aria-label="New agent name"
         placeholder="e.g. Pizza order line"
-        className="flex-1 rounded border border-gray-300 px-3 py-2"
+        className="input flex-1"
         value={name}
         onChange={(event) => setName(event.target.value)}
       />
-      <button
-        type="submit"
-        disabled={pending || name.trim() === ""}
-        className="rounded bg-blue-600 px-4 py-2 font-medium text-white disabled:opacity-40"
-      >
+      <button type="submit" disabled={pending || name.trim() === ""} className="btn-primary">
         {pending ? "Creating…" : "Create agent"}
       </button>
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="w-full text-sm text-red-600">{error}</p>}
     </form>
   );
 }

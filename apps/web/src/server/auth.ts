@@ -20,20 +20,59 @@ const SESSION_DAYS = 14;
 export interface SessionUser {
   userId: string;
   businessId: string;
+  businessName: string;
   name: string;
   email: string;
   role: Role;
+  isPlatformAdmin: boolean;
+  /** The business was suspended by a platform admin: its users are signed out. */
+  suspended: boolean;
 }
 
 /** Checks the password and starts a session. Returns the cookie value, or null. */
 export async function signIn(email: string, password: string): Promise<string | null> {
   const user = await getPrisma().user.findUnique({ where: { email: email.trim().toLowerCase() } });
   if (!user || !(await verifyPassword(password, user.passwordHash))) return null;
+  return startSession(user.id);
+}
+
+async function startSession(userId: string): Promise<string> {
   const { token, id } = newSessionToken();
   await getPrisma().session.create({
-    data: { id, userId: user.id, expiresAt: new Date(Date.now() + SESSION_DAYS * 86_400_000) },
+    data: { id, userId, expiresAt: new Date(Date.now() + SESSION_DAYS * 86_400_000) },
   });
   return token;
+}
+
+/** Self sign-up: a new business with the person as its owner, signed in. Null if the email is taken. */
+export async function signUp(input: {
+  businessName: string;
+  name: string;
+  email: string;
+  password: string;
+}): Promise<string | null> {
+  const email = input.email.trim().toLowerCase();
+  const prisma = getPrisma();
+  if (await prisma.user.findUnique({ where: { email } })) return null;
+  const user = await prisma.user.create({
+    data: {
+      email,
+      name: input.name.trim(),
+      passwordHash: await hashPassword(input.password),
+      role: "owner",
+      business: { create: { name: input.businessName.trim() } },
+    },
+  });
+  return startSession(user.id);
+}
+
+/** The Set-Cookie value for a session (Secure when the browser used HTTPS, even behind a proxy). */
+export function sessionCookie(token: string, request: Request): string {
+  const https =
+    request.headers.get("x-forwarded-proto") === "https" ||
+    new URL(request.url).protocol === "https:";
+  const maxAge = SESSION_DAYS * 86400;
+  return `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${https ? "; Secure" : ""}`;
 }
 
 export async function signOut(token: string): Promise<void> {
@@ -45,16 +84,19 @@ export async function userForToken(token: string | undefined): Promise<SessionUs
   if (!token) return null;
   const session = await getPrisma().session.findUnique({
     where: { id: sessionId(token) },
-    include: { user: true },
+    include: { user: { include: { business: { select: { name: true, suspendedAt: true } } } } },
   });
   if (!session || session.expiresAt < new Date()) return null;
   const { user } = session;
   return {
     userId: user.id,
     businessId: user.businessId,
+    businessName: user.business.name,
     name: user.name,
     email: user.email,
     role: user.role,
+    isPlatformAdmin: user.isPlatformAdmin,
+    suspended: user.business.suspendedAt !== null,
   };
 }
 

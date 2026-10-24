@@ -27,7 +27,9 @@ tier (t3.micro, 20 GB disk, one public IP); otherwise roughly $12–16 a month.
 3. **Deploy:** `deploy/aws/deploy.sh <elastic ip> <ssh key file>`. The first run writes the
    server's `.env` with random secrets and your `OPENAI_API_KEY` (from `.ddev/.env.web`).
 4. Open `https://<ip with dashes>.sslip.io` and sign in as `demo@example.com` with the
-   `DEMO_PASSWORD` from the server's `.env` (`ssh … cat /opt/voice-agent/.env`).
+   `DEMO_PASSWORD` from the server's `.env` (`ssh … cat /opt/voice-agent/.env`), or as the
+   platform admin (`ADMIN_EMAIL` / `ADMIN_PASSWORD` from the same file). Anyone can create a
+   business with **Get started**.
 
 To update, rebuild the images and run `deploy.sh` again; the database and secrets stay.
 

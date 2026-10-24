@@ -20,6 +20,7 @@ async function main() {
       update: {},
     });
     await seedDemoOwner(prisma);
+    await seedPlatformAdmin(prisma);
 
     const existing = await prisma.agent.findUnique({
       where: { id: DEMO_AGENT_ID },
@@ -104,6 +105,30 @@ async function seedDemoOwner(prisma: ReturnType<typeof createPrismaClient>) {
     },
   });
   console.log("Seed: created demo@example.com (owner of the demo business).");
+}
+
+/**
+ * The platform admin, from ADMIN_EMAIL and ADMIN_PASSWORD (skipped when they aren't set). Lives in
+ * its own "Platform" business so it doesn't belong to a customer.
+ */
+async function seedPlatformAdmin(prisma: ReturnType<typeof createPrismaClient>) {
+  const email = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+  const password = process.env.ADMIN_PASSWORD;
+  if (!email || !password) return;
+  if (await prisma.user.findUnique({ where: { email } })) return;
+  const salt = randomBytes(16);
+  const hash = scryptSync(password, salt, 64);
+  await prisma.user.create({
+    data: {
+      email,
+      name: "Platform admin",
+      passwordHash: `${salt.toString("hex")}:${hash.toString("hex")}`,
+      role: "owner",
+      isPlatformAdmin: true,
+      business: { create: { name: "Platform" } },
+    },
+  });
+  console.log(`Seed: created the platform admin ${email}.`);
 }
 
 main().catch((error: unknown) => {

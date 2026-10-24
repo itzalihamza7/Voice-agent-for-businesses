@@ -13,9 +13,11 @@ datasource db {
 
 // A company using the platform. Only one ("demo-business") until auth arrives (roadmap phase 15).
 model Business {
-  id        String   @id @default(uuid())
-  name      String
-  createdAt DateTime @default(now()) @map("created_at")
+  id          String    @id @default(uuid())
+  name        String
+  createdAt   DateTime  @default(now()) @map("created_at")
+  // Set by a platform admin: the business's users can't sign in and its numbers don't answer.
+  suspendedAt DateTime? @map("suspended_at")
 
   agents             Agent[]
   calls              Call[]
@@ -281,14 +283,16 @@ enum Role {
 }
 
 model User {
-  id           String   @id @default(uuid())
-  businessId   String   @map("business_id")
-  email        String   @unique
-  name         String
+  id              String   @id @default(uuid())
+  businessId      String   @map("business_id")
+  email           String   @unique
+  name            String
   // scrypt: "salt:hash", both hex.
-  passwordHash String   @map("password_hash")
-  role         Role     @default(editor)
-  createdAt    DateTime @default(now()) @map("created_at")
+  passwordHash    String   @map("password_hash")
+  role            Role     @default(editor)
+  // Platform admins run the platform itself: every business, usage and suspensions.
+  isPlatformAdmin Boolean  @default(false) @map("is_platform_admin")
+  createdAt       DateTime @default(now()) @map("created_at")
 
   business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
   sessions Session[]

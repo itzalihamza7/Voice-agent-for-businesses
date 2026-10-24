@@ -26,14 +26,14 @@ export function GenerateAgentForm() {
   }
 
   return (
-    <div className="mt-4 space-y-2 rounded border border-gray-200 p-3" data-testid="generate-agent">
-      <label className="block text-sm font-medium" htmlFor="agent-description">
-        Or describe the agent and let AI draft the flow
+    <div className="mt-4 space-y-2" data-testid="generate-agent">
+      <label className="sr-only" htmlFor="agent-description">
+        Describe the agent and let AI draft the flow
       </label>
       <textarea
         id="agent-description"
         rows={3}
-        className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+        className="input"
         placeholder="A phone agent for Luigi's Pizza that takes delivery orders: what pizza, size, address and phone number, answers questions about the menu, and passes complaints to the manager on +441632960123."
         value={description}
         onChange={(e) => setDescription(e.target.value)}
@@ -43,7 +43,7 @@ export function GenerateAgentForm() {
           type="button"
           disabled={description.trim().length < 20 || state.pending}
           onClick={() => void generate()}
-          className="rounded bg-violet-600 px-3 py-1.5 text-sm text-white disabled:opacity-40"
+          className="btn-secondary"
         >
           {state.pending ? "Designing the flow…" : "Generate agent"}
         </button>

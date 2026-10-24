@@ -9,6 +9,12 @@ most features were measured on both: the findings are in [docs/ROADMAP.md](docs/
 
 ## What it does
 
+- **Set up from a website:** a business types its address; the platform imports the pages its
+  sitemap lists into the knowledge base, detects the booking API the site already uses, and
+  creates a ready phone agent. Nothing on the business's website changes.
+- **App connections:** a business's own API (from a template, an OpenAPI document or typed by
+  hand) becomes tools agents can call, with the credential encrypted on the server and values
+  like the payment method fixed by code, not chosen by the AI.
 - **Agent builder:** a drag-and-drop flow editor (React Flow) with Say, Ask, AI response,
   Branch, Tool, Knowledge lookup, Transfer, Hand off and End steps, live checks, and versions
   that are never edited in place.
@@ -35,8 +41,9 @@ most features were measured on both: the findings are in [docs/ROADMAP.md](docs/
 - **Multi-agent and generation:** agents hand calls to each other; a new agent's flow can be
   generated from a plain-English description.
 - **Releases:** go-live through the eval gate, one-click rollback, and A/B traffic splits.
-- **Businesses and access:** sign-in, owner/editor/viewer roles, everything scoped by business,
-  encrypted per-business API keys.
+- **Businesses and access:** self sign-up, owner/editor/viewer roles, everything scoped by
+  business, encrypted per-business API keys, and a platform admin who sees every business and can
+  suspend one.
 
 ## How it fits together
 
@@ -85,7 +92,8 @@ ddev start
 
 `ddev start` installs dependencies, applies migrations, seeds a demo business and starts the app
 and the voice gateway. Open https://voice-agent.ddev.site and sign in as `demo@example.com` /
-`demo-password`.
+`demo-password` (or `admin@example.com` / `admin-password` for the platform admin), or create a
+new business with **Get started** and try **Connect website**.
 
 The demo business is a hair salon, High Street Hair: a question-answering agent with example
 documents and eval cases. Open it, press **Test**, and ask about prices or opening hours, by

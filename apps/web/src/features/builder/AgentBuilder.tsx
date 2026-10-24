@@ -28,6 +28,7 @@ import {
   type Connection,
   type NodeTypes,
 } from "@xyflow/react";
+import { AudioLines } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { EvalsPanel } from "./EvalsPanel";
@@ -255,10 +256,17 @@ function Builder({ agentId, initial, versions: initialVersions }: Props) {
 
   return (
     <div className="flex h-screen flex-col">
-      <header className="flex flex-wrap items-center gap-3 border-b border-gray-200 px-4 py-2">
-        <Link href="/" className="text-sm text-blue-600 underline">
-          ← Agents
+      <header className="flex flex-wrap items-center gap-3 border-b border-slate-200 bg-white px-4 py-2">
+        <Link
+          href="/agents"
+          className="flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-brand-600"
+        >
+          <span className="flex h-7 w-7 items-center justify-center rounded-md bg-gradient-to-br from-brand-500 to-violet-600 text-white">
+            <AudioLines className="h-4 w-4" />
+          </span>
+          Agents
         </Link>
+        <span className="text-slate-300">/</span>
         <input
           aria-label="Agent name"
           className="rounded border border-gray-300 px-2 py-1 font-semibold"

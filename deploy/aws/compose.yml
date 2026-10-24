@@ -23,6 +23,8 @@ services:
     environment:
       DATABASE_URL: postgresql://voice:${POSTGRES_PASSWORD}@db:5432/voice
       DEMO_PASSWORD: ${DEMO_PASSWORD:?}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
     depends_on:
       db: { condition: service_healthy }
     restart: "no"

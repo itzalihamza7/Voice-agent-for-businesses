@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { connection } from "next/server";
 import { KnowledgeBase } from "@/features/knowledge/KnowledgeBase";
 import { getKnowledgeStore } from "@/server/knowledge";
@@ -11,13 +10,11 @@ export default async function KnowledgePage() {
   await connection();
   const documents = await (await getKnowledgeStore()).listDocuments();
   return (
-    <div className="flex h-screen flex-col">
-      <header className="flex items-center gap-4 border-b border-gray-200 px-6 py-3">
-        <Link href="/" className="text-sm text-blue-600 underline">
-          ← Agents
-        </Link>
-        <h1 className="text-lg font-semibold">Knowledge base</h1>
-        <p className="text-sm text-gray-500">
+    // Full height inside the app shell: cancel the page padding.
+    <div className="-mx-8 -my-8 flex h-screen flex-col bg-white">
+      <header className="flex items-baseline gap-4 border-b border-slate-200 px-6 py-4">
+        <h1 className="text-xl font-semibold tracking-tight">Knowledge base</h1>
+        <p className="text-sm text-slate-500">
           Documents your agents can answer from (shared by all agents of the business).
         </p>
       </header>

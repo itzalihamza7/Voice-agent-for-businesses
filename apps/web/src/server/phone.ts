@@ -20,6 +20,9 @@ export async function agentForNumber(
     include: { versions: { orderBy: { version: "desc" } } },
   });
   if (!agent || agent.versions.length === 0) return null;
+  // A suspended business's numbers don't answer.
+  const business = await getPrisma().business.findUnique({ where: { id: agent.businessId } });
+  if (business?.suspendedAt) return null;
   const live = agent.liveVersion ?? agent.versions[0]!.version;
   const version =
     "version" in call
@@ -47,4 +50,15 @@ export function fromGateway(request: Request): boolean {
   const sent = request.headers.get("x-gateway-secret");
   if (!secret || !sent || sent.length !== secret.length) return false;
   return timingSafeEqual(Buffer.from(sent), Buffer.from(secret));
+}
+
+/** Each agent's live version and phone number, for the agent list. */
+export async function agentLines(
+  businessId: string,
+): Promise<Map<string, { liveVersion: number | null; phoneNumber: string | null }>> {
+  const agents = await getPrisma().agent.findMany({
+    where: { businessId },
+    select: { id: true, liveVersion: true, phoneNumber: true },
+  });
+  return new Map(agents.map(({ id, ...line }) => [id, line]));
 }

@@ -31,6 +31,9 @@ web_environment:
     - APP_SECRET=local-dev-app-secret-change-me
     # The demo owner's password (demo@example.com), local only.
     - DEMO_PASSWORD=demo-password
+    # The platform admin (sees every business), local only.
+    - ADMIN_EMAIL=admin@example.com
+    - ADMIN_PASSWORD=admin-password
 
 # Runs the Next.js dev server inside the web container. On every `ddev start` it first
 # installs dependencies, applies database migrations, seeds demo data and, while the knowledge

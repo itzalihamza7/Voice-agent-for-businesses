@@ -3,6 +3,7 @@
 #   deploy/aws/deploy.sh <server ip> <ssh key file>
 # Images: build them first for linux/amd64 (see README.md). On the first run the server's .env
 # is created with random secrets; OPENAI_API_KEY is read from .ddev/.env.web, never printed.
+# The platform admin is admin@<host> (or ADMIN_EMAIL) with a random password, added once.
 set -euo pipefail
 IP="$1"; KEY="$2"
 HOST="$(echo "$IP" | tr . -).sslip.io"
@@ -34,6 +35,15 @@ PHONE_MODEL=openai/gpt-4o-mini
 VOICE_STT=openai
 VOICE_TTS=openai
 TOOLS_ALLOW_PRIVATE_HOSTS=false
+ENV
+fi
+
+# Servers set up before the platform admin existed get one too (the seed creates it).
+if ! "${SSH[@]}" "grep -q '^ADMIN_EMAIL=' $DIR/.env"; then
+  echo "Adding the platform admin to the server's .env…"
+  "${SSH[@]}" "cat >> $DIR/.env" <<ENV
+ADMIN_EMAIL=${ADMIN_EMAIL:-admin@${HOST}}
+ADMIN_PASSWORD=$(openssl rand -base64 15 | tr -d '/+=')
 ENV
 fi
 

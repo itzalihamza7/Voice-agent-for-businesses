@@ -8,8 +8,8 @@ export const DEMO = {
 /** Where global-setup.ts saves the signed-in session. */
 export const STORAGE_STATE = "e2e/.auth/demo.json";
 
-/** Opens the home page as the signed-in demo owner. */
+/** Opens the agent list as the signed-in demo owner. */
 export async function openHome(page: Page) {
-  await page.goto("/");
+  await page.goto("/agents");
   await page.getByRole("heading", { name: "Your agents" }).waitFor();
 }

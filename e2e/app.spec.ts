@@ -1,9 +1,11 @@
 import { expect, test } from "@playwright/test";
 import { openHome } from "./helpers";
 
-test("visitors must sign in", async ({ browser }) => {
+test("visitors see the landing page and must sign in", async ({ browser }) => {
   const page = await browser.newPage({ storageState: { cookies: [], origins: [] } });
   await page.goto("/");
+  await expect(page.getByRole("link", { name: "Get started", exact: true })).toBeVisible();
+  await page.goto("/agents");
   await expect(page).toHaveURL(/\/login/);
   const api = await page.request.get("/api/agents");
   expect(api.status()).toBe(401);

@@ -442,6 +442,34 @@ Code: `packages/agent-config/src/versioning.ts`, `apps/web/src/server/releases.t
   business's language models instead of the platform's key.
 - Locally, the seed creates `demo@example.com` (password `DEMO_PASSWORD`, `demo-password` in
   DDEV) as the owner of the demo business.
+- **Sign-up** creates a business with its first owner and signs them in; new businesses start at
+  **Connect website**. Sign-in and sign-up share a rate limit per IP address.
+- **Platform admin:** a user with `is_platform_admin` (seeded from `ADMIN_EMAIL` and
+  `ADMIN_PASSWORD`, in its own "Platform" business) can open `/admin`: every business with its
+  people, agents, calls and AI cost, and suspending or reactivating a business. A suspended
+  business can't sign in or use the API, and its phone numbers stop answering.
+
+## How connecting a business works
+
+The goal: a business types its website's address and gets a working agent, with no change to
+its website.
+
+1. **Scan** (`server/onboarding.ts`, GET requests only): `sitemapPages()` (`packages/rag`) reads
+   the sitemap (and sitemap indexes) and keeps one language; `detectConnection()`
+   (`packages/tools/src/templates.ts`) checks for a known app (a template such as chauffeur
+   bookings, recognised by harmless GETs to its public API) and then for an OpenAPI document at
+   the usual addresses.
+2. **Set up:** the chosen pages are imported into the knowledge base, the detected API is saved
+   as a connection, and `websiteAgentDraft()` (`packages/orchestrator/src/agent-templates.ts`)
+   builds the agent: a greeting, a Branch that routes booking, existing bookings, "speak to a
+   person" and goodbyes, and a knowledge lookup for everything else.
+3. **Connections** (`packages/shared/src/connections.ts`, `packages/tools/src/connection.ts`):
+   each action (method, path with `{placeholders}`, parameters in path, query or body) becomes a
+   tool named `<slug>_<action>`, merged with the agent's other tools in `server/tools.ts`.
+   `fixedBody` holds values the business decides (payment method, accepted terms); the AI can't
+   override them. URLs go through the SSRF guard, responses are capped at 100 KB and redirects
+   aren't followed. Credentials are encrypted like the per-business OpenAI key and only owners
+   can see or change connections.
 
 ## How memory and context work
 
