@@ -7,4 +7,5 @@ export * from "./network";
 export * from "./registry";
 export * from "./templates";
 export * from "./types";
+export * from "./verification";
 export * from "./webhook";

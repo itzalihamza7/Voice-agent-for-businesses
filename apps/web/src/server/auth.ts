@@ -1,14 +1,8 @@
 import type { Role } from "@voice-agent/db";
 import { cookies } from "next/headers";
-import {
-  decrypt,
-  encrypt,
-  hashPassword,
-  newSessionToken,
-  sessionId,
-  verifyPassword,
-} from "./passwords";
+import { hashPassword, newSessionToken, sessionId, verifyPassword } from "./passwords";
 import { getPrisma } from "./store";
+import { open, seal } from "./vault";
 
 // Signing in, sessions and the current business. The proxy (src/proxy.ts) checks the session on
 // every request and passes the business on in a request header; server code reads it with
@@ -124,13 +118,7 @@ export async function createUser(input: {
   });
 }
 
-// ----- Per-business vendor keys ----------------------------------------------------------------
-
-function appSecret(): string {
-  const secret = process.env.APP_SECRET;
-  if (!secret || secret.length < 16) throw new Error("APP_SECRET must be set (16+ characters).");
-  return secret;
-}
+// ----- Per-business vendor keys (sealed with the business's own data key, see vault.ts) ---------
 
 export async function setBusinessSecret(businessId: string, name: string, value: string | null) {
   const prisma = getPrisma();
@@ -138,7 +126,7 @@ export async function setBusinessSecret(businessId: string, name: string, value:
     await prisma.businessSecret.deleteMany({ where: { businessId, name } });
     return;
   }
-  const sealed = encrypt(value, appSecret());
+  const sealed = await seal(businessId, value);
   await prisma.businessSecret.upsert({
     where: { businessId_name: { businessId, name } },
     create: { businessId, name, value: sealed },
@@ -163,5 +151,5 @@ export async function modelEnv(businessId: string): Promise<Record<string, strin
   const row = await getPrisma().businessSecret.findUnique({
     where: { businessId_name: { businessId, name: "OPENAI_API_KEY" } },
   });
-  return row ? { ...process.env, OPENAI_API_KEY: decrypt(row.value, appSecret()) } : process.env;
+  return row ? { ...process.env, OPENAI_API_KEY: await open(businessId, row.value) } : process.env;
 }

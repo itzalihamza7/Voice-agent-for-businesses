@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { ConnectionRequestLog } from "@voice-agent/shared";
 import { actionsFromOpenApi, connectionTools, requestUrl } from "./connection";
 
 const actions = [
@@ -73,6 +74,7 @@ describe("connection tools", () => {
         baseUrl: "https://shop.example/api",
         authHeaders: { "x-api-key": "k" },
         actions,
+        writesAllowed: true,
       },
       network(fetchMock),
     );
@@ -94,10 +96,96 @@ describe("connection tools", () => {
 
   it("refuses private addresses", async () => {
     const [lookup] = connectionTools(
-      { slug: "x", name: "X", baseUrl: "http://127.0.0.1:3000", authHeaders: {}, actions },
+      {
+        slug: "x",
+        name: "X",
+        baseUrl: "http://127.0.0.1:3000",
+        authHeaders: {},
+        actions,
+        writesAllowed: false,
+      },
       { allowPrivateHosts: false, fetch: vi.fn<typeof fetch>() },
     );
     expect(await lookup!.execute({ sku: "a" }, { now: new Date() })).toMatchObject({ ok: false });
+  });
+
+  it("refuses actions that change data without the business's consent, and logs it", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ sku: "RG6" }));
+    const log: ConnectionRequestLog[] = [];
+    const [lookup, order] = connectionTools(
+      {
+        slug: "chafer",
+        name: "Chafers",
+        baseUrl: "https://shop.example",
+        authHeaders: {},
+        actions,
+        writesAllowed: false,
+        onRequest: (entry) => log.push(entry),
+      },
+      network(fetchMock),
+    );
+    expect(await lookup!.execute({ sku: "RG6" }, { now: new Date() })).toMatchObject({ ok: true });
+    expect(await order!.execute({ sku: "RG6", quantity: 1 }, { now: new Date() })).toMatchObject({
+      ok: false,
+      error: expect.stringContaining("consent"),
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(log).toEqual([
+      expect.objectContaining({
+        action: "get_product",
+        path: "/products/RG6",
+        status: 200,
+        ok: true,
+      }),
+      expect.objectContaining({ action: "create_order", status: null, ok: false }),
+    ]);
+  });
+
+  it("fills caller-bound values from the call, never from the AI", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ bookings: [] }));
+    const [mine] = connectionTools(
+      {
+        slug: "rides",
+        name: "Rides",
+        baseUrl: "https://rides.example/api",
+        authHeaders: {},
+        writesAllowed: false,
+        actions: [
+          {
+            name: "my_bookings",
+            description: "The caller's upcoming bookings",
+            method: "GET",
+            path: "/agent/bookings",
+            fixedBody: {},
+            parameters: [
+              {
+                name: "phone",
+                in: "query",
+                type: "string",
+                required: true,
+                description: "",
+                source: "caller_phone",
+              },
+            ],
+          },
+        ],
+      },
+      network(fetchMock),
+    );
+    // The model isn't offered the parameter at all.
+    expect(mine!.parameters).toMatchObject({ properties: {}, required: [] });
+    await mine!.execute(
+      { phone: "+440000000000" },
+      { now: new Date(), callerPhone: "+34600111222" },
+    );
+    expect(String(fetchMock.mock.calls[0]![0])).toBe(
+      "https://rides.example/api/agent/bookings?phone=%2B34600111222",
+    );
+    // No caller number (a web chat): the request isn't made.
+    expect(await mine!.execute({}, { now: new Date(), callerPhone: null })).toMatchObject({
+      ok: false,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("imports actions from an OpenAPI document", () => {

@@ -9,6 +9,8 @@ type Context = { params: Promise<{ connectionId: string }> };
 const TestSchema = z.object({
   action: z.string(),
   args: z.record(z.string(), z.unknown()).default({}),
+  // For parameters bound to the caller's number: the number to test with.
+  callerPhone: z.string().trim().max(20).optional(),
 });
 
 export async function POST(request: Request, { params }: Context) {
@@ -23,6 +25,9 @@ export async function POST(request: Request, { params }: Context) {
   );
   if (!tool) return Response.json({ error: "No such action." }, { status: 404 });
   const started = performance.now();
-  const result = await tool.execute(parsed.data.args, { now: new Date() });
+  const result = await tool.execute(parsed.data.args, {
+    now: new Date(),
+    callerPhone: parsed.data.callerPhone ?? null,
+  });
   return Response.json({ result, latencyMs: Math.round(performance.now() - started) });
 }

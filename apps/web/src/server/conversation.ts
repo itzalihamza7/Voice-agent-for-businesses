@@ -26,6 +26,8 @@ export async function conversationDeps(
   settings: ConversationSettings,
   /** Whose knowledge base, caller memory, agents and API keys the call uses. */
   businessId: string,
+  /** The call these are for (its id goes in the connections' audit log). */
+  callId?: string,
 ): Promise<{ deps: ConversationDeps; close: () => Promise<void> }> {
   const { models, prompt, tools: toolConfig, contextBudget } = settings;
   const env = await modelEnv(businessId);
@@ -35,7 +37,7 @@ export async function conversationDeps(
     const model = createLanguageModel(spec, env);
     return fallback ? new FallbackLanguageModel(model, fallback) : model;
   };
-  const resolved = await loadTools(toolConfig, businessId);
+  const resolved = await loadTools(toolConfig, businessId, callId ? { callId } : {});
   return {
     deps: {
       decisions: build(models.decisions),

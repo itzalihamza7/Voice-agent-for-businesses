@@ -138,6 +138,9 @@ settle before testing in the browser.
   checks get a `guardrail` event and an eval case.
 - Unit tests never call a real language model: use a scripted fake (see `conversation.test.ts`).
   Model behaviour is checked by hand or with live runs against both Ollama and OpenAI.
+- Secrets go through `server/vault.ts` (`seal` / `open` with the business's data key), never
+  `encrypt` with `APP_SECRET` directly. Connection requests are logged without the key, body or
+  query string; keep it that way.
 - App connections: each action is a tool named `<slug>_<action>`. Values the business decides
   (payment method, accepting terms) go in `fixedBody`, never in AI parameters. A new known app is
   a template in `packages/tools/src/templates.ts` with a GET-only `detect`. Never test actions

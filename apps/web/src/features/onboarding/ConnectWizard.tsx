@@ -28,6 +28,7 @@ interface Result {
   imported: number;
   failed: string[];
   tools: string[];
+  writesLocked: boolean;
 }
 
 const readable = (name: string) => name.replace(/_/g, " ");
@@ -250,6 +251,17 @@ export function ConnectWizard({ businessName: initialName }: { businessName: str
             {result.failed.length > 0 && ` (${result.failed.length} couldn't be read)`}. Try it in
             the test chat, then publish it.
           </p>
+          {result.writesLocked && (
+            <p className="mx-auto mt-4 max-w-md rounded-lg bg-amber-50 px-4 py-3 text-left text-sm text-amber-900">
+              <strong>Bookings are off for now.</strong> Your agent can look things up, but actions
+              that change data (bookings, cancellations) start working once you prove the app is
+              yours: add its API key or verify the domain under{" "}
+              <Link href="/connections" className="font-medium underline">
+                App connections
+              </Link>
+              .
+            </p>
+          )}
           <div className="mt-6 flex justify-center gap-3">
             <Link href={`/agents/${result.agentId}/builder`} className="btn-primary">
               Open the agent <ArrowRight className="h-4 w-4" />

@@ -157,6 +157,8 @@ const CHAUFFEUR_BOOKING: Template = {
         "Find a booking by its reference and the email or phone number it was made with.",
       method: "POST",
       path: "/bookings/lookup",
+      // A POST that only reads: it needs the reference and the booking's email or phone.
+      readOnly: true,
       parameters: [
         string("reference", "The booking reference."),
         string("email", "The booking's email address.", false),

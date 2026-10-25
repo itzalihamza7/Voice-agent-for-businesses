@@ -470,6 +470,23 @@ its website.
    override them. URLs go through the SSRF guard, responses are capped at 100 KB and redirects
    aren't followed. Credentials are encrypted like the per-business OpenAI key and only owners
    can see or change connections.
+4. **Consent and limits** (`packages/tools/src/connection.ts`, `verification.ts`): actions that
+   change data (anything but GET, unless marked `readOnly`) only run with the business's consent:
+   the API's own key, or a verified domain (a DNS TXT record `vesper-verify=<token>` or the token
+   in `/.well-known/vesper-verify.txt`). Without it the request isn't sent. Parameters with
+   `source: "caller_phone"` are filled by code from the number the call comes from; the model
+   never sees them. Every request (or refusal) goes to the audit log (`connection_requests`:
+   action, path, status, timing, call id; never the key, the body or the query string).
+
+### Secrets and data
+
+- **Envelope encryption** (`server/vault.ts`): each business has its own random data key, stored
+  wrapped with the master key (`APP_SECRET`). Its OpenAI key and connection credentials are sealed
+  with it (`v2:` values); values sealed with the master key directly still open. An owner can
+  rotate the key in Settings, which re-seals every secret.
+- **Retention** (`server/retention.ts`): an owner picks how long call data is kept (7, 30, 90 or
+  365 days, or forever). Older calls (with their LangGraph threads), caller memories and audit
+  entries are deleted after calls are recorded (at most hourly) and when the setting changes.
 
 ## How memory and context work
 

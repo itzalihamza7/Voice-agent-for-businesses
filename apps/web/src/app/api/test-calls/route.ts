@@ -15,9 +15,9 @@ export async function POST(request: Request) {
   const { flow, callerPhone, agentId, agentVersion, ...settings } = parsed.data;
   let close = async () => {};
   try {
-    const built = await conversationDeps(settings, await currentBusinessId());
-    close = built.close;
     const callId = crypto.randomUUID();
+    const built = await conversationDeps(settings, await currentBusinessId(), callId);
+    close = built.close;
     const result = await (
       await getCallSessions()
     ).start(callId, flow, built.deps, {

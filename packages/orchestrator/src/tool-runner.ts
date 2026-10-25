@@ -26,6 +26,8 @@ import { toolArgumentsPrompt } from "./prompts";
 export interface ToolTurn {
   tools: ReadonlyMap<string, Tool> | null;
   now: Date;
+  /** The number the call comes from, for tool values bound to it. */
+  callerPhone: string | null;
   variables: Record<string, string>;
   transcript: TranscriptEntry[];
   events: ConversationEvent[];
@@ -98,7 +100,7 @@ export async function runToolStep(
   const started = performance.now();
   const checked = checkArguments(tool.parameters, args);
   const result: ToolResult = checked.ok
-    ? await tool.execute(checked.args, { now: turn.now })
+    ? await tool.execute(checked.args, { now: turn.now, callerPhone: turn.callerPhone })
     : { ok: false, error: checked.error };
   record(
     turn,
@@ -165,7 +167,7 @@ export async function replyWithTools(
       const outcome: ToolResult = !tool
         ? { ok: false, error: `The tool "${call.name}" isn't allowed in this step.` }
         : checked?.ok
-          ? await tool.execute(checked.args, { now: turn.now })
+          ? await tool.execute(checked.args, { now: turn.now, callerPhone: turn.callerPhone })
           : { ok: false, error: checked && !checked.ok ? checked.error : "Invalid arguments" };
       record(turn, nodeId, call.name, "ai", args, outcome, performance.now() - started);
       messages.push({

@@ -1,5 +1,6 @@
 import { websiteAgentDraft } from "@voice-agent/orchestrator";
 import { chunkText, embedChunks, extractFromUrl, sitemapPages } from "@voice-agent/rag";
+import { changesData } from "@voice-agent/shared";
 import { detectConnection, type DetectedConnection } from "@voice-agent/tools";
 import { listConnections, networkOptions, saveConnection } from "./connections";
 import { embeddingModels, getKnowledgeStore } from "./knowledge";
@@ -29,6 +30,8 @@ export interface SetupResult {
   imported: number;
   failed: string[];
   tools: string[];
+  /** True if some of the app's actions change data and stay off until the domain is verified. */
+  writesLocked: boolean;
 }
 
 export async function setUpFromWebsite(
@@ -68,6 +71,7 @@ export async function setUpFromWebsite(
 
   // 2. The app's API, if one was found: its actions become the agent's tools.
   let tools: string[] = [];
+  let writesLocked = false;
   if (scan) {
     // Setting up again reuses the connection made the first time (slugs are unique).
     const saved =
@@ -77,7 +81,10 @@ export async function setUpFromWebsite(
         name: scan.how === "template" ? `${input.businessName} bookings` : scan.connection.name,
         secret: null,
       }));
-    if (saved) tools = saved.actions.map((a) => `${saved.slug}_${a.name}`);
+    if (saved) {
+      tools = saved.actions.map((a) => `${saved.slug}_${a.name}`);
+      writesLocked = !saved.writesAllowed && saved.actions.some(changesData);
+    }
   }
 
   // 3. A ready agent that uses both.
@@ -93,5 +100,5 @@ export async function setUpFromWebsite(
     ...draft,
     agentId: crypto.randomUUID(),
   });
-  return { agentId: agent.agentId, imported, failed, tools };
+  return { agentId: agent.agentId, imported, failed, tools, writesLocked };
 }

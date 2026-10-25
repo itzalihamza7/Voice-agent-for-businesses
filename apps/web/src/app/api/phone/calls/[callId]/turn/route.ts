@@ -29,6 +29,7 @@ export async function POST(request: Request, { params }: Context) {
       tools: agent.config.tools,
     },
     agent.businessId,
+    callId,
   );
   try {
     const turn = await voiceTurn(callId, audio, "audio/wav", built.deps, "pcm");

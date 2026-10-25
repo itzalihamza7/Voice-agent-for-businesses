@@ -12,6 +12,12 @@ export const ConnectionParameterSchema = z.object({
   type: z.enum(["string", "number", "integer", "boolean", "object"]).default("string"),
   required: z.boolean().default(false),
   description: z.string().max(300).default(""),
+  /**
+   * Who gives the value. "ai": the model, from the conversation. "caller_phone": the code, from
+   * the number the call comes from; the model never sees or sets it, so a caller can't ask for
+   * someone else's bookings by saying another number. Absent means "ai".
+   */
+  source: z.enum(["ai", "caller_phone"]).optional(),
 });
 
 export const ConnectionActionSchema = z.object({
@@ -26,6 +32,8 @@ export const ConnectionActionSchema = z.object({
    * "chauffeur" }: decisions like these belong to the business, not the model.
    */
   fixedBody: z.record(z.string(), z.unknown()).default({}),
+  /** True for a POST that only reads (e.g. a lookup). By default only GET counts as reading. */
+  readOnly: z.boolean().optional(),
 });
 
 export const ConnectionAuthSchema = z.enum(["none", "bearer", "header"]);
@@ -54,4 +62,29 @@ export interface ConnectionSummary extends Omit<ConnectionInput, "secret"> {
   id: string;
   hasSecret: boolean;
   updatedAt: string;
+  /** Put in a DNS TXT record or a file on the API's domain to prove the business owns it. */
+  verificationToken: string;
+  verifiedAt: string | null;
+  /** May agents change data through it? Only with the API's own key or a verified domain. */
+  writesAllowed: boolean;
 }
+
+/** True if the action changes data in the business's app (anything but a read). */
+export function changesData(action: Pick<ConnectionAction, "method" | "readOnly">): boolean {
+  return !(action.readOnly ?? action.method === "GET");
+}
+
+/** One request an agent made through a connection, for the audit log. */
+export interface ConnectionRequestLog {
+  action: string;
+  method: string;
+  path: string;
+  status: number | null;
+  ok: boolean;
+  error: string | null;
+  latencyMs: number;
+}
+
+/** The DNS TXT record value and file path that prove a business owns an API's domain. */
+export const VERIFICATION_TXT_PREFIX = "vesper-verify=";
+export const VERIFICATION_FILE_PATH = "/.well-known/vesper-verify.txt";

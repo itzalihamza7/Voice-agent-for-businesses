@@ -56,12 +56,12 @@ export function SettingsPanel() {
 
   return (
     <div className="space-y-8">
-      <section className="space-y-2">
+      <section className="space-y-3">
         <h2 className="font-semibold">People</h2>
         <ul className="text-sm" data-testid="users">
           {users.map((u) => (
             <li key={u.id}>
-              {u.name} · {u.email} · <span className="text-gray-500">{u.role}</span>
+              {u.name} · {u.email} · <span className="text-slate-500">{u.role}</span>
             </li>
           ))}
         </ul>
@@ -72,14 +72,14 @@ export function SettingsPanel() {
               aria-label={field}
               type={field === "password" ? "password" : "text"}
               placeholder={field[0]!.toUpperCase() + field.slice(1)}
-              className="rounded border border-gray-300 px-2 py-1"
+              className="input"
               value={form[field]}
               onChange={(e) => setForm({ ...form, [field]: e.target.value })}
             />
           ))}
           <select
             aria-label="Role"
-            className="rounded border border-gray-300 px-2 py-1"
+            className="input"
             value={form.role}
             onChange={(e) => setForm({ ...form, role: e.target.value })}
           >
@@ -90,7 +90,7 @@ export function SettingsPanel() {
         </div>
         <button
           type="button"
-          className="rounded bg-blue-600 px-3 py-1 text-sm text-white"
+          className="btn-primary"
           onClick={async () => {
             if (await send("/api/business/users", "POST", form, `Added ${form.email}.`)) {
               setForm({ email: "", name: "", password: "", role: "editor" });
@@ -100,9 +100,9 @@ export function SettingsPanel() {
           Add person
         </button>
       </section>
-      <section className="space-y-2">
+      <section className="space-y-3">
         <h2 className="font-semibold">Your OpenAI key</h2>
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-slate-500">
           {keySet
             ? "Set: your agents use your own key. It is stored encrypted and never shown again."
             : "Not set: your agents use the platform's key."}
@@ -112,13 +112,13 @@ export function SettingsPanel() {
             aria-label="OpenAI API key"
             type="password"
             placeholder="sk-..."
-            className="flex-1 rounded border border-gray-300 px-2 py-1 text-sm"
+            className="input flex-1"
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
           />
           <button
             type="button"
-            className="rounded border border-gray-300 px-3 text-sm"
+            className="btn-secondary"
             disabled={apiKey.trim().length < 10}
             onClick={async () => {
               await send(
@@ -135,7 +135,7 @@ export function SettingsPanel() {
           {keySet && (
             <button
               type="button"
-              className="rounded border border-red-300 px-3 text-sm text-red-700"
+              className="btn-ghost text-red-600 hover:bg-red-50"
               onClick={() =>
                 void send(
                   "/api/business/secrets",

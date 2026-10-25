@@ -59,3 +59,29 @@ export function decrypt(encoded: string, secret: string): string {
 function keyFrom(secret: string): Buffer {
   return createHash("sha256").update(secret).digest();
 }
+
+// ----- Envelope encryption: a data key per business -------------------------------------------
+// Each business has its own random AES-256 key; only its wrapped form (encrypted with the master
+// key) is stored. Values sealed with it are marked "v2:" so older values (sealed directly with
+// the master key) can still be told apart and read.
+
+export const SEALED_PREFIX = "v2:";
+
+export function newDataKey(): Buffer {
+  return randomBytes(32);
+}
+
+export function sealWithKey(plain: string, key: Buffer): string {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", key, iv);
+  const data = Buffer.concat([cipher.update(plain, "utf8"), cipher.final()]);
+  return SEALED_PREFIX + Buffer.concat([iv, cipher.getAuthTag(), data]).toString("base64");
+}
+
+export function openWithKey(sealed: string, key: Buffer): string {
+  if (!sealed.startsWith(SEALED_PREFIX)) throw new Error("Not sealed with a data key.");
+  const raw = Buffer.from(sealed.slice(SEALED_PREFIX.length), "base64");
+  const decipher = createDecipheriv("aes-256-gcm", key, raw.subarray(0, 12));
+  decipher.setAuthTag(raw.subarray(12, 28));
+  return Buffer.concat([decipher.update(raw.subarray(28)), decipher.final()]).toString("utf8");
+}

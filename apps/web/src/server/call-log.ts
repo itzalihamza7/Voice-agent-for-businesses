@@ -6,6 +6,7 @@ import { currentBusinessId } from "./business";
 import { getCallSessions } from "./calls";
 import { defaultEmbeddingModel } from "./knowledge";
 import { phoneModel } from "./phone";
+import { applyRetention } from "./retention";
 import { getPrisma } from "./store";
 
 // The call log: finished calls (test and phone) with their transcript, trace, cost and a
@@ -48,6 +49,9 @@ export async function recordIfEnded(callId: string, result: TurnResult): Promise
     },
   });
   void analyze(call.id, state.transcript, trace);
+  void applyRetention(agent.businessId).catch((error: unknown) =>
+    console.warn(`Retention failed: ${String(error)}`),
+  );
 }
 
 async function analyze(

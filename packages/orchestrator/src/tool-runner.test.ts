@@ -30,6 +30,7 @@ function newTurn(): ToolTurn {
   const turn: ToolTurn = {
     tools: new Map([[checkAvailability.name, checkAvailability]]),
     now: new Date(2026, 9, 18),
+    callerPhone: null,
     variables: {},
     transcript: [{ role: "caller", text: "Is Friday free for two people?" }],
     events: [],

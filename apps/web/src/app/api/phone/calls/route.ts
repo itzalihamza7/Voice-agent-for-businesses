@@ -27,6 +27,7 @@ export async function POST(request: Request) {
       tools: agent.config.tools,
     },
     agent.businessId,
+    callId,
   );
   try {
     const caller = /^\+?[0-9 ()-]{6,20}$/.test(from) ? from : undefined;

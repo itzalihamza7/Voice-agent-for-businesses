@@ -6,9 +6,14 @@ import { businessConnectionTools, networkOptions } from "./connections";
 // MCP servers, and the actions of its business's connections (its own apps' APIs).
 // Private network addresses are blocked (SSRF guard) unless TOOLS_ALLOW_PRIVATE_HOSTS=true,
 // which DDEV sets for local development so the demo MCP server on this machine can be used.
-export async function loadTools(config: AgentTools | undefined, businessId: string) {
+export async function loadTools(
+  config: AgentTools | undefined,
+  businessId: string,
+  /** The call the tools run in, for the connections' audit log. */
+  context: { callId?: string } = {},
+) {
   const resolved = await resolveTools(config ?? DEFAULT_AGENT_TOOLS, networkOptions());
-  for (const tool of await businessConnectionTools(businessId)) {
+  for (const tool of await businessConnectionTools(businessId, context)) {
     if (resolved.tools.has(tool.name))
       resolved.problems.push(`Two tools are called "${tool.name}".`);
     else resolved.tools.set(tool.name, tool);

@@ -18,6 +18,11 @@ model Business {
   createdAt   DateTime  @default(now()) @map("created_at")
   // Set by a platform admin: the business's users can't sign in and its numbers don't answer.
   suspendedAt DateTime? @map("suspended_at")
+  // The business's own data key (AES-256), wrapped with the platform's master key. Encrypts its
+  // secrets (API keys, connection credentials), so each business's secrets have their own key.
+  dataKey     String?   @map("data_key")
+  // Calls, caller memory and connection logs older than this are deleted. null = kept.
+  retentionDays Int?    @map("retention_days")
 
   agents             Agent[]
   calls              Call[]
@@ -26,6 +31,7 @@ model Business {
   users              User[]
   secrets            BusinessSecret[]
   connections        Connection[]
+  connectionRequests ConnectionRequest[]
 
   @@map("businesses")
 }
@@ -346,11 +352,43 @@ model Connection {
   secret     String?
   // [{ name, description, method, path, parameters: [...] }], validated by Zod.
   actions    Json
+  // Proof the business may act on this API: a DNS TXT record or a file on the API's domain
+  // with this token. Without it (or the API's own key), actions that change data are refused.
+  verificationToken String    @default(uuid()) @map("verification_token")
+  verifiedAt        DateTime? @map("verified_at")
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
 
-  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  business Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  requests ConnectionRequest[]
 
   @@unique([businessId, slug])
   @@map("connections")
+}
+
+// The audit log: every request an agent made to a business's app (never the credential or the
+// body, which can hold callers' details).
+model ConnectionRequest {
+  id           String   @id @default(uuid())
+  businessId   String   @map("business_id")
+  connectionId String   @map("connection_id")
+  // The call it was made in (null for tests from the connections page).
+  callId       String?  @map("call_id")
+  action       String
+  method       String
+  // The URL's path only: query strings can hold callers' details.
+  path         String
+  // HTTP status; null when the request wasn't sent (refused, or a network error).
+  status       Int?
+  ok           Boolean
+  error        String?
+  latencyMs    Int      @map("latency_ms")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  business   Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  connection Connection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@index([connectionId, createdAt])
+  @@index([businessId, createdAt])
+  @@map("connection_requests")
 }

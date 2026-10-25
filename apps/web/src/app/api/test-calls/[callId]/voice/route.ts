@@ -25,7 +25,11 @@ export async function POST(request: Request, { params }: Context) {
 
   let close = async () => {};
   try {
-    const built = await conversationDeps(settings.data, await currentBusinessId());
+    const built = await conversationDeps(
+      settings.data,
+      await currentBusinessId(),
+      (await params).callId,
+    );
     close = built.close;
     const turn = await voiceTurn(
       (await params).callId,

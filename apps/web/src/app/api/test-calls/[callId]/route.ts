@@ -18,9 +18,9 @@ export async function POST(request: Request, { params }: Context) {
   const { action, ...settings } = parsed.data;
   let close = async () => {};
   try {
-    const built = await conversationDeps(settings, await currentBusinessId());
-    close = built.close;
     const callId = (await params).callId;
+    const built = await conversationDeps(settings, await currentBusinessId(), callId);
+    close = built.close;
     const result = await (await getCallSessions()).send(callId, action, built.deps);
     await recordIfEnded(callId, result);
     return Response.json(result);
