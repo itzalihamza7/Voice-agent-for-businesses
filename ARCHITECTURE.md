@@ -478,6 +478,28 @@ its website.
    never sees them. Every request (or refusal) goes to the audit log (`connection_requests`:
    action, path, status, timing, call id; never the key, the body or the query string).
 
+## How the website chat works
+
+A business adds `<script src="https://<app>/widget.js" data-agent="wg_…" async></script>` to its
+site once; everything else is set in the builder's **Website** tab.
+
+1. **`/widget.js`** (no dependencies) asks `/api/widget/:id?host=<page host>` for the title and
+   colour; for a host that isn't allowed it gets a 404 and shows nothing. Otherwise it draws the
+   button in a shadow root (the site's CSS can't reach it) and, when clicked, opens
+   `/embed/:id` in a frame.
+2. **`/embed/:id`** is the chat window (`features/widget/WidgetChat.tsx`). The proxy sends
+   `Content-Security-Policy: frame-ancestors 'self' <allowed hosts>`, so browsers refuse to show
+   it on any other site.
+3. **The chat API** (`/api/widget/:id/chats`, `…/:chatId`, `…/:chatId/voice`) is public. Starting
+   a chat runs the agent's live version (or the latest) as a LangGraph thread with source "web"
+   and returns a token (HMAC of the chat id with `APP_SECRET`); later messages need it. Answers
+   carry only the agent's words, never the call's state, tool results or trace.
+4. **Limits:** new chats (20 per hour) and messages (20 per minute) are counted per IP in the
+   proxy; a chat stops at 60 messages; each widget has a daily AI cost cap (`widget_usage`,
+   per UTC day), after which visitors get a polite "busy" message.
+5. **Call log:** web chats are saved after every turn (visitors usually just leave) and analysed
+   when the flow ends. They show as "website" in the dashboard.
+
 ### Secrets and data
 
 - **Envelope encryption** (`server/vault.ts`): each business has its own random data key, stored

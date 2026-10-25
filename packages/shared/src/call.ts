@@ -23,7 +23,7 @@ export interface CallLog {
 
 /** Where a call came from and which agent version handled it. */
 export interface CallMeta {
-  source: "test" | "phone";
+  source: "test" | "phone" | "web";
   agentId?: string;
   agentVersion?: number;
   callerPhone?: string;

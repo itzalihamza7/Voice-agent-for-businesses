@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hit, limitFor } from "./rate-limit";
+import { hit, limitFor, widgetLimitFor } from "./rate-limit";
 
 describe("rate limits", () => {
   it("allows up to the limit per window, then says how long to wait", () => {
@@ -17,5 +17,13 @@ describe("rate limits", () => {
     expect(limitFor("/api/auth/login", "POST")).toBe("login");
     expect(limitFor("/api/agents", "GET")).toBeNull();
     expect(limitFor("/api/agents", "POST")).toBeNull();
+  });
+
+  it("counts website visitors' new chats and messages separately", () => {
+    expect(widgetLimitFor("/api/widget/wg_1/chats", "POST")).toBe("widgetChat");
+    expect(widgetLimitFor("/api/widget/wg_1/chats/c1", "POST")).toBe("widgetMessage");
+    expect(widgetLimitFor("/api/widget/wg_1/chats/c1/voice", "POST")).toBe("widgetMessage");
+    expect(widgetLimitFor("/api/widget/wg_1", "GET")).toBeNull();
+    expect(widgetLimitFor("/api/agents", "POST")).toBeNull();
   });
 });

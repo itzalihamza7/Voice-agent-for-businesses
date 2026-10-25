@@ -36,3 +36,47 @@ test("the knowledge base lists documents and previews chunks", async ({ page }) 
   await add.getByRole("button", { name: "Preview chunks" }).click();
   await expect(add.getByTestId("preview-count")).toContainText("2 chunks");
 });
+
+test("the website widget is public but only shows on the business's sites", async ({
+  page,
+  browser,
+}) => {
+  // A fixture agent of its own, never a real one.
+  const created = await page.request.post("/api/agents", {
+    data: { name: `E2E widget ${Date.now()}` },
+  });
+  const { agent } = (await created.json()) as { agent: { agentId: string } };
+  const saved = await page.request.put(`/api/agents/${agent.agentId}/widget`, {
+    data: {
+      enabled: true,
+      allowedHosts: ["https://www.example.com/shop"],
+      color: "#0f766e",
+      title: "E2E shop",
+      dailyCostCapUsd: 1,
+    },
+  });
+  const { widget } = (await saved.json()) as {
+    widget: { publicId: string; allowedHosts: string[] };
+  };
+  expect(widget.allowedHosts).toEqual(["example.com"]);
+
+  // Visitors aren't signed in.
+  const visitor = await browser.newPage({ storageState: { cookies: [], origins: [] } });
+  const script = await visitor.request.get("/widget.js");
+  expect(script.headers()["content-type"]).toContain("javascript");
+  expect(
+    (await visitor.request.get(`/api/widget/${widget.publicId}?host=shop.example.com`)).status(),
+  ).toBe(200);
+  expect(
+    (await visitor.request.get(`/api/widget/${widget.publicId}?host=example.org`)).status(),
+  ).toBe(404);
+  const embed = await visitor.request.get(`/embed/${widget.publicId}`);
+  expect(embed.headers()["content-security-policy"]).toBe(
+    "frame-ancestors 'self' https://example.com https://*.example.com",
+  );
+  // A chat can't be continued without its token.
+  const reply = await visitor.request.post(`/api/widget/${widget.publicId}/chats/not-a-chat`, {
+    data: { token: "x".repeat(20), text: "hello" },
+  });
+  expect(reply.status()).toBe(403);
+});

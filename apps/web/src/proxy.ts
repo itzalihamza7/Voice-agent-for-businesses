@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, userForToken } from "@/server/auth";
-import { hit, LIMITS, limitFor } from "@/server/rate-limit";
+import { hit, LIMITS, limitFor, widgetLimitFor } from "@/server/rate-limit";
+import { frameAncestors } from "@voice-agent/shared";
+import { widgetHosts } from "@/server/widget";
 
 // Runs before every page and API request: checks the session, applies roles, and passes the
 // user's business on to server code in the x-business-id header (never trusted from the client).
@@ -8,6 +10,8 @@ import { hit, LIMITS, limitFor } from "@/server/rate-limit";
 //   - editor: can change agents, knowledge and evals;
 //   - owner: can also manage users, the business's API keys and its app connections.
 // Phone routes authenticate with the gateway's secret instead; the demo MCP server is public.
+// The website widget (its script, chat window and chat API) is public too: visitors are counted
+// per IP, and the chat window may only be framed by the business's allowed sites.
 // AI-heavy requests and sign-in attempts are rate limited (server/rate-limit.ts).
 
 const PUBLIC = [
@@ -18,6 +22,9 @@ const PUBLIC = [
   "/api/phone/",
   "/api/demo-mcp",
   "/api/health",
+  "/widget.js",
+  "/embed/",
+  "/api/widget/",
 ];
 /** Platform admins only. */
 const ADMIN_ONLY = ["/admin", "/api/admin/"];
@@ -45,6 +52,12 @@ export async function proxy(request: NextRequest) {
     const wait = hit(`login:${ip}`, LIMITS.login);
     if (wait) return tooMany(wait);
   }
+  const widgetLimit = widgetLimitFor(pathname, request.method);
+  if (widgetLimit) {
+    const wait = hit(`${widgetLimit}:${ip}`, LIMITS[widgetLimit]);
+    if (wait) return tooMany(wait);
+  }
+  if (pathname.startsWith("/embed/")) return embedPage(pathname, forwarded);
   if (matches(pathname, PUBLIC)) return NextResponse.next({ request: { headers: forwarded } });
 
   const api = pathname.startsWith("/api/");
@@ -87,6 +100,18 @@ export async function proxy(request: NextRequest) {
   forwarded.set("x-business-id", user.businessId);
   forwarded.set("x-user-role", user.role);
   return NextResponse.next({ request: { headers: forwarded } });
+}
+
+/** The widget's chat window, framable only by this app and the widget's allowed sites. */
+async function embedPage(pathname: string, forwarded: Headers) {
+  const publicId = decodeURIComponent(pathname.split("/")[2] ?? "");
+  const hosts = (await widgetHosts(publicId)) ?? [];
+  const response = NextResponse.next({ request: { headers: forwarded } });
+  response.headers.set(
+    "content-security-policy",
+    `frame-ancestors ${["'self'", ...frameAncestors(hosts)].join(" ")}`,
+  );
+  return response;
 }
 
 function tooMany(seconds: number) {

@@ -32,6 +32,7 @@ model Business {
   secrets            BusinessSecret[]
   connections        Connection[]
   connectionRequests ConnectionRequest[]
+  widgets            AgentWidget[]
 
   @@map("businesses")
 }
@@ -58,6 +59,7 @@ model Agent {
   evalCases EvalCase[]
   evalRuns  EvalRun[]
   releases  Release[]
+  widget    AgentWidget?
 
   @@index([businessId])
   @@map("agents")
@@ -391,4 +393,46 @@ model ConnectionRequest {
   @@index([connectionId, createdAt])
   @@index([businessId, createdAt])
   @@map("connection_requests")
+}
+
+// ----- Website chat widget -----------------------------------------------------------------------
+// An agent on the business's website: one line of script opens a chat (text or voice) that only
+// the listed sites may show. Visitors are anonymous, so each widget has a daily AI cost cap.
+
+model AgentWidget {
+  agentId         String   @id @map("agent_id")
+  businessId      String   @map("business_id")
+  // In the embed snippet: public, it only opens the chat.
+  publicId        String   @unique @map("public_id")
+  enabled         Boolean  @default(true)
+  // Hosts allowed to show the chat, e.g. ["signaturemile.com"] (subdomains included).
+  allowedHosts    String[] @map("allowed_hosts")
+  color           String   @default("#6d43f5")
+  // Shown in the chat's header; the business's name when empty.
+  title           String?
+  dailyCostCapUsd Float    @default(2) @map("daily_cost_cap_usd")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  agent    Agent         @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  business Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  usage    WidgetUsage[]
+
+  @@index([businessId])
+  @@map("agent_widgets")
+}
+
+// What a widget used per day (UTC), to enforce its cost cap.
+model WidgetUsage {
+  agentId  String @map("agent_id")
+  // YYYY-MM-DD, UTC.
+  day      String
+  chats    Int    @default(0)
+  messages Int    @default(0)
+  costUsd  Float  @default(0) @map("cost_usd")
+
+  widget AgentWidget @relation(fields: [agentId], references: [agentId], onDelete: Cascade)
+
+  @@id([agentId, day])
+  @@map("widget_usage")
 }

@@ -46,6 +46,7 @@ import { NodeSettingsPanel } from "./NodeSettingsPanel";
 import { PhoneNumber } from "./PhoneNumber";
 import { PromptStudio } from "./PromptStudio";
 import { ReleasesPanel } from "./ReleasesPanel";
+import { WidgetPanel } from "./WidgetPanel";
 import { useToolList } from "./tool-list";
 import { ToolsPanel } from "./ToolsPanel";
 import { TestChat } from "./TestChat";
@@ -95,7 +96,9 @@ function Builder({ agentId, initial, versions: initialVersions }: Props) {
   const [toolConfig, setToolConfig] = useState(initial.tools);
   const toolList = useToolList(toolConfig);
   // "flow" = the canvas; "prompt" = the prompt studio (shown on top of the canvas).
-  const [mode, setMode] = useState<"flow" | "prompt" | "tools" | "evals" | "releases">("flow");
+  const [mode, setMode] = useState<"flow" | "prompt" | "tools" | "evals" | "releases" | "website">(
+    "flow",
+  );
   const [initialCanvas] = useState(() => toReactFlow(initial.flow));
   const [nodes, setNodes, onNodesChange] = useNodesState<BuilderNode>(initialCanvas.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialCanvas.edges);
@@ -283,7 +286,7 @@ function Builder({ agentId, initial, versions: initialVersions }: Props) {
         </span>
         <PhoneNumber agentId={agentId} />
         <div className="flex overflow-hidden rounded border border-gray-300 text-sm" role="tablist">
-          {(["flow", "prompt", "tools", "evals", "releases"] as const).map((tab) => (
+          {(["flow", "prompt", "tools", "evals", "releases", "website"] as const).map((tab) => (
             <button
               key={tab}
               type="button"
@@ -302,6 +305,7 @@ function Builder({ agentId, initial, versions: initialVersions }: Props) {
                   tools: "Tools",
                   evals: "Evals",
                   releases: "Releases",
+                  website: "Website",
                 }[tab]
               }
             </button>
@@ -338,6 +342,11 @@ function Builder({ agentId, initial, versions: initialVersions }: Props) {
       </header>
 
       <div className="relative flex min-h-0 flex-1">
+        {mode === "website" && (
+          <div className="absolute inset-0 z-10 flex bg-white">
+            <WidgetPanel agentId={agentId} />
+          </div>
+        )}
         {mode === "releases" && (
           <div className="absolute inset-0 z-10 flex bg-white">
             <ReleasesPanel agentId={agentId} versions={versions.map((v) => v.version)} />

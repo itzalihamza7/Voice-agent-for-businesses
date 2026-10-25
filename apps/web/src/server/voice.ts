@@ -21,6 +21,8 @@ export async function voiceTurn(
   audioType: string,
   deps: ConversationDeps,
   format: SpeechFormat = "mp3",
+  /** Saves the turn to the call log (website chats save every turn). */
+  record: (callId: string, result: TurnResult) => Promise<void> = recordIfEnded,
 ): Promise<VoiceTurn> {
   const started = performance.now();
   const heard = await createSpeechToText().transcribe(audio, audioType);
@@ -33,7 +35,7 @@ export async function voiceTurn(
     await getCallSessions()
   ).send(callId, { type: "reply", text: heard.text }, deps);
   const agentMs = Math.round(performance.now() - agentStarted);
-  await recordIfEnded(callId, result);
+  await record(callId, result);
 
   const ttsStarted = performance.now();
   const speech = await speakEvents(result, format);

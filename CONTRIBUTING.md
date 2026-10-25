@@ -141,6 +141,8 @@ settle before testing in the browser.
 - Secrets go through `server/vault.ts` (`seal` / `open` with the business's data key), never
   `encrypt` with `APP_SECRET` directly. Connection requests are logged without the key, body or
   query string; keep it that way.
+- Website widget routes (`/widget.js`, `/embed/`, `/api/widget/`) are public: return only what a
+  visitor should see (`visible()` in `server/widget-chat.ts`), and keep every chat behind its token.
 - App connections: each action is a tool named `<slug>_<action>`. Values the business decides
   (payment method, accepting terms) go in `fixedBody`, never in AI parameters. A new known app is
   a template in `packages/tools/src/templates.ts` with a GET-only `detect`. Never test actions

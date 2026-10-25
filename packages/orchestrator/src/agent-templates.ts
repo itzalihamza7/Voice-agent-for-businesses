@@ -38,8 +38,8 @@ export function websiteAgentDraft(options: WebsiteAgentOptions): AgentConfigDraf
       ...at(0, 130),
       data: {
         text: canBook
-          ? "Hello, thank you for calling {{business_name}}. I can give you a price, book a ride, or help with a booking you already have. How can I help?"
-          : "Hello, thank you for calling {{business_name}}. How can I help you today?",
+          ? "Hello, this is {{business_name}}. I can give you a price, book a ride, or help with a booking you already have. How can I help?"
+          : "Hello, this is {{business_name}}. How can I help you today?",
       },
     },
   ];

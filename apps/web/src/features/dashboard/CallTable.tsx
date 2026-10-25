@@ -45,7 +45,13 @@ export function CallTable({ calls }: { calls: CallRow[] }) {
             <td>
               {call.agentName} <span className="text-gray-400">v{call.agentVersion}</span>
             </td>
-            <td>{call.source === "phone" ? `📞 ${call.callerPhone ?? ""}` : "test"}</td>
+            <td>
+              {call.source === "phone"
+                ? `📞 ${call.callerPhone ?? ""}`
+                : call.source === "web"
+                  ? "💬 website"
+                  : "test"}
+            </td>
             <td>{call.intent ?? <span className="text-gray-400">analysing…</span>}</td>
             <td>
               {call.outcome && (

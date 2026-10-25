@@ -15,17 +15,63 @@ import { getPrisma } from "./store";
 /** Records the call if this turn ended it. Analysis runs in the background. */
 export async function recordIfEnded(callId: string, result: TurnResult): Promise<void> {
   if (result.state.nodeId !== null) return;
-  const history = await (await getCallSessions()).history(callId);
-  if (!history?.meta.agentId) return;
   const prisma = getPrisma();
   if (await prisma.call.findUnique({ where: { threadId: callId } })) return;
-  const agent = await prisma.agent.findUnique({ where: { id: history.meta.agentId } });
-  if (!agent) return;
+  const snapshot = await callSnapshot(callId);
+  if (!snapshot) return;
+  const call = await prisma.call.create({
+    data: { ...snapshot.data, turns: { create: snapshot.turns } },
+  });
+  void analyze(call.id, snapshot.transcript, snapshot.trace);
+  void applyRetention(snapshot.data.businessId).catch((error: unknown) =>
+    console.warn(`Retention failed: ${String(error)}`),
+  );
+}
+
+/**
+ * Saves a website chat after every turn (visitors often just leave, so a chat is kept as it
+ * goes); the analysis runs once the flow ends.
+ */
+export async function recordWebTurn(callId: string, result: TurnResult): Promise<void> {
+  const snapshot = await callSnapshot(callId);
+  if (!snapshot) return;
+  const prisma = getPrisma();
+  const existing = await prisma.call.findUnique({
+    where: { threadId: callId },
+    select: { id: true },
+  });
+  const call = existing
+    ? (
+        await prisma.$transaction([
+          prisma.transcriptTurn.deleteMany({ where: { callId: existing.id } }),
+          prisma.call.update({
+            where: { id: existing.id },
+            data: { ...snapshot.data, turns: { create: snapshot.turns } },
+          }),
+        ])
+      )[1]
+    : await prisma.call.create({ data: { ...snapshot.data, turns: { create: snapshot.turns } } });
+  if (result.state.nodeId === null) {
+    void analyze(call.id, snapshot.transcript, snapshot.trace);
+    void applyRetention(snapshot.data.businessId).catch((error: unknown) =>
+      console.warn(`Retention failed: ${String(error)}`),
+    );
+  }
+}
+
+/** The call's row and transcript lines, from its LangGraph thread. */
+async function callSnapshot(callId: string) {
+  const history = await (await getCallSessions()).history(callId);
+  if (!history?.meta.agentId) return null;
+  const agent = await getPrisma().agent.findUnique({ where: { id: history.meta.agentId } });
+  if (!agent) return null;
 
   const { meta, state, trace } = history;
   const lastAt = trace.at(-1)?.atMs ?? 0;
   const spoken = state.transcript.filter((e) => e.role !== "system");
-  const call = await prisma.call.create({
+  return {
+    transcript: state.transcript,
+    trace,
     data: {
       businessId: agent.businessId,
       agentId: agent.id,
@@ -38,20 +84,14 @@ export async function recordIfEnded(callId: string, result: TurnResult): Promise
       trace: trace as unknown as Prisma.InputJsonArray,
       costUsd: callCost(trace),
       flags: callFlags(trace),
-      turns: {
-        create: spoken.map((entry, i) => ({
-          speaker: entry.role === "agent" ? "agent" : "caller",
-          text: entry.text,
-          // Turn times aren't per line; spread a turn's lines a few ms apart to keep order.
-          atMs: lineTime(trace, i),
-        })),
-      },
     },
-  });
-  void analyze(call.id, state.transcript, trace);
-  void applyRetention(agent.businessId).catch((error: unknown) =>
-    console.warn(`Retention failed: ${String(error)}`),
-  );
+    turns: spoken.map((entry, i) => ({
+      speaker: entry.role === "agent" ? ("agent" as const) : ("caller" as const),
+      text: entry.text,
+      // Turn times aren't per line; spread a turn's lines a few ms apart to keep order.
+      atMs: lineTime(trace, i),
+    })),
+  };
 }
 
 async function analyze(

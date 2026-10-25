@@ -6,11 +6,25 @@ export interface Limit {
   windowMs: number;
 }
 
-/** Requests that call models (they cost money) and sign-in attempts (they guess passwords). */
-export const LIMITS: Record<"ai" | "login", Limit> = {
+/**
+ * Requests that call models (they cost money), sign-in attempts (they guess passwords), and
+ * website visitors' chats (anonymous, so counted per IP address).
+ */
+export const LIMITS: Record<"ai" | "login" | "widgetChat" | "widgetMessage", Limit> = {
   ai: { requests: 120, windowMs: 60_000 },
   login: { requests: 10, windowMs: 60_000 },
+  widgetChat: { requests: 20, windowMs: 3_600_000 },
+  widgetMessage: { requests: 20, windowMs: 60_000 },
 };
+
+/** The widget limit a public request falls under, if any. */
+export function widgetLimitFor(
+  pathname: string,
+  method: string,
+): "widgetChat" | "widgetMessage" | null {
+  if (method !== "POST" || !pathname.startsWith("/api/widget/")) return null;
+  return /^\/api\/widget\/[^/]+\/chats$/.test(pathname) ? "widgetChat" : "widgetMessage";
+}
 
 const windows = new Map<string, { start: number; count: number }>();
 
