@@ -7,7 +7,7 @@ import { FlowNodeSchema, type ConversationEvent, type FlowNode } from "@voice-ag
 import type { Tool } from "@voice-agent/tools";
 import { describe, expect, it } from "vitest";
 import { buildContext, DEFAULT_CONTEXT_BUDGET } from "./context";
-import { replyWithTools, runToolStep, type ToolTurn } from "./tool-runner";
+import { announcesAction, replyWithTools, runToolStep, type ToolTurn } from "./tool-runner";
 
 const calls: Record<string, unknown>[] = [];
 const checkAvailability: Tool = {
@@ -135,6 +135,33 @@ describe("replyWithTools (agentic loop)", () => {
     });
     // The model saw its own tool call and the result.
     expect(messages.map((m) => m.role)).toEqual(["system", "assistant", "tool"]);
+  });
+
+  it("makes a model that only announces an action actually act", async () => {
+    const turn = newTurn();
+    const { llm, options } = scripted([
+      { text: "Let me check that for you, one moment please." },
+      {
+        toolCalls: [{ id: "c1", name: "checkAvailability", arguments: '{"date":"2026-10-23"}' }],
+      },
+      { text: "Friday has 10am or 2pm free." },
+    ]);
+    const reply = await replyWithTools(turn, "ai", llm, [], [checkAvailability]);
+    expect(reply.text).toBe("Friday has 10am or 2pm free.");
+    expect(toolCall(turn.events)).toHaveLength(1);
+    // The second try had to call a tool.
+    expect(options[1]?.toolChoice).toBe("required");
+    expect(turn.events.find((e) => e.type === "note")).toBeTruthy();
+  });
+
+  it("tells announcements from ordinary replies", () => {
+    expect(announcesAction("I'll book that for you now.")).toBe(true);
+    expect(announcesAction("One moment, please.")).toBe(true);
+    expect(announcesAction("I'm checking the prices.")).toBe(true);
+    expect(announcesAction("Your ride is booked. Let me know if you need anything else.")).toBe(
+      false,
+    );
+    expect(announcesAction("Which vehicle would you like?")).toBe(false);
   });
 
   it("refuses tools that aren't allowed in the step", async () => {

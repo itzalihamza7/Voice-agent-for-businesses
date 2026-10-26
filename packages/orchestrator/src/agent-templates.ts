@@ -69,10 +69,13 @@ export function websiteAgentDraft(options: WebsiteAgentOptions): AgentConfigDraf
         instructions: [
           "Help the caller book a ride or get a price, one question at a time.",
           "You need: pickup, drop-off (not for hourly rides), date, time and number of passengers.",
-          "Find each place with the place search and check the place's name with the caller.",
-          "Get a quote and say the vehicles with their prices; never make up a price.",
-          "When they choose and confirm, ask for their name, email and phone number, then book",
-          "and read back the booking reference. Payment is to the chauffeur.",
+          "As soon as you have them, find each place with the place search and get a quote, in",
+          "this same reply: say the vehicles with their prices; never make up a price.",
+          "When they choose a vehicle, ask for their name, email and phone number. Once you have",
+          "all three, read the booking back in one sentence and, when they agree (or if they",
+          "already did), call create_booking straight away in this same reply and give the",
+          "booking reference. Never say you will do something later or ask them to hold on: do it",
+          "now and tell them the result. Payment is to the chauffeur.",
         ].join(" "),
       },
     });
@@ -175,7 +178,7 @@ export function websiteAgentDraft(options: WebsiteAgentOptions): AgentConfigDraf
       persona: "Warm, discreet and efficient, like a concierge at a good hotel.",
       rules: [
         "Prices, availability and booking details come only from the tools; never guess them.",
-        "Repeat dates, times, places and references back to the caller before acting on them.",
+        "Before booking or cancelling, repeat the date, time, places and vehicle back to the caller once; prices and lookups don't need confirming.",
       ].join(" "),
     },
     tools: structuredClone(DEFAULT_AGENT_TOOLS),

@@ -172,18 +172,49 @@ export async function replyWithTools(
   const specs = allowed.map(toolSpec);
   const rounds: CompletionResult[] = [];
 
+  let usedTools = false;
+  let nudged = false;
   for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
     // The last round offers no tools, so the model has to answer in words.
     const offerTools = specs.length > 0 && round < MAX_TOOL_ROUNDS;
     const result = await llm.complete(messages, {
       temperature: 0.4,
-      ...(offerTools ? { tools: specs, toolChoice: "auto" as const } : {}),
+      ...(offerTools
+        ? {
+            tools: specs,
+            toolChoice: nudged && !usedTools ? ("required" as const) : ("auto" as const),
+          }
+        : {}),
       ...(!offerTools && onToken ? { onToken } : {}),
     });
     rounds.push(result);
+    // Saying "one moment, let me check" without checking leaves the caller waiting for nothing:
+    // the next turn only starts when they speak. Ask once more, this time requiring a tool call.
+    if (
+      offerTools &&
+      !result.toolCalls?.length &&
+      !usedTools &&
+      !nudged &&
+      announcesAction(result.text)
+    ) {
+      nudged = true;
+      turn.events.push({
+        type: "note",
+        nodeId,
+        message: "The AI said it would act without calling a tool; it was asked to act now.",
+      });
+      messages.push({ role: "assistant", content: result.text });
+      messages.push({
+        role: "user",
+        content:
+          "(System) You said you would do something but didn't. Don't announce it: call the tool you need now, then answer with the result.",
+      });
+      continue;
+    }
     if (!offerTools || !result.toolCalls?.length) {
       return { text: result.text, llm: sumCalls(rounds) };
     }
+    usedTools = true;
 
     messages.push({ role: "assistant", content: result.text, toolCalls: result.toolCalls });
     for (const call of result.toolCalls) {
@@ -210,6 +241,13 @@ export async function replyWithTools(
   }
   // Not reached: the last round always returns.
   throw new Error("Tool loop ended without a reply.");
+}
+
+/** "Let me check", "one moment", "I'll book it now"…: a promise to act, not an answer. */
+export function announcesAction(text: string): boolean {
+  return /\b(let me(?! know)|one moment|just a moment|hold on|please wait|bear with me|give me a (moment|second)|i(?:'|’| a)?m (now )?(checking|looking|booking|getting|finding)|i(?:'|’)ll (now |just )?(check|look|book|get|find|see|confirm|proceed)|i will (now |just )?(check|look|book|get|find|see|confirm|proceed))\b/i.test(
+    text,
+  );
 }
 
 function record(

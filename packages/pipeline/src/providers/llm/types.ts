@@ -33,8 +33,11 @@ export interface CompletionOptions {
   jsonSchema?: { name: string; schema: Record<string, unknown> };
   /** Tools the model may call. Its reply then has toolCalls instead of (or with) text. */
   tools?: ToolSpec[];
-  /** "auto" = the model decides, "none" = answer in text, { name } = must call that tool. */
-  toolChoice?: "auto" | "none" | { name: string };
+  /**
+   * "auto" = the model decides, "none" = answer in text, "required" = must call one of the tools,
+   * { name } = must call that tool.
+   */
+  toolChoice?: "auto" | "none" | "required" | { name: string };
   /**
    * Streams the reply: called with each piece of text as the model writes it. Only for plain
    * text replies (no tools, no jsonSchema); providers that can't stream simply don't call it.
