@@ -393,7 +393,7 @@ export function Inbox({ chatId }: { chatId: string | null }) {
                             : (m.author ?? "Team")}
                       </div>
                       <p
-                        className={`rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
+                        className={`rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-line ${
                           m.sender === "visitor"
                             ? "rounded-tl-sm bg-white ring-1 ring-slate-200"
                             : m.sender === "agent"

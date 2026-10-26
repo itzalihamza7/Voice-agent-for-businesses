@@ -607,7 +607,7 @@ export function WidgetChat({
             {working && (
               <div className="space-y-2">
                 {working.partial.length > 0 && (
-                  <p className="max-w-[85%] animate-fade-up rounded-2xl rounded-tl-sm bg-white px-3.5 py-2.5 text-sm leading-relaxed shadow-sm ring-1 ring-slate-200/70">
+                  <p className="max-w-[85%] animate-fade-up whitespace-pre-line rounded-2xl rounded-tl-sm bg-white px-3.5 py-2.5 text-sm leading-relaxed shadow-sm ring-1 ring-slate-200/70">
                     {working.partial.join(" ")}
                   </p>
                 )}
@@ -725,7 +725,7 @@ function Bubble({ message: m }: { message: Message }) {
   }
   if (m.sender === "visitor") {
     return (
-      <p className="ml-auto w-fit max-w-[85%] rounded-2xl rounded-tr-sm bg-[var(--accent)] px-3.5 py-2.5 text-sm leading-relaxed text-white">
+      <p className="ml-auto w-fit max-w-[85%] whitespace-pre-line rounded-2xl rounded-tr-sm bg-[var(--accent)] px-3.5 py-2.5 text-sm leading-relaxed text-white">
         {m.text}
       </p>
     );
@@ -738,7 +738,7 @@ function Bubble({ message: m }: { message: Message }) {
         </div>
       )}
       <p
-        className={`rounded-2xl rounded-tl-sm px-3.5 py-2.5 text-sm leading-relaxed shadow-sm ring-1 ${
+        className={`whitespace-pre-line rounded-2xl rounded-tl-sm px-3.5 py-2.5 text-sm leading-relaxed shadow-sm ring-1 ${
           m.sender === "staff" ? "bg-emerald-50 ring-emerald-200" : "bg-white ring-slate-200/70"
         }`}
       >
