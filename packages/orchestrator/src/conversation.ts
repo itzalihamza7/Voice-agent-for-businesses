@@ -93,6 +93,8 @@ export interface ConversationDeps {
    * for screens that show it as it happens. Without it, turns run exactly the same.
    */
   onProgress?: (update: ProgressUpdate) => void;
+  /** "voice" (phone, browser voice; the default) or "text" (a website chat): how replies are written. */
+  channel?: "voice" | "text";
 }
 
 /** What a Hand off step needs from the agent it passes the call to. */
@@ -128,6 +130,7 @@ interface Turn {
   injection: boolean;
   loadAgent: ConversationDeps["loadAgent"];
   onProgress: ConversationDeps["onProgress"];
+  channel: "voice" | "text";
   /** Knowledge searches started during a Branch decision, by lookup step id. */
   prefetched?: ToolTurn["prefetched"];
 }
@@ -166,6 +169,7 @@ function newTurn(
     events: [],
     injection: false,
     loadAgent: deps.loadAgent,
+    channel: deps.channel ?? "voice",
     // Progress is for show: a listener that fails never breaks the turn.
     onProgress: deps.onProgress
       ? (update) => {
@@ -640,6 +644,7 @@ async function writeAiResponse(turn: Turn, node: Extract<FlowNode, { type: "aiRe
       turn.context(node.id),
       allowed.length > 0,
       turn.callerMemory,
+      turn.channel,
     );
     if (turn.injection) {
       messages[0]!.content +=

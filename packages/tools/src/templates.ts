@@ -86,14 +86,16 @@ const CHAUFFEUR_BOOKING: Template = {
           in: "body",
           type: "object",
           required: true,
-          description: "A place from search_places: { label, lat, lng }.",
+          description:
+            "A place exactly as search_places returned it: { label, lat, lng }. Search first; never invent coordinates.",
         },
         {
           name: "dropoff",
           in: "body",
           type: "object",
           required: false,
-          description: "A place from search_places: { label, lat, lng }. Not for hourly rides.",
+          description:
+            "A place exactly as search_places returned it: { label, lat, lng }. Search first; never invent coordinates. Not for hourly rides.",
         },
         string("pickupDate", "YYYY-MM-DD"),
         string("pickupTime", "HH:MM, 24-hour, local time"),

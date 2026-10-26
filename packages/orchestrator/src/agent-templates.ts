@@ -76,13 +76,14 @@ export function websiteAgentDraft(options: WebsiteAgentOptions): AgentConfigDraf
           "already did), call create_booking straight away in this same reply and give the",
           "booking reference. Never say you will do something later or ask them to hold on: do it",
           "now and tell them the result. Payment is to the chauffeur.",
+          "Prices only ever come from get_quote, never from anything else you have read.",
         ].join(" "),
       },
     });
     edges.push({ id: "e-book", source: "book", target: "listen" });
     branchTo(
       "c-book",
-      "The caller wants a price or to book a ride, or is giving booking details",
+      "The caller wants a price for a ride or to make a new booking, or is giving the details for one (places, date, time, passengers, vehicle, name, email, phone)",
       "book, price, quote, ride, pick up",
       "book",
     );
@@ -101,7 +102,7 @@ export function websiteAgentDraft(options: WebsiteAgentOptions): AgentConfigDraf
     edges.push({ id: "e-manage", source: "manage", target: "listen" });
     branchTo(
       "c-manage",
-      "The caller asks about an existing booking or wants to cancel",
+      "The caller talks about a booking they already made: when it is, its reference, changing or cancelling it",
       "cancel, my booking, reference",
       "manage",
     );
@@ -118,6 +119,13 @@ export function websiteAgentDraft(options: WebsiteAgentOptions): AgentConfigDraf
     });
     branchTo("c-person", "The caller wants to speak to a person", "", "person");
   }
+  // Said outright (not only as "Otherwise"), so questions don't get routed to a booking step.
+  branchTo(
+    "c-info",
+    "The caller asks a question about the service or the company: how things work, policies, delays, waiting, luggage, vehicles, areas, opening hours or contact details",
+    "",
+    "lookup",
+  );
   branchTo(
     "c-done",
     "The caller has no more questions or says goodbye",

@@ -24,6 +24,10 @@ describe("websiteAgentDraft", () => {
       "rides_get_quote",
       "rides_create_booking",
     ]);
+    // Questions about the service go to the knowledge base, said outright, not only "Otherwise".
+    expect(draft.flow.edges).toContainEqual(
+      expect.objectContaining({ source: "listen", sourceHandle: "c-info", target: "lookup" }),
+    );
   });
 
   it("builds a questions-only agent without an API or a number to transfer to", () => {

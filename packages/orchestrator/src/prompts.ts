@@ -89,8 +89,9 @@ export function aiResponsePrompt(
   withTools = false,
   /** Facts remembered about the caller from earlier calls. */
   memory: string[] = [],
+  channel: "voice" | "text" = "voice",
 ): ChatMessage[] {
-  const system = buildSystemPrompt(settings, { instructions, variables });
+  const system = buildSystemPrompt(settings, { instructions, variables }, channel);
   const parts = [system];
   if (withTools) {
     parts.push(

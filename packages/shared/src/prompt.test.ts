@@ -47,6 +47,15 @@ describe("buildSystemPrompt", () => {
     expect(prompt).not.toContain("half past three");
   });
 
+  it("writes for reading in a website chat, not for speaking", () => {
+    const prompt = buildSystemPrompt(settings, step, "text");
+    expect(prompt).toContain("chatting by text on the business's website");
+    expect(prompt).toContain("LX-7ZTAM3");
+    expect(prompt).not.toContain("spoken aloud");
+    expect(prompt).not.toContain("half past three");
+    expect(prompt).toContain("Reply in one to three short sentences.");
+  });
+
   it("leaves out empty sections and unfinished examples", () => {
     const prompt = buildSystemPrompt(
       { ...settings, rules: " ", examples: [{ id: "x", caller: "Hi", agent: "" }] },

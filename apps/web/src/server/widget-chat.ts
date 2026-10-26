@@ -40,7 +40,8 @@ export async function widgetDeps(widget: Widget, version: number, chatId: string
     widget.businessId,
     chatId,
   );
-  return { ...built, flow: config.flow };
+  // Typed chats are read: the agent writes "€60" and "LX-7ZTAM3", not the spoken forms.
+  return { ...built, deps: { ...built.deps, channel: "text" as const }, flow: config.flow };
 }
 
 export interface OpenChat {

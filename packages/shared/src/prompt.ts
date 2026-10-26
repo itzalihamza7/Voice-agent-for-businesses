@@ -102,6 +102,8 @@ export function builtInVariables(settings: PromptSettings, now: Date): Record<st
 export function buildSystemPrompt(
   settings: PromptSettings,
   step: { instructions: string; variables: Readonly<Record<string, string>> },
+  /** "voice" (phone, browser voice): spoken aloud. "text": a chat on the business's website. */
+  channel: "voice" | "text" = "voice",
 ): string {
   const fill = (text: string) => renderTemplate(text.trim(), step.variables);
   const sections: string[] = [];
@@ -111,12 +113,26 @@ export function buildSystemPrompt(
   if (settings.goals.trim()) sections.push(`Goals: ${fill(settings.goals)}`);
   if (settings.rules.trim()) sections.push(`Business rules:\n${fill(settings.rules)}`);
 
-  const style = (Object.keys(VOICE_STYLE_RULES) as (keyof VoiceStyle)[])
-    .filter((key) => settings.voiceStyle[key])
-    .map((key) => `- ${VOICE_STYLE_RULES[key].rule}`);
-  sections.push(
-    ["You are on a live phone call: everything you write is spoken aloud.", ...style].join("\n"),
-  );
+  if (channel === "text") {
+    // A website chat is read, not heard: spoken numbers ("LX-seven Zulu…") would only confuse.
+    const style = (["shortSentences", "oneQuestionAtATime"] as const)
+      .filter((key) => settings.voiceStyle[key])
+      .map((key) => `- ${VOICE_STYLE_RULES[key].rule}`);
+    sections.push(
+      [
+        "You are chatting by text on the business's website: what you write is read, not heard.",
+        "- Plain text, no markdown or lists. Write prices, times, dates, numbers and references as they are written, e.g. €60, 10:30, 30 October, LX-7ZTAM3.",
+        ...style,
+      ].join("\n"),
+    );
+  } else {
+    const style = (Object.keys(VOICE_STYLE_RULES) as (keyof VoiceStyle)[])
+      .filter((key) => settings.voiceStyle[key])
+      .map((key) => `- ${VOICE_STYLE_RULES[key].rule}`);
+    sections.push(
+      ["You are on a live phone call: everything you write is spoken aloud.", ...style].join("\n"),
+    );
+  }
   sections.push(["Always:", ...PLATFORM_RULES.map((rule) => `- ${rule}`)].join("\n"));
 
   const examples = settings.examples.filter((e) => e.caller.trim() && e.agent.trim());
