@@ -16,6 +16,10 @@ interface Form {
   color: string;
   title: string;
   dailyCostCapUsd: string;
+  liveChat: boolean;
+  whatsappNumber: string;
+  phoneNumber: string;
+  alertWhatsapp: string;
 }
 
 const DEFAULT_FORM: Form = {
@@ -24,6 +28,10 @@ const DEFAULT_FORM: Form = {
   color: "#6d43f5",
   title: "",
   dailyCostCapUsd: "2",
+  liveChat: true,
+  whatsappNumber: "",
+  phoneNumber: "",
+  alertWhatsapp: "",
 };
 
 // The agent on the business's website: which sites may show the chat, how it looks, its daily
@@ -53,6 +61,10 @@ export function WidgetPanel({ agentId }: { agentId: string }) {
             color: data.widget.color,
             title: data.widget.title ?? "",
             dailyCostCapUsd: String(data.widget.dailyCostCapUsd),
+            liveChat: data.widget.liveChat,
+            whatsappNumber: data.widget.whatsappNumber ?? "",
+            phoneNumber: data.widget.phoneNumber ?? "",
+            alertWhatsapp: data.widget.alertWhatsapp ?? "",
           });
         }
         setLoaded(true);
@@ -75,6 +87,10 @@ export function WidgetPanel({ agentId }: { agentId: string }) {
         color: form.color,
         title: form.title.trim() || null,
         dailyCostCapUsd: Number(form.dailyCostCapUsd),
+        liveChat: form.liveChat,
+        whatsappNumber: form.whatsappNumber,
+        phoneNumber: form.phoneNumber,
+        alertWhatsapp: form.alertWhatsapp,
       }),
     });
     const body = (await response.json()) as {
@@ -178,6 +194,65 @@ export function WidgetPanel({ agentId }: { agentId: string }) {
             </div>
           </div>
         </div>
+
+        <fieldset className="space-y-3 rounded-xl border border-slate-200 p-4">
+          <legend className="px-1 text-sm font-semibold">When a visitor wants the team</legend>
+          <p className="text-xs text-slate-500">
+            Visitors pick how to reach you; the conversation and a summary go with them, so they
+            never repeat themselves. Leave a number empty to not offer it.
+          </p>
+          <label className="flex items-center gap-3 text-sm">
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-brand-600"
+              checked={form.liveChat}
+              onChange={(e) => setForm({ ...form, liveChat: e.target.checked })}
+            />
+            &quot;Talk to a person&quot;: your team answers in the Inbox
+          </label>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label" htmlFor="widget-whatsapp">
+                WhatsApp number
+              </label>
+              <input
+                id="widget-whatsapp"
+                className="input"
+                placeholder="+34600111222"
+                value={form.whatsappNumber}
+                onChange={(e) => setForm({ ...form, whatsappNumber: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="label" htmlFor="widget-phone">
+                Number to call
+              </label>
+              <input
+                id="widget-phone"
+                className="input"
+                placeholder="+34910000000"
+                value={form.phoneNumber}
+                onChange={(e) => setForm({ ...form, phoneNumber: e.target.value })}
+              />
+            </div>
+          </div>
+          <div>
+            <label className="label" htmlFor="widget-alert">
+              Alert the team on WhatsApp
+            </label>
+            <input
+              id="widget-alert"
+              className="input"
+              placeholder="+34600111222 (your team's phone)"
+              value={form.alertWhatsapp}
+              onChange={(e) => setForm({ ...form, alertWhatsapp: e.target.value })}
+            />
+            <p className="mt-1 text-xs text-slate-500">
+              Live-chat requests and call-backs are sent here with a summary and a link to the chat.
+              They always appear in the Inbox too.
+            </p>
+          </div>
+        </fieldset>
 
         <div>
           <label className="label" htmlFor="widget-cap">

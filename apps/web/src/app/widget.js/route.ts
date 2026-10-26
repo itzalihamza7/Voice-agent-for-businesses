@@ -30,6 +30,9 @@ const SCRIPT = String.raw`(function () {
       "align-items:center;justify-content:center;transition:transform .15s}" +
       ".launcher:hover{transform:scale(1.06)}" +
       ".launcher svg{width:26px;height:26px}" +
+      ".dot{position:absolute;top:2px;right:2px;width:14px;height:14px;border-radius:50%;background:#ef4444;" +
+      "border:2px solid #fff;display:none}.dot.on{display:block}" +
+      ".launcher{position:relative}" +
       ".panel{position:fixed;right:20px;bottom:92px;width:380px;height:min(640px,calc(100vh - 120px));" +
       "border-radius:18px;overflow:hidden;box-shadow:0 30px 80px -20px rgba(0,0,0,.45);" +
       "background:#fff;opacity:0;transform:translateY(12px);pointer-events:none;transition:opacity .2s,transform .2s}" +
@@ -49,8 +52,9 @@ const SCRIPT = String.raw`(function () {
     var title = String(config.title || "Chat");
     var open = false;
 
+    var unread = false;
     function render() {
-      button.innerHTML = open ? closeIcon : chatIcon;
+      button.innerHTML = (open ? closeIcon : chatIcon) + '<span class="dot' + (unread && !open ? " on" : "") + '"></span>';
       button.setAttribute("aria-label", (open ? "Close chat with " : "Chat with ") + title);
       button.setAttribute("aria-expanded", String(open));
       panel.classList.toggle("open", open);
@@ -64,11 +68,20 @@ const SCRIPT = String.raw`(function () {
         frame.allow = "microphone; autoplay";
         panel.appendChild(frame);
       }
+      if (open) unread = false;
+      var frameWindow = panel.firstChild && panel.firstChild.contentWindow;
+      if (frameWindow) frameWindow.postMessage(open ? "vesper:opened" : "vesper:closed", origin);
       render();
     }
     button.addEventListener("click", function () { toggle(!open); });
     window.addEventListener("message", function (event) {
-      if (event.origin === origin && event.data === "vesper:close") toggle(false);
+      if (event.origin !== origin) return;
+      if (event.data === "vesper:close") toggle(false);
+      // The team (or the assistant) wrote while the chat was closed.
+      if (event.data === "vesper:unread" && !open) {
+        unread = true;
+        render();
+      }
     });
     render();
     document.body.appendChild(host);

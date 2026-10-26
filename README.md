@@ -13,8 +13,11 @@ most features were measured on both: the findings are in [docs/ROADMAP.md](docs/
   sitemap lists into the knowledge base, detects the booking API the site already uses, and
   creates a ready phone agent. Nothing on the business's website changes.
 - **Website chat:** one line of script adds a chat button (text or voice) to the business's own
-  site, talking with the agent's live version. Only the business's listed sites can show it,
-  visitors are rate limited, and each widget has a daily AI cost cap.
+  site, talking with the agent's live version. Replies stream as the agent works; visitors can
+  reopen earlier chats, and reach the team (a person in the chat, WhatsApp, a call or a call-back)
+  with the whole conversation passed on. The team answers from the Inbox and is alerted on
+  WhatsApp. Only the business's listed sites can show the chat, visitors are rate limited, and
+  each widget has a daily AI cost cap.
 - **App connections:** a business's own API (from a template, an OpenAPI document or typed by
   hand) becomes tools agents can call, with the credential encrypted on the server and values
   like the payment method fixed by code, not chosen by the AI.

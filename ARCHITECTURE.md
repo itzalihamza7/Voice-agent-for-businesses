@@ -499,6 +499,21 @@ site once; everything else is set in the builder's **Website** tab.
    per UTC day), after which visitors get a polite "busy" message.
 5. **Call log:** web chats are saved after every turn (visitors usually just leave) and analysed
    when the flow ends. They show as "website" in the dashboard.
+6. **Speed:** messages are answered as a stream (`Accept: text/event-stream`): plain-language
+   status ("Checking our information"), then the reply's sentences as they are written, each one
+   checked by the same grounding and policy rules as the whole reply before it is sent (a failing
+   sentence stops the stream; the checked reply replaces it). A Branch also starts the search of
+   any Knowledge lookup it leads to while it is still deciding (`prefetchLookups`), so a
+   knowledge answer arrives a second or two sooner.
+7. **Reaching the team, with context** (`server/web-chats.ts`): every visible message is saved in
+   `web_chat_messages`, so a visitor can reopen any earlier chat (their list is kept in the chat
+   window's storage, per website) and the team always has the whole conversation. A visitor can
+   ask for a person (the chat waits in the **Inbox**; a team member joins, answers in the same chat,
+   and hands back to the AI), continue on WhatsApp (opened with their question and the chat's
+   reference), call (with the reference), or ask for a call back. The chat gets a reference like
+   `VS-7K2Q` and an AI summary; live chats and call-backs alert the team on WhatsApp (Twilio or
+   Meta, `server/notify.ts`) with a link to the chat, and the Inbox badge, sound and desktop
+   notifications show them too. A Transfer step in the flow opens these choices for the visitor.
 
 ### Secrets and data
 

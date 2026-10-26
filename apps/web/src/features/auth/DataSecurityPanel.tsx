@@ -41,7 +41,12 @@ export function DataSecurityPanel() {
     });
     const out = (await response.json()) as {
       error?: string;
-      deleted?: { calls: number; callerMemories: number; connectionRequests: number } | null;
+      deleted?: {
+        calls: number;
+        webChats: number;
+        callerMemories: number;
+        connectionRequests: number;
+      } | null;
     };
     setBusy(null);
     if (!response.ok) return setMessage({ text: out.error ?? "Didn't work.", error: true });
@@ -49,8 +54,8 @@ export function DataSecurityPanel() {
     const d = out.deleted;
     setMessage({
       text:
-        d && d.calls + d.callerMemories + d.connectionRequests > 0
-          ? `Saved. Deleted ${d.calls} calls, ${d.callerMemories} caller memories and ${d.connectionRequests} log entries.`
+        d && d.calls + d.webChats + d.callerMemories + d.connectionRequests > 0
+          ? `Saved. Deleted ${d.calls} calls, ${d.webChats} website chats, ${d.callerMemories} caller memories and ${d.connectionRequests} log entries.`
           : "Saved.",
     });
   }
@@ -75,8 +80,8 @@ export function DataSecurityPanel() {
           <Timer className="h-4 w-4 text-brand-600" /> Keep call data for
         </h2>
         <p className="mt-1 text-sm text-slate-500">
-          Calls (transcripts and traces), caller memories and the connection logs older than this
-          are deleted automatically.
+          Calls (transcripts and traces), website chats, caller memories and the connection logs
+          older than this are deleted automatically.
         </p>
         <div
           className="mt-3 flex flex-wrap gap-2"

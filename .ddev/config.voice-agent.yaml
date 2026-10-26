@@ -32,6 +32,8 @@ web_environment:
     # The demo owner's password (demo@example.com), local only.
     - DEMO_PASSWORD=demo-password
     # The platform admin (sees every business), local only.
+    # Links in team alerts (WhatsApp) point here.
+    - APP_URL=https://voice-agent.ddev.site
     - ADMIN_EMAIL=admin@example.com
     - ADMIN_PASSWORD=admin-password
 

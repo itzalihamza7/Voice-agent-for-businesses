@@ -1,8 +1,8 @@
 import { getPrisma } from "./store";
 
 // Data retention: a business can choose how long call data is kept. Older calls (with their
-// transcript, trace and LangGraph thread), caller memories not updated since, and connection
-// audit entries are deleted. Runs after calls are recorded (at most hourly per business) and
+// transcript, trace and LangGraph thread), website chats, caller memories not updated since,
+// and connection audit entries are deleted. Runs after calls are recorded (at most hourly per business) and
 // when the setting changes.
 
 const HOUR_MS = 3_600_000;
@@ -12,6 +12,7 @@ export const RETENTION_CHOICES = [7, 30, 90, 365] as const;
 
 export interface RetentionResult {
   calls: number;
+  webChats: number;
   callerMemories: number;
   connectionRequests: number;
 }
@@ -29,7 +30,9 @@ export async function applyRetention(
     where: { id: businessId },
     select: { retentionDays: true },
   });
-  if (!business?.retentionDays) return { calls: 0, callerMemories: 0, connectionRequests: 0 };
+  if (!business?.retentionDays) {
+    return { calls: 0, webChats: 0, callerMemories: 0, connectionRequests: 0 };
+  }
   const cutoff = new Date(now - business.retentionDays * 24 * HOUR_MS);
 
   const old = await prisma.call.findMany({
@@ -37,14 +40,16 @@ export async function applyRetention(
     select: { id: true, threadId: true },
   });
   const threads = old.map((c) => c.threadId).filter((t): t is string => t !== null);
-  const [calls, callerMemories, connectionRequests] = await prisma.$transaction([
+  const [calls, webChats, callerMemories, connectionRequests] = await prisma.$transaction([
     prisma.call.deleteMany({ where: { id: { in: old.map((c) => c.id) } } }),
+    prisma.webChat.deleteMany({ where: { businessId, lastMessageAt: { lt: cutoff } } }),
     prisma.callerMemory.deleteMany({ where: { businessId, updatedAt: { lt: cutoff } } }),
     prisma.connectionRequest.deleteMany({ where: { businessId, createdAt: { lt: cutoff } } }),
   ]);
   if (threads.length) await deleteThreads(threads);
   return {
     calls: calls.count,
+    webChats: webChats.count,
     callerMemories: callerMemories.count,
     connectionRequests: connectionRequests.count,
   };

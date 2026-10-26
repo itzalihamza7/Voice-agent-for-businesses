@@ -32,6 +32,18 @@ export function frameAncestors(allowed: readonly string[]): string[] {
   );
 }
 
+/** A phone number in international format, or empty for "not offered". */
+const optionalPhone = z
+  .string()
+  .trim()
+  .transform((v) => v.replace(/[\s()-]/g, ""))
+  .refine(
+    (v) => v === "" || /^\+[1-9][0-9]{6,14}$/.test(v),
+    "Use the international format, e.g. +34600111222.",
+  )
+  .transform((v) => (v === "" ? null : v))
+  .nullable();
+
 export const WidgetSettingsSchema = z.object({
   enabled: z.boolean(),
   allowedHosts: z
@@ -53,6 +65,14 @@ export const WidgetSettingsSchema = z.object({
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Use a colour like #6d43f5."),
   title: z.string().trim().max(60).nullable(),
   dailyCostCapUsd: z.number().min(0.1).max(100),
+  /** Visitors can continue on WhatsApp, with the chat's reference and question. */
+  whatsappNumber: optionalPhone.default(null),
+  /** Visitors can call (or ask to be called back), quoting the chat's reference. */
+  phoneNumber: optionalPhone.default(null),
+  /** Visitors can ask for a person, who answers from the Inbox. */
+  liveChat: z.boolean().default(true),
+  /** The team's WhatsApp number for alerts about hand-offs. */
+  alertWhatsapp: optionalPhone.default(null),
 });
 
 export type WidgetSettingsInput = z.input<typeof WidgetSettingsSchema>;
@@ -66,6 +86,43 @@ export interface WidgetSummary extends WidgetSettings {
 export interface WidgetPublicConfig {
   title: string;
   color: string;
+  /** Ways to reach the team. Numbers are the business's public contact numbers. */
+  whatsappNumber: string | null;
+  phoneNumber: string | null;
+  liveChat: boolean;
+}
+
+/** How a visitor asks to reach the team. */
+export const HANDOFF_CHANNELS = ["person", "whatsapp", "call", "callback"] as const;
+export type HandoffChannel = (typeof HANDOFF_CHANNELS)[number];
+
+export const HandoffRequestSchema = z.object({
+  token: z.string().min(10).max(200),
+  channel: z.enum(HANDOFF_CHANNELS),
+  name: z.string().trim().max(80).optional(),
+  /** For "callback": the number (or email) to reach the visitor. */
+  contact: z.string().trim().max(120).optional(),
+});
+
+/** One message as the visitor and the team see it. */
+export interface WebChatMessageView {
+  id: string;
+  sender: "visitor" | "agent" | "staff" | "system";
+  text: string;
+  author: string | null;
+  at: string;
+}
+
+/** A visitor's chat: its messages and whether a person has taken over. */
+export interface WebChatView {
+  id: string;
+  title: string | null;
+  mode: "bot" | "waiting" | "live";
+  /** The flow has ended: the AI won't answer again (a person still can). */
+  ended: boolean;
+  reference: string | null;
+  handoff: HandoffChannel | null;
+  messages: WebChatMessageView[];
 }
 
 /** A visitor's message. The token proves the chat is theirs. */

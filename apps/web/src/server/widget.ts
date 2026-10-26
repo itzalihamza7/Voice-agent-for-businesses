@@ -31,6 +31,10 @@ function summary(row: WidgetRow): WidgetSummary {
     color: row.color,
     title: row.title,
     dailyCostCapUsd: row.dailyCostCapUsd,
+    whatsappNumber: row.whatsappNumber,
+    phoneNumber: row.phoneNumber,
+    liveChat: row.liveChat,
+    alertWhatsapp: row.alertWhatsapp,
   };
 }
 
@@ -74,7 +78,15 @@ export async function activeWidget(publicId: string) {
 /** What the chat window shows (public). */
 export async function publicConfig(publicId: string): Promise<WidgetPublicConfig | null> {
   const row = await activeWidget(publicId);
-  return row ? { title: row.title || row.business.name, color: row.color } : null;
+  return row
+    ? {
+        title: row.title || row.business.name,
+        color: row.color,
+        whatsappNumber: row.whatsappNumber,
+        phoneNumber: row.phoneNumber,
+        liveChat: row.liveChat,
+      }
+    : null;
 }
 
 /** The hosts that may show the chat in a frame (for the CSP header), or null if none. */

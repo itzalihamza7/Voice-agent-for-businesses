@@ -3,6 +3,7 @@
 import {
   BookOpen,
   Bot,
+  Inbox,
   LayoutDashboard,
   Plug,
   Settings,
@@ -12,6 +13,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 
 interface Item {
   href: string;
@@ -21,13 +23,35 @@ interface Item {
 
 const MAIN: Item[] = [
   { href: "/agents", label: "Agents", icon: Bot },
+  { href: "/inbox", label: "Inbox", icon: Inbox },
   { href: "/connect", label: "Connect website", icon: Sparkles },
   { href: "/knowledge", label: "Knowledge base", icon: BookOpen },
   { href: "/dashboard/calls", label: "Calls & analytics", icon: LayoutDashboard },
 ];
 
+/** Website visitors waiting for the team, checked every 15 seconds. */
+function useWaiting(): number {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    let active = true;
+    const check = () =>
+      fetch("/api/inbox/count")
+        .then((r) => (r.ok ? (r.json() as Promise<{ count: number }>) : null))
+        .then((body) => active && body && setCount(body.count))
+        .catch(() => undefined);
+    void check();
+    const timer = setInterval(check, 15_000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, []);
+  return count;
+}
+
 export function SidebarNav({ owner, platformAdmin }: { owner: boolean; platformAdmin: boolean }) {
   const pathname = usePathname();
+  const waiting = useWaiting();
   const items = [
     ...MAIN,
     ...(owner
@@ -57,6 +81,11 @@ export function SidebarNav({ owner, platformAdmin }: { owner: boolean; platformA
             )}
             <Icon className={`h-4 w-4 ${active ? "text-brand-300" : ""}`} />
             {label}
+            {href === "/inbox" && waiting > 0 && (
+              <span className="ml-auto rounded-full bg-brand-500 px-1.5 py-0.5 text-[10px] leading-none font-semibold text-white">
+                {waiting}
+              </span>
+            )}
           </Link>
         );
       })}

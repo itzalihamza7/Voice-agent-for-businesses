@@ -23,7 +23,5 @@ export default async function EmbedPage({
       </div>
     );
   }
-  return (
-    <WidgetChat publicId={publicId} title={config.title} color={config.color} preview={preview} />
-  );
+  return <WidgetChat publicId={publicId} config={config} preview={preview} />;
 }

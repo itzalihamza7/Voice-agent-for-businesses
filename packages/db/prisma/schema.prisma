@@ -33,6 +33,7 @@ model Business {
   connections        Connection[]
   connectionRequests ConnectionRequest[]
   widgets            AgentWidget[]
+  webChats           WebChat[]
 
   @@map("businesses")
 }
@@ -60,6 +61,7 @@ model Agent {
   evalRuns  EvalRun[]
   releases  Release[]
   widget    AgentWidget?
+  webChats  WebChat[]
 
   @@index([businessId])
   @@map("agents")
@@ -411,6 +413,13 @@ model AgentWidget {
   // Shown in the chat's header; the business's name when empty.
   title           String?
   dailyCostCapUsd Float    @default(2) @map("daily_cost_cap_usd")
+  // Ways a visitor can reach the team, each with the chat's context. null = not offered.
+  whatsappNumber  String?  @map("whatsapp_number")
+  phoneNumber     String?  @map("phone_number")
+  // Offer "talk to a person" (a live chat answered from the Inbox).
+  liveChat        Boolean  @default(true) @map("live_chat")
+  // Where the team is told about hand-offs (WhatsApp, E.164). null = only the Inbox.
+  alertWhatsapp   String?  @map("alert_whatsapp")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
@@ -435,4 +444,57 @@ model WidgetUsage {
 
   @@id([agentId, day])
   @@map("widget_usage")
+}
+
+// A visitor's chat on a website, as the visitor and the team see it: every visible message in
+// order (the AI's, the visitor's and the team's), and whether a person has taken over. The
+// conversation engine's own state is in its LangGraph thread (same id).
+model WebChat {
+  // The LangGraph thread id.
+  id             String    @id
+  businessId     String    @map("business_id")
+  agentId        String    @map("agent_id")
+  // The visitor's first message: the chat's title in their history and in the Inbox.
+  title          String?
+  // "bot" (the AI answers), "waiting" (asked for a person), "live" (a person answers).
+  mode           String    @default("bot")
+  // The last way the visitor asked to reach the team: "person", "whatsapp", "call", "callback".
+  handoff        String?
+  // Short code the visitor can quote on WhatsApp or the phone, e.g. "VS-7K2Q".
+  reference      String?   @unique
+  // A few lines for the team: who wants what.
+  summary        String?
+  visitorName    String?   @map("visitor_name")
+  visitorContact String?   @map("visitor_contact")
+  // A hand-off the team hasn't dealt with yet.
+  needsAttention Boolean   @default(false) @map("needs_attention")
+  // The team member who joined (user id).
+  assignedTo     String?   @map("assigned_to")
+  handoffAt      DateTime? @map("handoff_at")
+  lastMessageAt  DateTime  @default(now()) @map("last_message_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  business Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  agent    Agent            @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  messages WebChatMessage[]
+
+  @@index([businessId, lastMessageAt])
+  @@index([businessId, needsAttention])
+  @@map("web_chats")
+}
+
+model WebChatMessage {
+  id        String   @id @default(uuid())
+  chatId    String   @map("chat_id")
+  // "visitor", "agent" (the AI), "staff" (a person) or "system" (e.g. "Maria joined").
+  sender    String
+  text      String
+  // The team member's name, for staff messages.
+  author    String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  chat WebChat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  @@index([chatId, createdAt])
+  @@map("web_chat_messages")
 }

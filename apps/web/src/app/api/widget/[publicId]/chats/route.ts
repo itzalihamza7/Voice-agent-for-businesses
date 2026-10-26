@@ -1,7 +1,7 @@
 // POST /api/widget/:publicId/chats: a visitor opens the chat. Starts a conversation with the
 // agent's live version and returns the chat's id, its token and the agent's first words.
 import { getCallSessions } from "@/server/calls";
-import { countUsage, chatToken, underCostCap, widgetAgent, activeWidget } from "@/server/widget";
+import { activeWidget, chatToken, countUsage, underCostCap, widgetAgent } from "@/server/widget";
 import {
   busyMessage,
   chatError,
@@ -10,6 +10,7 @@ import {
   visible,
   widgetDeps,
 } from "@/server/widget-chat";
+import { addMessages, ensureWebChat } from "@/server/web-chats";
 
 type Context = { params: Promise<{ publicId: string }> };
 
@@ -33,8 +34,17 @@ export async function POST(_request: Request, { params }: Context) {
       agentId: widget.agentId,
       agentVersion: agent.version,
     });
-    await Promise.all([recordWebTurn(chatId, result), countUsage(widget.agentId, result, true)]);
-    return json({ chatId, token: chatToken(publicId, chatId), ...visible(result) }, 201);
+    const shown = visible(result);
+    await ensureWebChat(chatId, widget.businessId, widget.agentId);
+    await Promise.all([
+      addMessages(
+        chatId,
+        shown.replies.map((text) => ({ sender: "agent" as const, text })),
+      ),
+      recordWebTurn(chatId, result),
+      countUsage(widget.agentId, result, true),
+    ]);
+    return json({ chatId, token: chatToken(publicId, chatId), mode: "bot", ...shown }, 201);
   } catch (error) {
     return chatError(error);
   } finally {
