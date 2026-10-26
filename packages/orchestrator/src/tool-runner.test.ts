@@ -7,7 +7,13 @@ import { FlowNodeSchema, type ConversationEvent, type FlowNode } from "@voice-ag
 import type { Tool } from "@voice-agent/tools";
 import { describe, expect, it } from "vitest";
 import { buildContext, DEFAULT_CONTEXT_BUDGET } from "./context";
-import { announcesAction, replyWithTools, runToolStep, type ToolTurn } from "./tool-runner";
+import {
+  announcesAction,
+  claimsDone,
+  replyWithTools,
+  runToolStep,
+  type ToolTurn,
+} from "./tool-runner";
 
 const calls: Record<string, unknown>[] = [];
 const checkAvailability: Tool = {
@@ -154,7 +160,23 @@ describe("replyWithTools (agentic loop)", () => {
     expect(turn.events.find((e) => e.type === "note")).toBeTruthy();
   });
 
+  it("never lets a reply claim a booking that no tool made", async () => {
+    const turn = newTurn();
+    const { llm, options } = scripted([
+      { text: "Done! Your booking reference is 90243e4a-833b-4412." },
+      { text: "Shall I book the E-Class for Friday at 10:00?" },
+    ]);
+    const reply = await replyWithTools(turn, "ai", llm, [], [checkAvailability]);
+    expect(reply.text).toBe("Shall I book the E-Class for Friday at 10:00?");
+    // Asking first is allowed, so the retry doesn't force a tool call.
+    expect(options[1]?.toolChoice).toBe("auto");
+    expect(claimsDone("Your ride is booked.")).toBe(true);
+    expect(claimsDone("I've cancelled it for you.")).toBe(true);
+    expect(claimsDone("Would you like me to book it?")).toBe(false);
+  });
+
   it("tells announcements from ordinary replies", () => {
+    expect(announcesAction("I'll go ahead and finalize that for you now.")).toBe(true);
     expect(announcesAction("I'll book that for you now.")).toBe(true);
     expect(announcesAction("One moment, please.")).toBe(true);
     expect(announcesAction("I'm checking the prices.")).toBe(true);

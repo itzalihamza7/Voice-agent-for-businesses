@@ -174,6 +174,7 @@ export async function replyWithTools(
 
   let usedTools = false;
   let nudged = false;
+  let required = false;
   for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
     // The last round offers no tools, so the model has to answer in words.
     const offerTools = specs.length > 0 && round < MAX_TOOL_ROUNDS;
@@ -182,32 +183,43 @@ export async function replyWithTools(
       ...(offerTools
         ? {
             tools: specs,
-            toolChoice: nudged && !usedTools ? ("required" as const) : ("auto" as const),
+            toolChoice: required && !usedTools ? ("required" as const) : ("auto" as const),
           }
         : {}),
       ...(!offerTools && onToken ? { onToken } : {}),
     });
     rounds.push(result);
-    // Saying "one moment, let me check" without checking leaves the caller waiting for nothing:
-    // the next turn only starts when they speak. Ask once more, this time requiring a tool call.
-    if (
-      offerTools &&
-      !result.toolCalls?.length &&
-      !usedTools &&
-      !nudged &&
-      announcesAction(result.text)
-    ) {
+    // Two ways a reply can mislead when no tool ran this turn, checked in code (never shown):
+    //  - "one moment, let me check" leaves the caller waiting for nothing, since the next turn
+    //    only starts when they speak: asked again, a tool call is then required;
+    //  - "your booking reference is …" when nothing was booked (in testing, the model read a
+    //    quote's id out as a booking reference): asked again to do it, or to ask first.
+    const problem =
+      offerTools && !result.toolCalls?.length && !usedTools && !nudged
+        ? claimsDone(result.text)
+          ? "claimed"
+          : announcesAction(result.text)
+            ? "announced"
+            : null
+        : null;
+    if (problem) {
       nudged = true;
+      required = problem === "announced";
       turn.events.push({
         type: "note",
         nodeId,
-        message: "The AI said it would act without calling a tool; it was asked to act now.",
+        message:
+          problem === "claimed"
+            ? "The AI said something was done without calling a tool; it was asked again."
+            : "The AI said it would act without calling a tool; it was asked to act now.",
       });
       messages.push({ role: "assistant", content: result.text });
       messages.push({
         role: "user",
         content:
-          "(System) You said you would do something but didn't. Don't announce it: call the tool you need now, then answer with the result.",
+          problem === "claimed"
+            ? "(System) That reply says it's done, but you haven't called the tool that does it, so nothing happened. If the caller has agreed, call it now and give the result from the tool. If not, ask them to confirm. Never give a reference or number that didn't come from that tool."
+            : "(System) You said you would do something but didn't. Don't announce it: call the tool you need now, then answer with the result.",
       });
       continue;
     }
@@ -243,9 +255,20 @@ export async function replyWithTools(
   throw new Error("Tool loop ended without a reply.");
 }
 
+const ACT =
+  "check|look|book|get|find|see|confirm|proceed|finali[sz]e|complete|process|arrange|reserve|cancel|place|go ahead|sort|put";
+
 /** "Let me check", "one moment", "I'll book it now"…: a promise to act, not an answer. */
 export function announcesAction(text: string): boolean {
-  return /\b(let me(?! know)|one moment|just a moment|hold on|please wait|bear with me|give me a (moment|second)|i(?:'|’| a)?m (now )?(checking|looking|booking|getting|finding)|i(?:'|’)ll (now |just )?(check|look|book|get|find|see|confirm|proceed)|i will (now |just )?(check|look|book|get|find|see|confirm|proceed))\b/i.test(
+  return new RegExp(
+    `\\b(let me(?! know)|one moment|just a moment|hold on|please wait|bear with me|give me a (moment|second)|i(?:'|’| a)?m (now )?(checking|looking|booking|getting|finding|processing)|i(?:'|’)ll (now |just )?(${ACT})|i will (now |just )?(${ACT}))\\b`,
+    "i",
+  ).test(text);
+}
+
+/** "Your booking reference is …", "it's booked", "I've cancelled it": something done. */
+export function claimsDone(text: string): boolean {
+  return /\b((booking|reservation|confirmation) (reference|number|code) is|your reference (number )?is|(is|are|has been|have been) (now )?(booked|confirmed|reserved|cancell?ed)|i(?:'|’)ve (now )?(booked|cancell?ed|reserved|confirmed)|booking is (now )?(confirmed|complete|done))\b/i.test(
     text,
   );
 }
