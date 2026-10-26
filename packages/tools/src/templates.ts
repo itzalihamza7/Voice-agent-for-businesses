@@ -167,6 +167,25 @@ const CHAUFFEUR_BOOKING: Template = {
       fixedBody: {},
     },
     {
+      name: "my_bookings",
+      description:
+        "The caller's upcoming bookings, found by the number they are calling from (filled in automatically): pickup time, places, vehicle and reference. Try this first when they ask about their booking. Needs the business's agent key; if it fails, ask for the reference instead.",
+      method: "GET",
+      path: "/agent/bookings",
+      parameters: [
+        {
+          name: "phone",
+          in: "query",
+          type: "string",
+          required: true,
+          description: "The caller's number.",
+          // Filled in by code from the line the call comes from: callers only hear their own.
+          source: "caller_phone",
+        },
+      ],
+      fixedBody: {},
+    },
+    {
       name: "cancel_booking",
       description:
         "Cancel a booking, after the caller has confirmed. Needs the reference and the email or phone number it was made with.",

@@ -26,7 +26,7 @@ export function websiteAgentDraft(options: WebsiteAgentOptions): AgentConfigDraf
   const { businessName, tools, transferNumber, kind } = options;
   const pick = (...suffixes: string[]) => tools.filter((t) => suffixes.some((s) => t.endsWith(s)));
   const bookingTools = pick("_search_places", "_list_vehicles", "_get_quote", "_create_booking");
-  const manageTools = pick("_find_booking", "_cancel_booking");
+  const manageTools = pick("_my_bookings", "_find_booking", "_cancel_booking");
   const canBook = kind === "chauffeur" && bookingTools.length > 0;
   const canManage = kind === "chauffeur" && manageTools.length > 0;
 
@@ -92,7 +92,7 @@ export function websiteAgentDraft(options: WebsiteAgentOptions): AgentConfigDraf
       data: {
         tools: manageTools,
         instructions:
-          "Help with an existing booking. Ask for the booking reference and the email or phone number it was made with, then find it and tell the caller its details. Cancel only after the caller clearly confirms.",
+          "Help with an existing booking. First look up the caller's upcoming bookings by their number (my_bookings); if that finds nothing or isn't available, ask for the booking reference and the email or phone number it was made with, and find it. Tell the caller its details. Cancel only after the caller clearly confirms.",
       },
     });
     edges.push({ id: "e-manage", source: "manage", target: "listen" });
