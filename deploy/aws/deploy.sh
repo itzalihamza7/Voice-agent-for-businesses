@@ -47,6 +47,11 @@ ADMIN_PASSWORD=$(openssl rand -base64 15 | tr -d '/+=')
 ENV
 fi
 
+# Links in team alerts (WhatsApp) point at the app.
+if ! "${SSH[@]}" "grep -q '^APP_URL=' $DIR/.env"; then
+  echo "APP_URL=https://${HOST}" | "${SSH[@]}" "cat >> $DIR/.env"
+fi
+
 echo "Starting…"
 "${SSH[@]}" "cd $DIR && docker compose up -d --remove-orphans && docker image prune -f >/dev/null"
 echo "Done: https://$HOST"
