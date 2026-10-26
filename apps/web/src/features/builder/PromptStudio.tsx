@@ -70,11 +70,11 @@ export function PromptStudio({ prompt, onChange, savedPrompt, savedLabel, flow }
     onChange({ ...prompt, [key]: value });
 
   return (
-    <div className="grid min-h-0 flex-1 grid-cols-2 divide-x divide-gray-200">
+    <div className="grid min-h-0 flex-1 grid-cols-2 divide-x divide-slate-200">
       <section className="space-y-4 overflow-y-auto p-6" data-testid="prompt-editor">
         <div>
           <h2 className="text-lg font-semibold">Prompt</h2>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-slate-500">
             How the AI talks in AI response steps. Saved with the agent&apos;s next version.
           </p>
         </div>
@@ -132,7 +132,7 @@ export function PromptStudio({ prompt, onChange, savedPrompt, savedLabel, flow }
               />
               <span>
                 {VOICE_STYLE_RULES[key].label}
-                <span className="block text-xs text-gray-500">{VOICE_STYLE_RULES[key].rule}</span>
+                <span className="block text-xs text-slate-500">{VOICE_STYLE_RULES[key].rule}</span>
               </span>
             </label>
           ))}
@@ -140,11 +140,11 @@ export function PromptStudio({ prompt, onChange, savedPrompt, savedLabel, flow }
 
         <div className="space-y-2">
           <p className="text-sm font-medium">
-            Example exchanges <span className="font-normal text-gray-500">(few-shot)</span>
+            Example exchanges <span className="font-normal text-slate-500">(few-shot)</span>
           </p>
           {prompt.examples.map((example, index) => (
-            <div key={example.id} className="space-y-1 rounded border border-gray-200 p-2">
-              <div className="flex items-center justify-between text-xs text-gray-500">
+            <div key={example.id} className="space-y-1 rounded-lg border border-slate-200 p-2">
+              <div className="flex items-center justify-between text-xs text-slate-500">
                 Example {index + 1}
                 <button
                   type="button"
@@ -179,7 +179,7 @@ export function PromptStudio({ prompt, onChange, savedPrompt, savedLabel, flow }
           {prompt.examples.length < 10 && (
             <button
               type="button"
-              className="text-sm text-blue-600 underline"
+              className="text-sm text-brand-600 font-medium hover:underline"
               onClick={() =>
                 set("examples", [...prompt.examples, { id: newId("ex"), caller: "", agent: "" }])
               }
@@ -189,10 +189,10 @@ export function PromptStudio({ prompt, onChange, savedPrompt, savedLabel, flow }
           )}
         </div>
 
-        <div className="text-xs text-gray-600">
+        <div className="text-xs text-slate-600">
           Variables you can use:{" "}
           {[...knownVariables].map((name) => (
-            <code key={name} className="mr-1 rounded bg-gray-100 px-1">{`{{${name}}}`}</code>
+            <code key={name} className="mr-1 rounded-lg bg-slate-100 px-1">{`{{${name}}}`}</code>
           ))}
           {typos.length > 0 && (
             <p className="mt-1 text-red-600" data-testid="prompt-typos">
@@ -201,16 +201,16 @@ export function PromptStudio({ prompt, onChange, savedPrompt, savedLabel, flow }
           )}
         </div>
 
-        <details open className="rounded border border-gray-200">
+        <details open className="rounded-lg border border-slate-200">
           <summary className="cursor-pointer px-3 py-2 text-sm font-medium">
             What the AI receives{" "}
-            <span className="font-normal text-gray-500" data-testid="token-estimate">
+            <span className="font-normal text-slate-500" data-testid="token-estimate">
               ≈ {estimateTokens(preview)} tokens
             </span>
           </summary>
           <pre
             data-testid="prompt-preview"
-            className="max-h-96 overflow-y-auto border-t border-gray-200 bg-gray-50 p-3 text-xs whitespace-pre-wrap"
+            className="max-h-96 overflow-y-auto border-t border-slate-200 bg-slate-50 p-3 text-xs whitespace-pre-wrap"
           >
             {preview}
           </pre>
@@ -227,7 +227,7 @@ export function PromptStudio({ prompt, onChange, savedPrompt, savedLabel, flow }
               <span className="font-medium">AI response step</span>
               <select
                 aria-label="AI response step"
-                className="mt-1 w-full rounded border border-gray-300 px-2 py-1"
+                className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1"
                 value={stepId}
                 onChange={(event) => setStepId(event.target.value)}
               >
@@ -249,7 +249,7 @@ export function PromptStudio({ prompt, onChange, savedPrompt, savedLabel, flow }
             <TextArea label="Caller says" value={callerMessage} onChange={setCallerMessage} />
             {askVariables.length > 0 && (
               <details className="text-sm">
-                <summary className="cursor-pointer text-gray-600">
+                <summary className="cursor-pointer text-slate-600">
                   Sample answers from earlier in the call (optional)
                 </summary>
                 <div className="mt-2 space-y-1">
@@ -328,7 +328,7 @@ function Playground({
     <section className="space-y-4 overflow-y-auto p-6" data-testid="prompt-playground">
       <div>
         <h2 className="text-lg font-semibold">Playground</h2>
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-slate-500">
           Same caller message, same model: only the prompt differs.
           {same && " No edits yet, so A and B show how much replies vary on their own."}
         </p>
@@ -338,7 +338,7 @@ function Playground({
         <span className="font-medium">Model</span>
         <select
           aria-label="Playground model"
-          className="mt-1 w-full rounded border border-gray-300 px-2 py-1"
+          className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1"
           value={model}
           onChange={(event) => setModelKey(event.target.value)}
         >
@@ -361,7 +361,7 @@ function Playground({
         type="button"
         onClick={run}
         disabled={!model || running || !input.callerMessage.trim() || !input.instructions.trim()}
-        className="rounded bg-blue-600 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-40"
+        className="rounded-lg bg-brand-600 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-40"
       >
         {running ? "Running…" : "Run A vs B"}
       </button>
@@ -373,32 +373,32 @@ function Playground({
             return (
               <div
                 key={key}
-                className="space-y-2 rounded border border-gray-200 p-3"
+                className="space-y-2 rounded-lg border border-slate-200 p-3"
                 data-testid={`result-${key}`}
               >
                 <h3 className="text-sm font-semibold">{title}</h3>
-                {result.status === "running" && <p className="text-sm text-gray-400">…</p>}
+                {result.status === "running" && <p className="text-sm text-slate-400">…</p>}
                 {result.status === "error" && (
                   <p className="text-sm text-red-600">{result.message}</p>
                 )}
                 {result.status === "done" && (
                   <>
                     <div
-                      className="rounded-lg bg-gray-100 px-3 py-1.5 text-sm"
+                      className="rounded-lg bg-slate-100 px-3 py-1.5 text-sm"
                       data-testid={`reply-${key}`}
                     >
                       {result.reply}
                       <LlmMeta llm={result.llm} />
                     </div>
                     <details>
-                      <summary className="cursor-pointer text-xs text-gray-600">
+                      <summary className="cursor-pointer text-xs text-slate-600">
                         System prompt ({result.llm.inputTokens ?? "?"} input tokens in total,{" "}
                         {result.llm.costUsd === null
                           ? "cost unknown"
                           : formatCost(result.llm.costUsd)}
                         )
                       </summary>
-                      <pre className="mt-1 max-h-64 overflow-y-auto bg-gray-50 p-2 text-[11px] whitespace-pre-wrap">
+                      <pre className="mt-1 max-h-64 overflow-y-auto bg-slate-50 p-2 text-[11px] whitespace-pre-wrap">
                         {result.systemPrompt}
                       </pre>
                     </details>
@@ -417,7 +417,7 @@ function Label({ label, hint }: { label: string; hint?: string | undefined }) {
   return (
     <span className="font-medium">
       {label}
-      {hint && <span className="ml-1 font-normal text-gray-500">· {hint}</span>}
+      {hint && <span className="ml-1 font-normal text-slate-500">· {hint}</span>}
     </span>
   );
 }
@@ -436,7 +436,7 @@ function TextField({ label, hint, value, placeholder, onChange }: FieldProps) {
       <Label label={label} hint={hint} />
       <input
         aria-label={label}
-        className="mt-1 w-full rounded border border-gray-300 px-2 py-1"
+        className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1"
         value={value}
         placeholder={placeholder}
         onChange={(event) => onChange(event.target.value)}
@@ -458,7 +458,7 @@ function TextArea({
       <Label label={label} hint={hint} />
       <textarea
         aria-label={label}
-        className="mt-1 w-full rounded border border-gray-300 px-2 py-1"
+        className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1"
         rows={rows}
         value={value}
         placeholder={placeholder}

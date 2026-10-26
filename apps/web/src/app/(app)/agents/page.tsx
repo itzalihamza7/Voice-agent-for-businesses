@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { connection } from "next/server";
 import { CreateAgentForm } from "@/features/agents/CreateAgentForm";
+import { DeleteAgentButton } from "@/features/agents/DeleteAgentButton";
 import { GenerateAgentForm } from "@/features/agents/GenerateAgentForm";
 import { EmptyState, PageHeader } from "@/features/ui/PageHeader";
 import { currentBusinessId } from "@/server/business";
@@ -50,10 +51,10 @@ export default async function AgentsPage() {
           {agents.map((agent) => {
             const line = lines.get(agent.agentId);
             return (
-              <li key={agent.agentId}>
+              <li key={agent.agentId} className="group relative">
                 <Link
                   href={`/agents/${agent.agentId}/builder`}
-                  className="card group flex h-full flex-col p-5 transition hover:border-brand-300 hover:shadow-md"
+                  className="card flex h-full flex-col p-5 transition hover:border-brand-300 hover:shadow-md"
                 >
                   <div className="flex items-start gap-3">
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
@@ -85,6 +86,7 @@ export default async function AgentsPage() {
                     )}
                   </div>
                 </Link>
+                <DeleteAgentButton agentId={agent.agentId} name={agent.name} />
               </li>
             );
           })}

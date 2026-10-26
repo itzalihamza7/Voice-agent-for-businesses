@@ -60,10 +60,10 @@ export function ReleasesPanel({ agentId, versions }: { agentId: string; versions
     );
   const pctText = (value: number | null) => (value === null ? "–" : `${value}%`);
 
-  if (!overview) return <p className="p-6 text-sm text-gray-500">Loading…</p>;
+  if (!overview) return <p className="p-6 text-sm text-slate-500">Loading…</p>;
   return (
     <div
-      className="grid min-h-0 flex-1 grid-cols-2 divide-x divide-gray-200"
+      className="grid min-h-0 flex-1 grid-cols-2 divide-x divide-slate-200"
       data-testid="releases"
     >
       <section className="space-y-5 overflow-y-auto p-6">
@@ -76,13 +76,13 @@ export function ReleasesPanel({ agentId, versions }: { agentId: string; versions
               `, and ${overview.split.percent}% of new calls get v${overview.split.version} (A/B test)`}
             .
           </p>
-          <p className="mt-1 text-xs text-gray-500">
+          <p className="mt-1 text-xs text-slate-500">
             Versions go live from the Evals tab, through the eval gate.
           </p>
           <button
             type="button"
             onClick={() => void act("rollback", { method: "POST" }, "Rolled back.")}
-            className="mt-2 rounded border border-red-300 px-3 py-1 text-sm text-red-700"
+            className="mt-2 rounded-lg border border-red-300 px-3 py-1 text-sm text-red-700"
           >
             Roll back to the previous live version
           </button>
@@ -91,10 +91,10 @@ export function ReleasesPanel({ agentId, versions }: { agentId: string; versions
           <h2 className="font-semibold">A/B test</h2>
           <div className="flex items-end gap-2 text-sm">
             <label>
-              <span className="block text-xs text-gray-600">Candidate</span>
+              <span className="block text-xs text-slate-600">Candidate</span>
               <select
                 aria-label="Candidate version"
-                className="rounded border border-gray-300 px-1 py-0.5"
+                className="rounded-lg border border-slate-300 px-1 py-0.5"
                 value={candidate}
                 onChange={(e) => setCandidate(Number(e.target.value))}
               >
@@ -106,10 +106,10 @@ export function ReleasesPanel({ agentId, versions }: { agentId: string; versions
               </select>
             </label>
             <label>
-              <span className="block text-xs text-gray-600">Share of new calls</span>
+              <span className="block text-xs text-slate-600">Share of new calls</span>
               <select
                 aria-label="Share of calls"
-                className="rounded border border-gray-300 px-1 py-0.5"
+                className="rounded-lg border border-slate-300 px-1 py-0.5"
                 value={percent}
                 onChange={(e) => setPercent(Number(e.target.value))}
               >
@@ -123,7 +123,7 @@ export function ReleasesPanel({ agentId, versions }: { agentId: string; versions
             <button
               type="button"
               onClick={() => void split(candidate, percent)}
-              className="rounded bg-blue-600 px-3 py-1 text-white"
+              className="rounded-lg bg-brand-600 px-3 py-1 text-white"
             >
               Start
             </button>
@@ -131,13 +131,13 @@ export function ReleasesPanel({ agentId, versions }: { agentId: string; versions
               <button
                 type="button"
                 onClick={() => void split(overview.split!.version, 0)}
-                className="rounded border border-gray-300 px-3 py-1"
+                className="rounded-lg border border-slate-300 px-3 py-1"
               >
                 Stop
               </button>
             )}
           </div>
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-slate-500">
             The candidate needs a finished eval run. Each call keeps the version it started with.
           </p>
         </div>
@@ -154,7 +154,7 @@ export function ReleasesPanel({ agentId, versions }: { agentId: string; versions
           <ul className="mt-1 space-y-1 text-xs">
             {overview.history.map((r) => (
               <li key={r.id}>
-                <span className="text-gray-400">{new Date(r.createdAt).toLocaleString()}</span>{" "}
+                <span className="text-slate-400">{new Date(r.createdAt).toLocaleString()}</span>{" "}
                 {r.note}
               </li>
             ))}
@@ -164,7 +164,7 @@ export function ReleasesPanel({ agentId, versions }: { agentId: string; versions
       <section className="overflow-y-auto p-6">
         <h2 className="font-semibold">Compare versions</h2>
         <table className="mt-2 w-full text-sm" data-testid="version-comparison">
-          <thead className="text-left text-xs text-gray-500">
+          <thead className="text-left text-xs text-slate-500">
             <tr>
               <th>Version</th>
               <th>Eval score</th>
@@ -177,11 +177,11 @@ export function ReleasesPanel({ agentId, versions }: { agentId: string; versions
           </thead>
           <tbody>
             {overview.comparison.map((row) => (
-              <tr key={row.version} className="border-t border-gray-100">
+              <tr key={row.version} className="border-t border-slate-100">
                 <td>
                   v{row.version}
                   {row.version === overview.liveVersion && (
-                    <span className="ml-1 rounded bg-emerald-100 px-1 text-xs text-emerald-800">
+                    <span className="ml-1 rounded-lg bg-emerald-100 px-1 text-xs text-emerald-800">
                       live
                     </span>
                   )}

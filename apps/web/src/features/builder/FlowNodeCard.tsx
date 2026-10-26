@@ -48,30 +48,30 @@ export function FlowNodeCard({ id, type, data, selected }: NodeProps<BuilderNode
     <div
       data-testid={`node-${node.type}`}
       className={`w-56 rounded-md border-2 px-3 py-2 text-left shadow-sm ${kind.accent} ${
-        isActive ? "ring-4 ring-emerald-400" : selected ? "ring-2 ring-blue-400" : ""
+        isActive ? "ring-4 ring-emerald-400" : selected ? "ring-2 ring-brand-400" : ""
       } ${hasIssues ? "outline-2 outline-offset-2 outline-red-500" : ""}`}
     >
       {node.type !== "start" && <Handle type="target" position={Position.Top} />}
-      <div className="text-xs font-semibold tracking-wide text-gray-600 uppercase">
+      <div className="text-xs font-semibold tracking-wide text-slate-600 uppercase">
         {kind.label}
       </div>
       {node.type === "branch" ? (
-        <ol className="mt-1 space-y-0.5 text-xs text-gray-900">
+        <ol className="mt-1 space-y-0.5 text-xs text-slate-900">
           {node.data.conditions.map((condition, index) => (
             <li key={condition.id} className="truncate">
               {index + 1}.{" "}
-              {condition.label || <span className="text-gray-400 italic">no description</span>}
+              {condition.label || <span className="text-slate-400 italic">no description</span>}
             </li>
           ))}
         </ol>
       ) : (
-        <div className="mt-1 line-clamp-2 min-h-5 text-sm text-gray-900">
-          {nodeSummary(node) || <span className="text-gray-400 italic">Not set up yet</span>}
+        <div className="mt-1 line-clamp-2 min-h-5 text-sm text-slate-900">
+          {nodeSummary(node) || <span className="text-slate-400 italic">Not set up yet</span>}
         </div>
       )}
 
       {branchOutputs.length > 0 ? (
-        <div className="mt-2 -mb-2 flex gap-1 text-[10px] text-gray-600">
+        <div className="mt-2 -mb-2 flex gap-1 text-[10px] text-slate-600">
           {branchOutputs.map((output) => (
             // Each output's handle sits at the bottom centre of its own label. Only the text is
             // truncated: overflow-hidden on this box would clip the handle and make it hard to grab.

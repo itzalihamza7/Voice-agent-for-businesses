@@ -14,14 +14,14 @@ const OUTCOME_STYLE: Record<string, string> = {
 export function CallTable({ calls }: { calls: CallRow[] }) {
   if (calls.length === 0) {
     return (
-      <p className="mt-4 text-gray-500">
+      <p className="mt-4 text-slate-500">
         No calls yet. Finish a test call in the builder, or call an agent&apos;s number.
       </p>
     );
   }
   return (
     <table className="mt-2 w-full text-sm" data-testid="call-table">
-      <thead className="text-left text-xs text-gray-500">
+      <thead className="text-left text-xs text-slate-500">
         <tr>
           <th className="py-1">When</th>
           <th>Agent</th>
@@ -36,14 +36,17 @@ export function CallTable({ calls }: { calls: CallRow[] }) {
       </thead>
       <tbody>
         {calls.map((call) => (
-          <tr key={call.id} className="border-t border-gray-100 align-top">
+          <tr key={call.id} className="border-t border-slate-100 align-top">
             <td className="py-1.5">
-              <Link href={`/dashboard/calls/${call.id}`} className="text-blue-600 underline">
+              <Link
+                href={`/dashboard/calls/${call.id}`}
+                className="text-brand-600 font-medium hover:underline"
+              >
                 {new Date(call.startedAt).toLocaleString()}
               </Link>
             </td>
             <td>
-              {call.agentName} <span className="text-gray-400">v{call.agentVersion}</span>
+              {call.agentName} <span className="text-slate-400">v{call.agentVersion}</span>
             </td>
             <td>
               {call.source === "phone"
@@ -52,10 +55,10 @@ export function CallTable({ calls }: { calls: CallRow[] }) {
                   ? "💬 website"
                   : "test"}
             </td>
-            <td>{call.intent ?? <span className="text-gray-400">analysing…</span>}</td>
+            <td>{call.intent ?? <span className="text-slate-400">analysing…</span>}</td>
             <td>
               {call.outcome && (
-                <span className={`rounded px-1.5 text-xs ${OUTCOME_STYLE[call.outcome] ?? ""}`}>
+                <span className={`rounded-lg px-1.5 text-xs ${OUTCOME_STYLE[call.outcome] ?? ""}`}>
                   {call.outcome}
                 </span>
               )}

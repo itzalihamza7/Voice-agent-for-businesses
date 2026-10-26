@@ -82,23 +82,23 @@ export function SearchPlayground() {
     <section className="space-y-4 overflow-y-auto p-6" data-testid="search-playground">
       <div>
         <h2 className="font-semibold">Search playground</h2>
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-slate-500">
           See what each search method finds. Calls use hybrid search with the first embedding model.
         </p>
       </div>
       <textarea
         aria-label="Search question"
-        className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+        className="w-full rounded-lg border border-slate-300 px-2 py-1 text-sm"
         rows={2}
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />
       <div className="grid grid-cols-3 gap-2 text-xs">
         <label>
-          <span className="text-gray-600">Embedding model</span>
+          <span className="text-slate-600">Embedding model</span>
           <select
             aria-label="Embedding model"
-            className="mt-1 w-full rounded border border-gray-300 px-1 py-0.5"
+            className="mt-1 w-full rounded-lg border border-slate-300 px-1 py-0.5"
             value={embeddingModel}
             onChange={(e) => setEmbeddingModel(e.target.value)}
           >
@@ -116,10 +116,10 @@ export function SearchPlayground() {
           ] as const
         ).map(([label, value, set]) => (
           <label key={label}>
-            <span className="text-gray-600">{label}</span>
+            <span className="text-slate-600">{label}</span>
             <select
               aria-label={label}
-              className="mt-1 w-full rounded border border-gray-300 px-1 py-0.5"
+              className="mt-1 w-full rounded-lg border border-slate-300 px-1 py-0.5"
               value={value}
               onChange={(e) => set(e.target.value)}
             >
@@ -137,14 +137,14 @@ export function SearchPlayground() {
         type="button"
         onClick={search}
         disabled={!query.trim() || !embeddingModel || state.busy}
-        className="rounded bg-blue-600 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-40"
+        className="rounded-lg bg-brand-600 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-40"
       >
         {state.busy ? "Searching…" : "Search"}
       </button>
       {state.error && <p className="text-sm text-red-600">{state.error}</p>}
       {outcome && (
         <>
-          <p className="text-xs text-gray-500" data-testid="search-summary">
+          <p className="text-xs text-slate-500" data-testid="search-summary">
             {outcome.searchQuery !== outcome.query && (
               <>Searched for &quot;{outcome.searchQuery}&quot; · </>
             )}
@@ -170,21 +170,21 @@ export function SearchPlayground() {
 function Results({ title, hits, testId }: { title: string; hits: Hit[]; testId: string }) {
   return (
     <div className="space-y-1" data-testid={testId}>
-      <h3 className="text-xs font-semibold text-gray-700">{title}</h3>
-      {hits.length === 0 && <p className="text-xs text-gray-400">Nothing (relevant) found</p>}
+      <h3 className="text-xs font-semibold text-slate-700">{title}</h3>
+      {hits.length === 0 && <p className="text-xs text-slate-400">Nothing (relevant) found</p>}
       {hits.slice(0, 5).map((hit, i) => (
         <div
           key={hit.chunkId}
-          className="rounded border border-gray-200 p-2 text-xs"
+          className="rounded-lg border border-slate-200 p-2 text-xs"
           data-testid="hit"
         >
           <div className="flex justify-between gap-1">
             <span className="font-medium">
               {i + 1}. {hit.heading ?? hit.documentTitle}
             </span>
-            <span className="text-gray-400">{hit.score.toFixed(3)}</span>
+            <span className="text-slate-400">{hit.score.toFixed(3)}</span>
           </div>
-          <p className="line-clamp-3 text-gray-600">{hit.content}</p>
+          <p className="line-clamp-3 text-slate-600">{hit.content}</p>
         </div>
       ))}
     </div>

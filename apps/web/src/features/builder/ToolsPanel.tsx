@@ -30,11 +30,11 @@ const EXAMPLE_PARAMETERS = JSON.stringify(
 export function ToolsPanel({ config, onChange, available, problems }: Props) {
   const builtIns = available.filter((tool) => tool.source === "builtin");
   return (
-    <div className="grid min-h-0 flex-1 grid-cols-2 divide-x divide-gray-200">
+    <div className="grid min-h-0 flex-1 grid-cols-2 divide-x divide-slate-200">
       <section className="space-y-6 overflow-y-auto p-6" data-testid="tools-editor">
         <div>
           <h2 className="text-lg font-semibold">Webhook tools</h2>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-slate-500">
             Your own endpoint: we POST {'{ "arguments": {...} }'} as JSON and use the JSON object it
             returns. Private network addresses are blocked unless allowed for local development.
           </p>
@@ -58,7 +58,7 @@ export function ToolsPanel({ config, onChange, available, problems }: Props) {
           </div>
           <button
             type="button"
-            className="mt-2 text-sm text-blue-600 underline"
+            className="mt-2 text-sm text-brand-600 font-medium hover:underline"
             onClick={() =>
               onChange({
                 ...config,
@@ -80,7 +80,7 @@ export function ToolsPanel({ config, onChange, available, problems }: Props) {
 
         <div>
           <h2 className="text-lg font-semibold">MCP servers</h2>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-slate-500">
             Any Model Context Protocol server (Streamable HTTP). Its tools are listed automatically,
             named <code>server_tool</code>. Try the demo server:{" "}
             <code>http://localhost:3000/api/demo-mcp</code>.
@@ -103,7 +103,7 @@ export function ToolsPanel({ config, onChange, available, problems }: Props) {
               return (
                 <div
                   key={index}
-                  className="space-y-2 rounded border border-gray-200 p-3"
+                  className="space-y-2 rounded-lg border border-slate-200 p-3"
                   data-testid="mcp-server"
                 >
                   <div className="flex gap-2">
@@ -115,7 +115,7 @@ export function ToolsPanel({ config, onChange, available, problems }: Props) {
                     <button
                       type="button"
                       aria-label={`Remove MCP server ${index + 1}`}
-                      className="self-end pb-1 text-gray-400 hover:text-red-600"
+                      className="self-end pb-1 text-slate-400 hover:text-red-600"
                       onClick={() =>
                         onChange({
                           ...config,
@@ -141,7 +141,7 @@ export function ToolsPanel({ config, onChange, available, problems }: Props) {
                       Connected: {tools.map((t) => t.name).join(", ")}
                     </p>
                   ) : (
-                    <p className="text-xs text-gray-500">Connecting…</p>
+                    <p className="text-xs text-slate-500">Connecting…</p>
                   )}
                 </div>
               );
@@ -149,7 +149,7 @@ export function ToolsPanel({ config, onChange, available, problems }: Props) {
           </div>
           <button
             type="button"
-            className="mt-2 text-sm text-blue-600 underline"
+            className="mt-2 text-sm text-brand-600 font-medium hover:underline"
             onClick={() =>
               onChange({
                 ...config,
@@ -167,19 +167,19 @@ export function ToolsPanel({ config, onChange, available, problems }: Props) {
 
       <section className="space-y-3 overflow-y-auto p-6">
         <h2 className="text-lg font-semibold">Built-in tools</h2>
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-slate-500">
           Always available. They use a mock booking system (open Monday–Saturday, 9:00–17:00; demo
           booking reference ABC123), so booking agents can be tested end to end.
         </p>
         {builtIns.map((tool) => (
           <div
             key={tool.name}
-            className="rounded border border-gray-200 p-3 text-sm"
+            className="rounded-lg border border-slate-200 p-3 text-sm"
             data-testid="builtin-tool"
           >
             <code className="font-semibold">{tool.name}</code>
-            <p className="text-gray-600">{tool.description}</p>
-            <p className="mt-1 text-xs text-gray-500">
+            <p className="text-slate-600">{tool.description}</p>
+            <p className="mt-1 text-xs text-slate-500">
               Arguments:{" "}
               {toolParameters(tool)
                 .map((p) => `${p.name}${p.required ? "*" : ""}`)
@@ -211,7 +211,7 @@ function WebhookEditor({
   const label = (field: string) => `Webhook ${index + 1}: ${field}`;
 
   return (
-    <div className="space-y-2 rounded border border-gray-200 p-3" data-testid="webhook-tool">
+    <div className="space-y-2 rounded-lg border border-slate-200 p-3" data-testid="webhook-tool">
       <div className="flex gap-2">
         <Field
           label={label("name")}
@@ -221,7 +221,7 @@ function WebhookEditor({
         <button
           type="button"
           aria-label={`Remove webhook ${index + 1}`}
-          className="self-end pb-1 text-gray-400 hover:text-red-600"
+          className="self-end pb-1 text-slate-400 hover:text-red-600"
           onClick={onRemove}
         >
           ✕
@@ -241,7 +241,7 @@ function WebhookEditor({
         <span className="font-medium">{label("arguments (JSON Schema)")}</span>
         <textarea
           aria-label={label("arguments (JSON Schema)")}
-          className="mt-1 w-full rounded border border-gray-300 px-2 py-1 font-mono text-xs"
+          className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1 font-mono text-xs"
           rows={6}
           value={schemaText}
           onChange={(event) => {
@@ -285,7 +285,7 @@ function Field({
       <span className="font-medium">{label}</span>
       <input
         aria-label={label}
-        className="mt-1 w-full rounded border border-gray-300 px-2 py-1"
+        className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1"
         value={value}
         onChange={(event) => onChange(event.target.value)}
       />

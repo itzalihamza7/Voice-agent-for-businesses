@@ -118,9 +118,12 @@ export function AddDocument({ onAdded }: { onAdded: () => Promise<void> }) {
   }
 
   return (
-    <div className="space-y-3 rounded border border-gray-200 p-4" data-testid="add-document">
+    <div className="space-y-3 rounded-lg border border-slate-200 p-4" data-testid="add-document">
       <h2 className="font-semibold">Add a document</h2>
-      <div className="flex overflow-hidden rounded border border-gray-300 text-sm" role="tablist">
+      <div
+        className="flex overflow-hidden rounded-lg border border-slate-300 text-sm"
+        role="tablist"
+      >
         {(["text", "url", "pdf"] as const).map((tab) => (
           <button
             key={tab}
@@ -128,7 +131,7 @@ export function AddDocument({ onAdded }: { onAdded: () => Promise<void> }) {
             role="tab"
             aria-selected={source === tab}
             onClick={() => setSource(tab)}
-            className={`flex-1 px-3 py-1 ${source === tab ? "bg-gray-800 text-white" : "hover:bg-gray-100"}`}
+            className={`flex-1 px-3 py-1 ${source === tab ? "bg-ink text-white" : "hover:bg-slate-100"}`}
           >
             {{ text: "Paste text", url: "Web page", pdf: "PDF" }[tab]}
           </button>
@@ -138,7 +141,7 @@ export function AddDocument({ onAdded }: { onAdded: () => Promise<void> }) {
         <div className="flex gap-2">
           <input
             aria-label="Page URL"
-            className="flex-1 rounded border border-gray-300 px-2 py-1 text-sm"
+            className="flex-1 rounded-lg border border-slate-300 px-2 py-1 text-sm"
             placeholder="https://your-business.com/faq"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
@@ -147,7 +150,7 @@ export function AddDocument({ onAdded }: { onAdded: () => Promise<void> }) {
             type="button"
             onClick={fetchPage}
             disabled={!url}
-            className="rounded border border-gray-300 px-3 text-sm"
+            className="rounded-lg border border-slate-300 px-3 text-sm"
           >
             Fetch
           </button>
@@ -164,14 +167,14 @@ export function AddDocument({ onAdded }: { onAdded: () => Promise<void> }) {
       )}
       <input
         aria-label="Document title"
-        className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+        className="w-full rounded-lg border border-slate-300 px-2 py-1 text-sm"
         placeholder="Title, e.g. FAQ"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
       />
       <textarea
         aria-label="Document text"
-        className="w-full rounded border border-gray-300 px-2 py-1 font-mono text-xs"
+        className="w-full rounded-lg border border-slate-300 px-2 py-1 font-mono text-xs"
         rows={8}
         placeholder={"# Prices\nA haircut costs £30.\n\n# Opening hours\n…"}
         value={text}
@@ -184,7 +187,7 @@ export function AddDocument({ onAdded }: { onAdded: () => Promise<void> }) {
         <span className="font-medium">Split into chunks by</span>
         <select
           aria-label="Chunking"
-          className="mt-1 w-full rounded border border-gray-300 px-2 py-1"
+          className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1"
           value={chunking}
           onChange={(e) => {
             setChunking(e.target.value as Chunking);
@@ -195,14 +198,14 @@ export function AddDocument({ onAdded }: { onAdded: () => Promise<void> }) {
           <option value="fixed">Fixed size</option>
           <option value="semantic">Meaning (semantic)</option>
         </select>
-        <span className="mt-1 block text-xs text-gray-500">{CHUNKING_HELP[chunking]}</span>
+        <span className="mt-1 block text-xs text-slate-500">{CHUNKING_HELP[chunking]}</span>
       </label>
       <div className="flex gap-2">
         <button
           type="button"
           onClick={showPreview}
           disabled={!text.trim()}
-          className="rounded border border-gray-300 px-3 py-1 text-sm disabled:opacity-40"
+          className="rounded-lg border border-slate-300 px-3 py-1 text-sm disabled:opacity-40"
         >
           Preview chunks
         </button>
@@ -210,12 +213,12 @@ export function AddDocument({ onAdded }: { onAdded: () => Promise<void> }) {
           type="button"
           onClick={save}
           disabled={!text.trim() || !title.trim() || Boolean(status.busy)}
-          className="rounded bg-blue-600 px-3 py-1 text-sm text-white disabled:opacity-40"
+          className="rounded-lg bg-brand-600 px-3 py-1 text-sm text-white disabled:opacity-40"
         >
           Save to knowledge base
         </button>
       </div>
-      {status.busy && <p className="text-sm text-gray-500">{status.busy}</p>}
+      {status.busy && <p className="text-sm text-slate-500">{status.busy}</p>}
       {status.error && (
         <p className="text-sm text-red-600" data-testid="add-error">
           {status.error}

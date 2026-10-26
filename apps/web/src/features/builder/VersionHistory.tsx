@@ -14,15 +14,15 @@ interface Props {
 export function VersionHistory({ versions, openVersion, onOpen }: Props) {
   return (
     <div className="space-y-1">
-      <h2 className="text-sm font-semibold text-gray-700">Versions</h2>
+      <h2 className="text-sm font-semibold text-slate-700">Versions</h2>
       <ul className="space-y-1">
         {[...versions].reverse().map((version) => (
           <li key={version.version}>
             <button
               type="button"
               onClick={() => onOpen(version)}
-              className={`w-full rounded px-2 py-1 text-left text-sm ${
-                version.version === openVersion ? "bg-blue-100 font-medium" : "hover:bg-gray-100"
+              className={`w-full rounded-lg px-2 py-1 text-left text-sm ${
+                version.version === openVersion ? "bg-brand-100 font-medium" : "hover:bg-slate-100"
               }`}
             >
               v{version.version} · {version.name}

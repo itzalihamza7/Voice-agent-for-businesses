@@ -151,7 +151,15 @@ export async function listCalls(businessId?: string, take = 200): Promise<CallRo
     take,
     include: { agent: { select: { name: true } }, _count: { select: { turns: true } } },
   });
-  return rows.map((row) => ({
+  return rows.map(callRow);
+}
+
+type ListedCall = Prisma.CallGetPayload<{
+  include: { agent: { select: { name: true } }; _count: { select: { turns: true } } };
+}>;
+
+function callRow(row: ListedCall): CallRow {
+  return {
     id: row.id,
     agentId: row.agentId,
     agentName: row.agent.name,
@@ -167,18 +175,23 @@ export async function listCalls(businessId?: string, take = 200): Promise<CallRo
     outcome: row.outcome,
     summary: row.summary,
     flags: flagsOf(row.flags),
-  }));
+  };
 }
 
 export async function getCall(id: string, businessId?: string) {
   const business = businessId ?? (await currentBusinessId());
   const row = await getPrisma().call.findFirst({
     where: { id, businessId: business },
-    include: { agent: { select: { name: true } }, turns: { orderBy: { atMs: "asc" } } },
+    include: {
+      agent: { select: { name: true } },
+      turns: { orderBy: { atMs: "asc" } },
+      _count: { select: { turns: true } },
+    },
   });
   if (!row) return null;
+  // Read directly: an older call isn't in the dashboard's latest-200 list.
   return {
-    ...(await listCalls(business)).find((c) => c.id === id)!,
+    ...callRow(row),
     transcript: row.turns.map((t) => ({ speaker: t.speaker, text: t.text })),
     trace: (row.trace ?? []) as unknown as TraceEntry[],
   };

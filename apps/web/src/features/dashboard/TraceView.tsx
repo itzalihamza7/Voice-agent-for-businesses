@@ -38,7 +38,7 @@ export function TraceView({ trace }: { trace: TraceEntry[] }) {
     <ol className="space-y-1 text-xs" data-testid="trace">
       {trace.map((entry, i) => (
         <li key={i} className="flex gap-2">
-          <span className="w-14 shrink-0 text-right text-gray-400">
+          <span className="w-14 shrink-0 text-right text-slate-400">
             {(entry.atMs / 1000).toFixed(1)} s
           </span>
           <span>

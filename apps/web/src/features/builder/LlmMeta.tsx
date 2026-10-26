@@ -10,7 +10,7 @@ export function LlmMeta({ llm }: { llm: LlmCallInfo }) {
   }
   parts.push(llm.costUsd === null ? "cost unknown" : formatCost(llm.costUsd));
   return (
-    <span className="block text-[10px] text-gray-400 not-italic" data-testid="llm-meta">
+    <span className="block text-[10px] text-slate-400 not-italic" data-testid="llm-meta">
       {parts.join(" · ")}
       {llm.promptCut && (
         <span className="block text-amber-600" data-testid="prompt-cut-note">

@@ -163,10 +163,19 @@ export async function listLanguageModels(
     const body = (await response.json()) as {
       models?: {
         name: string;
-        details?: { parameter_size?: string; quantization_level?: string };
+        details?: {
+          parameter_size?: string;
+          quantization_level?: string;
+          family?: string;
+          families?: string[] | null;
+        };
       }[];
     };
     for (const m of body.models ?? []) {
+      // Embedding models (nomic-embed-text, mxbai-embed-large, …) can't chat: they turn text into
+      // vectors for the knowledge base. Offering one as a chat model only gives errors.
+      const families = [m.details?.family, ...(m.details?.families ?? [])].join(" ");
+      if (/embed/i.test(m.name) || /bert/i.test(families)) continue;
       const details = [m.details?.parameter_size, m.details?.quantization_level].filter(Boolean);
       models.push({
         provider: "ollama",

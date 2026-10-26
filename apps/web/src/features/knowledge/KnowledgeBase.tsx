@@ -69,7 +69,7 @@ export function KnowledgeBase({ initialDocuments }: { initialDocuments: Document
   }
 
   return (
-    <div className="grid min-h-0 flex-1 grid-cols-2 divide-x divide-gray-200">
+    <div className="grid min-h-0 flex-1 grid-cols-2 divide-x divide-slate-200">
       <section className="space-y-6 overflow-y-auto p-6">
         <div>
           <div className="flex items-baseline justify-between gap-2">
@@ -78,7 +78,7 @@ export function KnowledgeBase({ initialDocuments }: { initialDocuments: Document
               type="button"
               onClick={addExamples}
               disabled={examples.busy}
-              className="text-xs text-blue-600 underline disabled:opacity-40"
+              className="text-xs text-brand-600 font-medium hover:underline disabled:opacity-40"
               title="A hair salon's FAQ, price list, policies and about page, for trying things out"
             >
               {examples.busy ? "Adding examples…" : "Add example documents"}
@@ -91,7 +91,7 @@ export function KnowledgeBase({ initialDocuments }: { initialDocuments: Document
           )}
           {examples.error && <p className="mt-1 text-xs text-red-600">{examples.error}</p>}
           {documents.length === 0 ? (
-            <p className="mt-2 text-sm text-gray-500">
+            <p className="mt-2 text-sm text-slate-500">
               No documents yet. Add your FAQ, price list or website below.
             </p>
           ) : (
@@ -99,7 +99,7 @@ export function KnowledgeBase({ initialDocuments }: { initialDocuments: Document
               {documents.map((doc) => (
                 <li
                   key={doc.id}
-                  className="rounded border border-gray-200 p-3 text-sm"
+                  className="rounded-lg border border-slate-200 p-3 text-sm"
                   data-testid="document"
                 >
                   <div className="flex items-baseline justify-between gap-2">
@@ -107,7 +107,7 @@ export function KnowledgeBase({ initialDocuments }: { initialDocuments: Document
                     <span className="flex gap-3 text-xs">
                       <button
                         type="button"
-                        className="text-blue-600 underline"
+                        className="text-brand-600 font-medium hover:underline"
                         onClick={() => toggleChunks(doc.id)}
                       >
                         {openChunks[doc.id] ? "Hide chunks" : "Chunks"}
@@ -121,7 +121,7 @@ export function KnowledgeBase({ initialDocuments }: { initialDocuments: Document
                       </button>
                     </span>
                   </div>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-slate-500">
                     {doc.sourceType}
                     {doc.sourceUrl ? ` · ${doc.sourceUrl}` : ""} · {doc.chunkCount} chunks (
                     {doc.chunking}) · embedded with {doc.models.join(", ")}
@@ -143,8 +143,8 @@ export function ChunkList({ chunks }: { chunks: { heading: string | null; conten
   return (
     <ol className="mt-2 max-h-80 space-y-1 overflow-y-auto" data-testid="chunk-list">
       {chunks.map((chunk, i) => (
-        <li key={i} className="rounded bg-gray-50 p-2 text-xs">
-          <span className="text-gray-400">
+        <li key={i} className="rounded-lg bg-slate-50 p-2 text-xs">
+          <span className="text-slate-400">
             #{i + 1} · {chunk.content.length} chars
           </span>
           {chunk.heading && <span className="ml-1 font-semibold">{chunk.heading}</span>}

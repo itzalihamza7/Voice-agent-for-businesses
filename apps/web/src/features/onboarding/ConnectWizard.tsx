@@ -145,7 +145,7 @@ export function ConnectWizard({ businessName: initialName }: { businessName: str
               <ul className="mt-3 max-h-64 space-y-1 overflow-y-auto pr-1 text-sm">
                 {scan.pages.map((page) => (
                   <li key={page}>
-                    <label className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 hover:bg-slate-50">
+                    <label className="flex cursor-pointer items-center gap-2 rounded-lg px-1 py-0.5 hover:bg-slate-50">
                       <input
                         type="checkbox"
                         className="accent-brand-600"

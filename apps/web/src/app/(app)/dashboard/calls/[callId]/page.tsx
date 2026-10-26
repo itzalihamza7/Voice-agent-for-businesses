@@ -20,8 +20,11 @@ export default async function CallDetailPage({ params }: { params: Promise<{ cal
       <h1 className="text-2xl font-semibold tracking-tight">
         {call.agentName} v{call.agentVersion} · {new Date(call.startedAt).toLocaleString()}
       </h1>
-      <p className="text-sm text-gray-600" data-testid="call-analysis">
-        {call.summary ?? "Analysis pending…"}
+      <p className="text-sm text-slate-600" data-testid="call-analysis">
+        {call.summary ??
+          (call.source === "web" && call.durationMs !== null && !call.outcome
+            ? "Website chat: analysed when it ends."
+            : "Analysis pending…")}
         {call.intent && ` · intent: ${call.intent}`}
         {call.outcome && ` · outcome: ${call.outcome}`}
         {call.sentiment && ` · sentiment: ${call.sentiment}`}

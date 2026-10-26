@@ -21,8 +21,9 @@ test("create an agent and save a version in the builder", async ({ page }) => {
   await page.getByLabel("Agent name").fill(`${name} (renamed)`);
   await page.getByRole("button", { name: "Save version" }).click();
   await expect(page.getByText("Saved as v2")).toBeVisible();
-  // Clean up through the database-free route: agents can't be deleted yet, so keep the name
-  // recognisable ("E2E ...") for manual cleanup.
+  // Clean up: the fixture agent goes again.
+  const agentId = /\/agents\/([^/]+)\/builder/.exec(page.url())?.[1];
+  expect((await page.request.delete(`/api/agents/${agentId}`)).status()).toBe(204);
 });
 
 test("the knowledge base lists documents and previews chunks", async ({ page }) => {
@@ -79,4 +80,5 @@ test("the website widget is public but only shows on the business's sites", asyn
     data: { token: "x".repeat(20), text: "hello" },
   });
   expect(reply.status()).toBe(403);
+  expect((await page.request.delete(`/api/agents/${agent.agentId}`)).status()).toBe(204);
 });

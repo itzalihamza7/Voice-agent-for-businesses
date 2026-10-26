@@ -39,13 +39,13 @@ export function NodeSettingsPanel({ node, issues, tools, onChange, onDelete }: P
     <div className="space-y-4">
       <div>
         <h2 className="font-semibold">{kind.label}</h2>
-        <p className="text-sm text-gray-500">{kind.description}</p>
+        <p className="text-sm text-slate-500">{kind.description}</p>
       </div>
 
       <Form node={node} tools={tools} onChange={onChange} />
 
       {issues.length > 0 && (
-        <ul className="space-y-1 rounded border border-red-200 bg-red-50 p-2 text-sm text-red-700">
+        <ul className="space-y-1 rounded-lg border border-red-200 bg-red-50 p-2 text-sm text-red-700">
           {issues.map((issue, index) => (
             // Two unnamed Branch paths can produce the same message, so the index is part of the key.
             <li key={`${index}-${issue.message}`}>{issue.message}</li>
@@ -69,7 +69,7 @@ export function NodeSettingsPanel({ node, issues, tools, onChange, onDelete }: P
 function Form({ node, tools, onChange }: Pick<Props, "node" | "tools" | "onChange">) {
   switch (node.type) {
     case "start":
-      return <p className="text-sm text-gray-500">Connect Start to the first step of the call.</p>;
+      return <p className="text-sm text-slate-500">Connect Start to the first step of the call.</p>;
     case "say":
       return (
         <TextArea
@@ -96,7 +96,7 @@ function Form({ node, tools, onChange }: Pick<Props, "node" | "tools" | "onChang
             <span className="font-medium">Expected answer</span>
             <select
               aria-label="Expected answer"
-              className="mt-1 w-full rounded border border-gray-300 px-2 py-1"
+              className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1"
               value={node.data.answerType}
               onChange={(event) =>
                 onChange({ ...node.data, answerType: event.target.value as AnswerType })
@@ -108,7 +108,7 @@ function Form({ node, tools, onChange }: Pick<Props, "node" | "tools" | "onChang
                 </option>
               ))}
             </select>
-            <span className="mt-1 block text-xs text-gray-500">
+            <span className="mt-1 block text-xs text-slate-500">
               {node.data.answerType === "text"
                 ? "Saved exactly as the caller says it."
                 : "Turned into a clean value; the caller is asked again if it isn't understood."}
@@ -129,7 +129,7 @@ function Form({ node, tools, onChange }: Pick<Props, "node" | "tools" | "onChang
           />
           <fieldset className="space-y-1">
             <legend className="text-sm font-medium">Tools the AI may use</legend>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-slate-500">
               The AI can call these (several times if needed) before it answers, e.g. to look up
               free times instead of guessing.
             </p>
@@ -150,7 +150,7 @@ function Form({ node, tools, onChange }: Pick<Props, "node" | "tools" | "onChang
                 />
                 <span>
                   <code className="text-xs">{tool.name}</code>
-                  <span className="block text-xs text-gray-500">{tool.description}</span>
+                  <span className="block text-xs text-slate-500">{tool.description}</span>
                 </span>
               </label>
             ))}
@@ -218,7 +218,7 @@ function Form({ node, tools, onChange }: Pick<Props, "node" | "tools" | "onChang
               <button
                 type="button"
                 aria-label={`Remove path ${index + 1}`}
-                className="self-end pb-1 text-gray-400 hover:text-red-600"
+                className="self-end pb-1 text-slate-400 hover:text-red-600"
                 onClick={() =>
                   onChange({
                     conditions: node.data.conditions.filter((c) => c.id !== condition.id),
@@ -231,7 +231,7 @@ function Form({ node, tools, onChange }: Pick<Props, "node" | "tools" | "onChang
           ))}
           <button
             type="button"
-            className="text-sm text-blue-600 underline"
+            className="text-sm text-brand-600 font-medium hover:underline"
             onClick={() =>
               onChange({
                 conditions: [
@@ -243,7 +243,7 @@ function Form({ node, tools, onChange }: Pick<Props, "node" | "tools" | "onChang
           >
             + Add path
           </button>
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-slate-500">
             &quot;Otherwise&quot; is taken when no path matches. A rule (variable equals value) is
             checked first, in code: best for tool results, e.g. availability_requestedTimeFree =
             true. Otherwise the AI picks the path from what the caller said; keywords are used
@@ -260,7 +260,7 @@ function Form({ node, tools, onChange }: Pick<Props, "node" | "tools" | "onChang
             <span className="font-medium">Tool</span>
             <select
               aria-label="Tool"
-              className="mt-1 w-full rounded border border-gray-300 px-2 py-1"
+              className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1"
               value={node.data.toolName}
               onChange={(event) => onChange({ ...node.data, toolName: event.target.value })}
             >
@@ -274,12 +274,12 @@ function Form({ node, tools, onChange }: Pick<Props, "node" | "tools" | "onChang
                 </option>
               ))}
             </select>
-            {tool && <span className="mt-1 block text-xs text-gray-500">{tool.description}</span>}
+            {tool && <span className="mt-1 block text-xs text-slate-500">{tool.description}</span>}
           </label>
           {tool && (
             <fieldset className="space-y-2">
               <legend className="text-sm font-medium">Arguments</legend>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-slate-500">
                 Use {"{{variables}}"}, e.g. {"{{preferred_date}}"}. Leave empty to let the AI fill
                 it in from the conversation.
               </p>
@@ -305,7 +305,7 @@ function Form({ node, tools, onChange }: Pick<Props, "node" | "tools" | "onChang
             value={node.data.saveAs}
             onChange={(value) => onChange({ ...node.data, saveAs: value })}
           />
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-slate-500">
             The result&apos;s fields become variables
             {tool?.resultFields
               ? `: ${tool.resultFields.map((field) => `{{${saveAs}_${field}}}`).join(", ")}`
@@ -323,7 +323,7 @@ function Form({ node, tools, onChange }: Pick<Props, "node" | "tools" | "onChang
             value={node.data.query}
             onChange={(query) => onChange({ ...node.data, query })}
           />
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-slate-500">
             The search uses what the caller just asked; the topic helps when their words are vague.
             Documents are managed on the Knowledge base page.
           </p>
@@ -331,7 +331,7 @@ function Form({ node, tools, onChange }: Pick<Props, "node" | "tools" | "onChang
             <span className="font-medium">Search</span>
             <select
               aria-label="Search mode"
-              className="mt-1 w-full rounded border border-gray-300 px-2 py-1"
+              className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1"
               value={node.data.mode}
               onChange={(event) =>
                 onChange({ ...node.data, mode: event.target.value as typeof node.data.mode })
@@ -346,7 +346,7 @@ function Form({ node, tools, onChange }: Pick<Props, "node" | "tools" | "onChang
             <span className="font-medium">Passages to give the AI</span>
             <select
               aria-label="Passages to give the AI"
-              className="mt-1 w-full rounded border border-gray-300 px-2 py-1"
+              className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1"
               value={node.data.limit}
               onChange={(event) => onChange({ ...node.data, limit: Number(event.target.value) })}
             >
@@ -366,7 +366,7 @@ function Form({ node, tools, onChange }: Pick<Props, "node" | "tools" | "onChang
             />
             <span>
               Rewrite the question first
-              <span className="block text-xs text-gray-500">
+              <span className="block text-xs text-slate-500">
                 The AI turns spoken words into a search query (~1 s).
               </span>
             </span>
@@ -380,7 +380,7 @@ function Form({ node, tools, onChange }: Pick<Props, "node" | "tools" | "onChang
             />
             <span>
               Check relevance (rerank)
-              <span className="block text-xs text-gray-500">
+              <span className="block text-xs text-slate-500">
                 The AI rates the passages and drops unrelated ones (~1 s). Recommended: without it,
                 small models invented answers from unrelated passages.
               </span>
@@ -416,7 +416,7 @@ function Form({ node, tools, onChange }: Pick<Props, "node" | "tools" | "onChang
             value={node.data.message}
             onChange={(message) => onChange({ ...node.data, message })}
           />
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-slate-500">
             The other agent continues the call with its live version: same caller, same transcript
             and memory.
           </p>
@@ -453,7 +453,7 @@ function TextInput({ label, value, placeholder, onChange }: InputProps) {
   return (
     <Field label={label}>
       <input
-        className="mt-1 w-full rounded border border-gray-300 px-2 py-1"
+        className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1"
         value={value}
         placeholder={placeholder}
         onChange={(event) => onChange(event.target.value)}
@@ -466,7 +466,7 @@ function TextArea({ label, value, onChange, rows = 3 }: InputProps & { rows?: nu
   return (
     <Field label={label}>
       <textarea
-        className="mt-1 w-full rounded border border-gray-300 px-2 py-1"
+        className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1"
         rows={rows}
         value={value}
         onChange={(event) => onChange(event.target.value)}
@@ -491,7 +491,7 @@ function AgentPicker({ value, onChange }: { value: string; onChange: (agentId: s
   return (
     <Field label="Agent">
       <select
-        className="mt-1 w-full rounded border border-gray-300 px-2 py-1"
+        className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1"
         value={value}
         onChange={(e) => onChange(e.target.value)}
       >

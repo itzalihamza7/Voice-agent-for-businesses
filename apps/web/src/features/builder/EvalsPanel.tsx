@@ -120,10 +120,10 @@ export function EvalsPanel({ agentId, versions }: Props) {
 
   const modelSelect = (label: string, value: string, set: (v: string) => void, none = false) => (
     <label className="text-xs">
-      <span className="text-gray-600">{label}</span>
+      <span className="text-slate-600">{label}</span>
       <select
         aria-label={label}
-        className="mt-0.5 w-full rounded border border-gray-300 px-1 py-0.5"
+        className="mt-0.5 w-full rounded-lg border border-slate-300 px-1 py-0.5"
         value={value}
         onChange={(e) => set(e.target.value)}
       >
@@ -138,11 +138,11 @@ export function EvalsPanel({ agentId, versions }: Props) {
   );
 
   return (
-    <div className="grid min-h-0 flex-1 grid-cols-2 divide-x divide-gray-200" data-testid="evals">
+    <div className="grid min-h-0 flex-1 grid-cols-2 divide-x divide-slate-200" data-testid="evals">
       <section className="space-y-4 overflow-y-auto p-6">
         <div>
           <h2 className="font-semibold">Test cases ({cases.length})</h2>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-slate-500">
             Scripted callers are checked by code; simulated callers are played by a model. A judge
             model grades both.
           </p>
@@ -151,7 +151,7 @@ export function EvalsPanel({ agentId, versions }: Props) {
           {cases.map((c) => (
             <li
               key={c.id}
-              className="rounded border border-gray-200 p-2 text-sm"
+              className="rounded-lg border border-slate-200 p-2 text-sm"
               data-testid="eval-case"
             >
               <div className="flex justify-between gap-2">
@@ -164,7 +164,7 @@ export function EvalsPanel({ agentId, versions }: Props) {
                   Delete
                 </button>
               </div>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-slate-500">
                 {c.definition.kind === "script"
                   ? `Script: ${c.definition.turns.map((t) => `“${t}”`).join(" → ")}`
                   : `Simulated: ${c.definition.persona} Goal: ${c.definition.goal}`}
@@ -189,10 +189,10 @@ export function EvalsPanel({ agentId, versions }: Props) {
         <h2 className="font-semibold">Run</h2>
         <div className="grid grid-cols-2 gap-2">
           <label className="text-xs">
-            <span className="text-gray-600">Version</span>
+            <span className="text-slate-600">Version</span>
             <select
               aria-label="Version"
-              className="mt-0.5 w-full rounded border border-gray-300 px-1 py-0.5"
+              className="mt-0.5 w-full rounded-lg border border-slate-300 px-1 py-0.5"
               value={version}
               onChange={(e) => setVersion(Number(e.target.value))}
             >
@@ -217,7 +217,7 @@ export function EvalsPanel({ agentId, versions }: Props) {
           type="button"
           disabled={!cases.length || !agentChoice || progress !== null}
           onClick={() => void runEvals()}
-          className="rounded bg-blue-600 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-40"
+          className="rounded-lg bg-brand-600 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-40"
         >
           {progress
             ? `Running ${progress.done}/${progress.total}…`
@@ -236,7 +236,7 @@ export function EvalsPanel({ agentId, versions }: Props) {
         <div>
           <h3 className="text-sm font-semibold">History</h3>
           <table className="mt-1 w-full text-xs" data-testid="eval-runs">
-            <thead className="text-left text-gray-500">
+            <thead className="text-left text-slate-500">
               <tr>
                 <th>Version</th>
                 <th>Score</th>
@@ -247,11 +247,11 @@ export function EvalsPanel({ agentId, versions }: Props) {
             </thead>
             <tbody>
               {runs.map((run) => (
-                <tr key={run.id} className="border-t border-gray-100">
+                <tr key={run.id} className="border-t border-slate-100">
                   <td>
                     v{run.agentVersion}
                     {run.agentVersion === liveVersion && (
-                      <span className="ml-1 rounded bg-emerald-100 px-1 text-emerald-800">
+                      <span className="ml-1 rounded-lg bg-emerald-100 px-1 text-emerald-800">
                         live
                       </span>
                     )}
@@ -268,7 +268,7 @@ export function EvalsPanel({ agentId, versions }: Props) {
                     {run.status === "done" && run.agentVersion !== liveVersion && (
                       <button
                         type="button"
-                        className="text-blue-600 underline"
+                        className="text-brand-600 font-medium hover:underline"
                         onClick={() => void goLive(run.agentVersion)}
                       >
                         Go live
@@ -291,12 +291,12 @@ function Results({ results }: { results: EvalCaseResult[] }) {
       {results.map((r) => {
         const cost = r.llm.reduce((sum, c) => sum + (c.costUsd ?? 0), 0);
         return (
-          <li key={r.caseId} className="rounded border border-gray-200 p-2 text-xs">
+          <li key={r.caseId} className="rounded-lg border border-slate-200 p-2 text-xs">
             <div className="flex justify-between">
               <span className="font-medium">
                 {r.passed ? "✅" : "❌"} {r.name}
               </span>
-              <span className="text-gray-500">
+              <span className="text-slate-500">
                 {Math.round(r.score * 100)}% · {(r.latencyMs / 1000).toFixed(1)} s ·{" "}
                 {formatCost(cost)}
               </span>
@@ -317,7 +317,7 @@ function Results({ results }: { results: EvalCaseResult[] }) {
                 </p>
               ))}
             <details>
-              <summary className="cursor-pointer text-gray-500">Transcript</summary>
+              <summary className="cursor-pointer text-slate-500">Transcript</summary>
               {r.transcript
                 .filter((e) => e.role !== "system")
                 .map((e, i) => (
@@ -379,26 +379,26 @@ function AddCase({ onAdd }: { onAdd: (input: NewEvalCase) => Promise<void> }) {
       aria-label={label}
       placeholder={label}
       rows={rows}
-      className="w-full rounded border border-gray-300 px-2 py-1 text-xs"
+      className="w-full rounded-lg border border-slate-300 px-2 py-1 text-xs"
       value={value}
       onChange={(e) => set(e.target.value)}
     />
   );
 
   return (
-    <div className="space-y-2 rounded border border-gray-200 p-3" data-testid="add-eval-case">
+    <div className="space-y-2 rounded-lg border border-slate-200 p-3" data-testid="add-eval-case">
       <h3 className="text-sm font-semibold">Add a case</h3>
       <div className="flex gap-2">
         <input
           aria-label="Case name"
           placeholder="Name, e.g. Gives the Saturday hours"
-          className="flex-1 rounded border border-gray-300 px-2 py-1 text-xs"
+          className="flex-1 rounded-lg border border-slate-300 px-2 py-1 text-xs"
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
         <select
           aria-label="Case kind"
-          className="rounded border border-gray-300 text-xs"
+          className="rounded-lg border border-slate-300 text-xs"
           value={kind}
           onChange={(e) => setKind(e.target.value as "script" | "simulated")}
         >
@@ -413,7 +413,7 @@ function AddCase({ onAdd }: { onAdd: (input: NewEvalCase) => Promise<void> }) {
           {area("Agent must never say (one per line)", mustNotSay, setMustNotSay)}
           <select
             aria-label="Call should end"
-            className="rounded border border-gray-300 text-xs"
+            className="rounded-lg border border-slate-300 text-xs"
             value={endsWith}
             onChange={(e) => setEndsWith(e.target.value)}
           >
@@ -437,7 +437,7 @@ function AddCase({ onAdd }: { onAdd: (input: NewEvalCase) => Promise<void> }) {
           (kind === "script" ? !list(lines).length : !persona.trim() || !goal.trim())
         }
         onClick={() => void add()}
-        className="rounded border border-gray-300 px-3 py-1 text-xs disabled:opacity-40"
+        className="rounded-lg border border-slate-300 px-3 py-1 text-xs disabled:opacity-40"
       >
         Add case
       </button>

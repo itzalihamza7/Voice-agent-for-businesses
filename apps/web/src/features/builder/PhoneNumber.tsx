@@ -49,7 +49,7 @@ export function PhoneNumber({ agentId }: { agentId: string }) {
       <input
         aria-label="Phone number"
         placeholder="+441632960000"
-        className={`w-36 rounded border px-1 py-0.5 ${error ? "border-red-500" : "border-gray-300"}`}
+        className={`w-36 rounded-lg border px-1 py-0.5 ${error ? "border-red-500" : "border-slate-300"}`}
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && void save()}

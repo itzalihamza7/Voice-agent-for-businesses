@@ -47,14 +47,14 @@ export default async function CallsPage() {
         <section className="card p-5">
           <h2 className="font-semibold">What callers call about</h2>
           {topics.length === 0 ? (
-            <p className="text-sm text-gray-500">Topics appear once calls have been analysed.</p>
+            <p className="text-sm text-slate-500">Topics appear once calls have been analysed.</p>
           ) : (
             <ul className="mt-2 space-y-2 text-sm" data-testid="topics">
               {topics.map((topic) => (
                 <li key={topic.label}>
                   <span className="font-medium">{topic.label}</span>{" "}
-                  <span className="text-gray-500">({topic.calls})</span>
-                  <p className="text-xs text-gray-500">{topic.examples[0]}</p>
+                  <span className="text-slate-500">({topic.calls})</span>
+                  <p className="text-xs text-slate-500">{topic.examples[0]}</p>
                 </li>
               ))}
             </ul>
@@ -63,7 +63,7 @@ export default async function CallsPage() {
         <section className="card p-5">
           <h2 className="font-semibold">Calls that need a look</h2>
           {attention.length === 0 ? (
-            <p className="text-sm text-gray-500">Nothing flagged.</p>
+            <p className="text-sm text-slate-500">Nothing flagged.</p>
           ) : (
             <ul className="mt-2 space-y-1 text-sm">
               {attention.map((call) => (

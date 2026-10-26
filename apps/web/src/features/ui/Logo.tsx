@@ -1,27 +1,29 @@
 import Link from "next/link";
 import { BRAND } from "./brand";
 
-/** The mark: five sound bars that dip into a V, on a violet tile. */
+/**
+ * The mark: five sound bars that dip into a V, on a violet tile. The tile is a CSS gradient, not
+ * an SVG one: an SVG gradient is found by id, and when the copy holding it is hidden (e.g. the
+ * desktop-only panel on a phone) every other copy of the logo loses its colour.
+ */
 export function LogoMark({ className = "h-8 w-8" }: { className?: string }) {
   return (
-    <svg viewBox="0 0 32 32" className={className} aria-hidden="true">
-      <defs>
-        <linearGradient id="vesper-mark" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#a48bff" />
-          <stop offset="1" stopColor="#5a2fe0" />
-        </linearGradient>
-      </defs>
-      <rect width="32" height="32" rx="9" fill="url(#vesper-mark)" />
-      {[
-        [6.2, 8],
-        [10.6, 11],
-        [15, 15.5],
-        [19.4, 11],
-        [23.8, 8],
-      ].map(([x, y]) => (
-        <rect key={x} x={x} y={y} width="2.4" height={24 - y!} rx="1.2" fill="white" />
-      ))}
-    </svg>
+    <span
+      className={`inline-flex shrink-0 items-center justify-center rounded-[28%] bg-linear-to-br from-brand-400 to-brand-700 ${className}`}
+      aria-hidden="true"
+    >
+      <svg viewBox="0 0 32 32" className="h-full w-full">
+        {[
+          [6.2, 8],
+          [10.6, 11],
+          [15, 15.5],
+          [19.4, 11],
+          [23.8, 8],
+        ].map(([x, y]) => (
+          <rect key={x} x={x} y={y} width="2.4" height={24 - y!} rx="1.2" fill="white" />
+        ))}
+      </svg>
+    </span>
   );
 }
 

@@ -41,6 +41,9 @@ describe("listLanguageModels", () => {
       Response.json({
         models: [
           { name: "qwen3:8b", details: { parameter_size: "8.2B", quantization_level: "Q4_K_M" } },
+          // Embedding models can't chat, so they aren't offered.
+          { name: "nomic-embed-text:latest", details: { family: "nomic-bert" } },
+          { name: "custom-vectors:1", details: { families: ["bert"] } },
         ],
       }),
     );

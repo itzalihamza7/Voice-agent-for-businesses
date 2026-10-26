@@ -243,7 +243,7 @@ export function TestChat({
           type="button"
           onClick={start}
           disabled={pending}
-          className="text-sm text-blue-600 underline"
+          className="text-sm text-brand-600 font-medium hover:underline"
         >
           {testedFlow ? "Restart" : "Start test call"}
         </button>
@@ -253,38 +253,38 @@ export function TestChat({
         <button
           type="button"
           onClick={() => (voice.status === "off" ? void voice.start() : voice.stop())}
-          className={`rounded border px-2 py-1 ${voice.status === "off" ? "border-gray-300" : "border-rose-500 bg-rose-50 text-rose-700"}`}
+          className={`rounded-lg border px-2 py-1 ${voice.status === "off" ? "border-slate-300" : "border-rose-500 bg-rose-50 text-rose-700"}`}
         >
           {voice.status === "off" ? "🎙️ Voice off" : "🎙️ Voice on"}
         </button>
         {voice.status !== "off" && (
           <>
-            <span className="h-2 w-16 overflow-hidden rounded bg-gray-200">
+            <span className="h-2 w-16 overflow-hidden rounded-lg bg-slate-200">
               <span
                 className="block h-full bg-rose-500"
                 style={{ width: `${Math.min(100, voice.level * 800)}%` }}
               />
             </span>
-            <span className="text-gray-500">{voice.status}…</span>
+            <span className="text-slate-500">{voice.status}…</span>
           </>
         )}
       </div>
       <div className="grid grid-cols-2 gap-2 text-xs">
         <label>
-          <span className="text-gray-600">Caller&apos;s number (memory)</span>
+          <span className="text-slate-600">Caller&apos;s number (memory)</span>
           <input
             aria-label="Caller's number"
-            className="mt-0.5 w-full rounded border border-gray-300 px-1 py-0.5"
+            className="mt-0.5 w-full rounded-lg border border-slate-300 px-1 py-0.5"
             placeholder="none: no memory"
             value={callerPhone}
             onChange={(event) => setCallerPhone(event.target.value)}
           />
         </label>
         <label>
-          <span className="text-gray-600">Context budget</span>
+          <span className="text-slate-600">Context budget</span>
           <select
             aria-label="Context budget"
-            className="mt-0.5 w-full rounded border border-gray-300 px-1 py-0.5"
+            className="mt-0.5 w-full rounded-lg border border-slate-300 px-1 py-0.5"
             value={contextBudget}
             onChange={(event) => setContextBudget(Number(event.target.value))}
           >
@@ -296,7 +296,7 @@ export function TestChat({
           </select>
         </label>
       </div>
-      <p className="text-xs text-gray-500">
+      <p className="text-xs text-slate-500">
         You play the caller. Uses the flow on the canvas, saved or not. Models can be changed
         mid-call.
       </p>
@@ -305,28 +305,28 @@ export function TestChat({
         {messages.map((message, index) => (
           <MessageBubble key={index} message={message} />
         ))}
-        {pending && <p className="text-xs text-gray-400">…</p>}
+        {pending && <p className="text-xs text-slate-400">…</p>}
         <div ref={endRef} />
       </div>
 
       {waitingFor && !pending && (
-        <div className="space-y-2 border-t border-gray-200 pt-3">
+        <div className="space-y-2 border-t border-slate-200 pt-3">
           {waitingFor === "path" ? (
             <>
               <input
                 aria-label="What the caller says (optional)"
-                className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+                className="w-full rounded-lg border border-slate-300 px-2 py-1 text-sm"
                 placeholder="What the caller says (optional)…"
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
               />
-              <p className="text-xs font-medium text-gray-600">Which path does the call take?</p>
+              <p className="text-xs font-medium text-slate-600">Which path does the call take?</p>
               {paths.map((path, index) => (
                 <button
                   key={path.handle}
                   type="button"
                   onClick={() => choosePath(path.handle)}
-                  className="block w-full rounded border border-amber-300 bg-amber-50 px-2 py-1 text-left text-sm hover:bg-amber-100"
+                  className="block w-full rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-left text-sm hover:bg-amber-100"
                 >
                   {path.label === "Otherwise" ? "Otherwise" : `${index + 1}. ${path.label}`}
                 </button>
@@ -337,7 +337,7 @@ export function TestChat({
               <input
                 aria-label="Caller's answer"
                 autoFocus
-                className="flex-1 rounded border border-gray-300 px-2 py-1 text-sm"
+                className="flex-1 rounded-lg border border-slate-300 px-2 py-1 text-sm"
                 placeholder={
                   waitingFor === "callerMessage"
                     ? "What does the caller say? The AI picks the path…"
@@ -349,7 +349,7 @@ export function TestChat({
               <button
                 type="submit"
                 disabled={!input.trim()}
-                className="rounded bg-blue-600 px-3 py-1 text-sm text-white disabled:opacity-40"
+                className="rounded-lg bg-brand-600 px-3 py-1 text-sm text-white disabled:opacity-40"
               >
                 Send
               </button>
@@ -359,7 +359,7 @@ export function TestChat({
       )}
 
       {aiCalls.length > 0 && (
-        <p className="text-xs text-gray-500" data-testid="ai-totals">
+        <p className="text-xs text-slate-500" data-testid="ai-totals">
           AI: {aiCalls.length} request(s) ·{" "}
           {(aiCalls.reduce((sum, call) => sum + call.latencyMs, 0) / 1000).toFixed(1)} s ·{" "}
           {aiCalls.reduce(
@@ -373,9 +373,9 @@ export function TestChat({
       {state && <ContextMeter state={state} budget={contextBudget} />}
 
       {state?.callerPhone && (
-        <div className="border-t border-gray-200 pt-2 text-xs" data-testid="caller-memory">
+        <div className="border-t border-slate-200 pt-2 text-xs" data-testid="caller-memory">
           <div className="flex items-baseline justify-between">
-            <h3 className="font-semibold text-gray-600">Remembered about {state.callerPhone}</h3>
+            <h3 className="font-semibold text-slate-600">Remembered about {state.callerPhone}</h3>
             <button
               type="button"
               className="text-red-600 underline"
@@ -391,18 +391,18 @@ export function TestChat({
               ))}
             </ul>
           ) : (
-            <p className="mt-1 text-gray-500">Nothing yet: facts are saved when the call ends.</p>
+            <p className="mt-1 text-slate-500">Nothing yet: facts are saved when the call ends.</p>
           )}
         </div>
       )}
 
       {state && Object.keys(state.variables).length > 0 && (
-        <div className="border-t border-gray-200 pt-2">
-          <h3 className="text-xs font-semibold text-gray-600">Collected answers</h3>
+        <div className="border-t border-slate-200 pt-2">
+          <h3 className="text-xs font-semibold text-slate-600">Collected answers</h3>
           <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-2 text-xs" data-testid="variables">
             {Object.entries(state.variables).map(([name, value]) => (
               <div key={name} className="contents">
-                <dt className="font-mono text-gray-500">{name}</dt>
+                <dt className="font-mono text-slate-500">{name}</dt>
                 <dd className="truncate">{value}</dd>
               </div>
             ))}
@@ -422,7 +422,7 @@ function ContextMeter({ state, budget }: { state: ConversationState; budget: num
   const over = tokens > budget;
   return (
     <p
-      className={`text-xs ${over ? "text-amber-700" : "text-gray-500"}`}
+      className={`text-xs ${over ? "text-amber-700" : "text-slate-500"}`}
       data-testid="context-meter"
     >
       Context: ~{tokens.toLocaleString()} of {budget.toLocaleString()} tokens
@@ -436,7 +436,7 @@ function ContextMeter({ state, budget }: { state: ConversationState; budget: num
 
 function MessageBubble({ message }: { message: Message }) {
   if (message.kind === "note") {
-    const tone = { info: "text-gray-500", data: "text-indigo-600", error: "text-red-600" }[
+    const tone = { info: "text-slate-500", data: "text-indigo-600", error: "text-red-600" }[
       message.tone
     ];
     return (
@@ -452,7 +452,7 @@ function MessageBubble({ message }: { message: Message }) {
       <div
         data-testid={`${message.kind}-message`}
         className={`max-w-[85%] rounded-lg px-3 py-1.5 text-sm ${
-          isAgent ? "bg-gray-100 text-gray-900" : "bg-blue-600 text-white"
+          isAgent ? "bg-slate-100 text-slate-900" : "bg-brand-600 text-white"
         }`}
       >
         {message.text}

@@ -73,12 +73,12 @@ export function ModelPicker({ options, problems, choice, onChange }: Props) {
     <div className="space-y-1">
       {JOBS.map(({ job, label, none }) => (
         <label key={job} className="flex items-center gap-2 text-xs">
-          <span className="w-24 shrink-0 text-gray-600">{label}</span>
+          <span className="w-24 shrink-0 text-slate-600">{label}</span>
           <select
             aria-label={label}
             value={choice[job]}
             onChange={(event) => onChange({ ...choice, [job]: event.target.value })}
-            className="min-w-0 flex-1 rounded border border-gray-300 px-1 py-0.5"
+            className="min-w-0 flex-1 rounded-lg border border-slate-300 px-1 py-0.5"
           >
             <option value="">{none}</option>
             {options.map((option) => (

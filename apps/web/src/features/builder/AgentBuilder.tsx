@@ -270,11 +270,11 @@ function Builder({ agentId, initial, versions: initialVersions }: Props) {
         <span className="text-slate-300">/</span>
         <input
           aria-label="Agent name"
-          className="rounded border border-gray-300 px-2 py-1 font-semibold"
+          className="rounded-lg border border-slate-300 px-2 py-1 font-semibold"
           value={name}
           onChange={(event) => setName(event.target.value)}
         />
-        <span data-testid="save-state" className="text-sm text-gray-500">
+        <span data-testid="save-state" className="text-sm text-slate-500">
           {dirty ? "Unsaved changes" : `v${openVersion}`}
           {!dirty && openVersion !== latestVersion && ` (latest is v${latestVersion})`}
         </span>
@@ -285,7 +285,10 @@ function Builder({ agentId, initial, versions: initialVersions }: Props) {
           {issues.length ? `${issues.length} issue(s)` : "Ready to run ✓"}
         </span>
         <PhoneNumber agentId={agentId} />
-        <div className="flex overflow-hidden rounded border border-gray-300 text-sm" role="tablist">
+        <div
+          className="flex overflow-hidden rounded-lg border border-slate-300 text-sm"
+          role="tablist"
+        >
           {(["flow", "prompt", "tools", "evals", "releases", "website"] as const).map((tab) => (
             <button
               key={tab}
@@ -296,7 +299,7 @@ function Builder({ agentId, initial, versions: initialVersions }: Props) {
                 setMode(tab);
                 setTesting(false);
               }}
-              className={`px-3 py-1 ${mode === tab ? "bg-gray-800 text-white" : "hover:bg-gray-100"}`}
+              className={`px-3 py-1 ${mode === tab ? "bg-ink text-white" : "hover:bg-slate-100"}`}
             >
               {
                 {
@@ -316,7 +319,7 @@ function Builder({ agentId, initial, versions: initialVersions }: Props) {
             type="button"
             hidden={mode !== "flow"}
             onClick={() => setTesting((on) => !on)}
-            className={`rounded border px-3 py-1.5 text-sm font-medium ${
+            className={`rounded-lg border px-3 py-1.5 text-sm font-medium ${
               testing
                 ? "border-emerald-600 bg-emerald-600 text-white"
                 : "border-emerald-600 text-emerald-700 hover:bg-emerald-50"
@@ -334,7 +337,7 @@ function Builder({ agentId, initial, versions: initialVersions }: Props) {
             type="button"
             onClick={save}
             disabled={!canSave}
-            className="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
+            className="rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
           >
             {status.kind === "saving" ? "Saving…" : "Save version"}
           </button>
@@ -379,7 +382,7 @@ function Builder({ agentId, initial, versions: initialVersions }: Props) {
             />
           </div>
         )}
-        <aside className="w-60 overflow-y-auto border-r border-gray-200 p-3">
+        <aside className="w-60 overflow-y-auto border-r border-slate-200 p-3">
           <NodePalette onAdd={addNodeBelow} />
         </aside>
 
@@ -412,7 +415,7 @@ function Builder({ agentId, initial, versions: initialVersions }: Props) {
           </CanvasHighlightContext.Provider>
         </div>
 
-        <aside className="w-80 space-y-6 overflow-y-auto border-l border-gray-200 p-4">
+        <aside className="w-80 space-y-6 overflow-y-auto border-l border-slate-200 p-4">
           {testing ? (
             <TestChat
               flow={flow}
@@ -450,7 +453,7 @@ function Builder({ agentId, initial, versions: initialVersions }: Props) {
 function IssueList({ issues, onSelect }: { issues: FlowIssue[]; onSelect: (id: string) => void }) {
   return (
     <div className="space-y-1">
-      <h2 className="text-sm font-semibold text-gray-700">Checks</h2>
+      <h2 className="text-sm font-semibold text-slate-700">Checks</h2>
       {issues.length === 0 ? (
         <p className="text-sm text-emerald-700">Every step is set up and connected.</p>
       ) : (
@@ -461,7 +464,7 @@ function IssueList({ issues, onSelect }: { issues: FlowIssue[]; onSelect: (id: s
                 type="button"
                 disabled={!issue.nodeId}
                 onClick={() => issue.nodeId && onSelect(issue.nodeId)}
-                className="w-full rounded bg-red-50 px-2 py-1 text-left text-sm text-red-700 enabled:hover:bg-red-100"
+                className="w-full rounded-lg bg-red-50 px-2 py-1 text-left text-sm text-red-700 enabled:hover:bg-red-100"
               >
                 {issue.message}
               </button>
@@ -469,7 +472,7 @@ function IssueList({ issues, onSelect }: { issues: FlowIssue[]; onSelect: (id: s
           ))}
         </ul>
       )}
-      <p className="text-xs text-gray-500">Drafts with issues can still be saved.</p>
+      <p className="text-xs text-slate-500">Drafts with issues can still be saved.</p>
     </div>
   );
 }

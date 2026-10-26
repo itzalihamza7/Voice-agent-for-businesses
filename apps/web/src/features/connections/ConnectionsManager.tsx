@@ -529,14 +529,14 @@ function VerifyPanel({
       <div className="grid gap-3 md:grid-cols-2">
         <div className="rounded-lg border border-slate-200 bg-white p-3">
           <div className="text-xs font-semibold text-slate-900">A DNS TXT record</div>
-          <code className="mt-2 block rounded bg-slate-100 px-2 py-1.5 text-xs break-all text-slate-800">
+          <code className="mt-2 block rounded-lg bg-slate-100 px-2 py-1.5 text-xs break-all text-slate-800">
             {VERIFICATION_TXT_PREFIX}
             {connection.verificationToken}
           </code>
         </div>
         <div className="rounded-lg border border-slate-200 bg-white p-3">
           <div className="text-xs font-semibold text-slate-900">Or a file</div>
-          <code className="mt-2 block rounded bg-slate-100 px-2 py-1.5 text-xs break-all text-slate-800">
+          <code className="mt-2 block rounded-lg bg-slate-100 px-2 py-1.5 text-xs break-all text-slate-800">
             https://{host}
             {VERIFICATION_FILE_PATH}
           </code>
