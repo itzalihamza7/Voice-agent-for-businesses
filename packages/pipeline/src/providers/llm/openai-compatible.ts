@@ -13,6 +13,7 @@ import {
 // Talks to any server that speaks OpenAI's Chat Completions API. That covers OpenAI itself and
 // Ollama (http://localhost:11434/v1), so one class lets us compare a hosted and a local model.
 // Plain fetch on purpose (no SDK) so the HTTP request is easy to see and learn from.
+// With onToken (plain text replies only) the reply is streamed as server-sent events.
 
 export interface OpenAICompatibleConfig {
   /** Registry name, e.g. "openai" or "ollama". Used in error messages. */
@@ -90,6 +91,9 @@ export class OpenAICompatibleProvider implements LanguageModelProvider {
       maxRetries = 2,
     } = this.config;
     const started = performance.now();
+    const streaming = Boolean(options.onToken) && !options.tools?.length && !options.jsonSchema;
+    // Once text has gone out, a retry would repeat it: fail instead.
+    let streamed = false;
 
     for (let attempt = 0; ; attempt++) {
       let failure: string;
@@ -111,9 +115,29 @@ export class OpenAICompatibleProvider implements LanguageModelProvider {
               type: "json_schema",
               json_schema: { ...options.jsonSchema, strict: true },
             },
+            ...(streaming ? { stream: true, stream_options: { include_usage: true } } : {}),
           }),
           signal: AbortSignal.timeout(timeoutMs),
         });
+
+        if (response.ok && streaming && response.body) {
+          const {
+            text,
+            model: answeredBy,
+            usage,
+          } = await readStream(response.body, (piece) => {
+            streamed = true;
+            options.onToken!(piece);
+          });
+          return {
+            text: text.trim(),
+            model: answeredBy ?? model,
+            latencyMs: Math.round(performance.now() - started),
+            usage,
+            costUsd: this.config.estimateCost?.(usage) ?? null,
+            ...(usage && wasCut(messages, usage.inputTokens) ? { promptCut: true } : {}),
+          };
+        }
 
         if (response.ok) {
           const parsed = ResponseSchema.safeParse(await response.json());
@@ -155,7 +179,7 @@ export class OpenAICompatibleProvider implements LanguageModelProvider {
         failure = error instanceof Error ? error.message : String(error);
       }
 
-      if (attempt >= maxRetries) {
+      if (attempt >= maxRetries || streamed) {
         throw new LanguageModelError(
           `${this.name} failed after ${attempt + 1} attempts (${failure})`,
         );
@@ -163,6 +187,60 @@ export class OpenAICompatibleProvider implements LanguageModelProvider {
       // Exponential backoff: 0.5 s, 1 s, 2 s...
       await new Promise((resolve) => setTimeout(resolve, 500 * 2 ** attempt));
     }
+  }
+}
+
+const StreamChunkSchema = z.object({
+  model: z.string().optional(),
+  choices: z.array(z.object({ delta: z.object({ content: z.string().nullish() }).nullish() })),
+  usage: ResponseSchema.shape.usage,
+});
+
+/** Reads a streamed reply (server-sent events), passing each piece of text on as it arrives. */
+async function readStream(
+  body: ReadableStream<Uint8Array>,
+  onText: (text: string) => void,
+): Promise<{ text: string; model: string | null; usage: TokenUsage | null }> {
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let text = "";
+  let model: string | null = null;
+  let usage: TokenUsage | null = null;
+  const handle = (line: string) => {
+    if (!line.startsWith("data:")) return;
+    const data = line.slice(5).trim();
+    if (!data || data === "[DONE]") return;
+    const chunk = StreamChunkSchema.safeParse(safeParse(data));
+    if (!chunk.success) return;
+    model ??= chunk.data.model ?? null;
+    const piece = chunk.data.choices[0]?.delta?.content;
+    if (piece) {
+      text += piece;
+      onText(piece);
+    }
+    if (chunk.data.usage) {
+      usage = {
+        inputTokens: chunk.data.usage.prompt_tokens,
+        outputTokens: chunk.data.usage.completion_tokens,
+        cachedInputTokens: chunk.data.usage.prompt_tokens_details?.cached_tokens ?? 0,
+      };
+    }
+  };
+  for await (const bytes of body as unknown as AsyncIterable<Uint8Array>) {
+    buffer += decoder.decode(bytes, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    lines.forEach(handle);
+  }
+  handle(buffer);
+  return { text, model, usage };
+}
+
+function safeParse(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
   }
 }
 

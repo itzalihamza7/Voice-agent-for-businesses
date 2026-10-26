@@ -837,3 +837,171 @@ describe("parseBranchAnswer", () => {
     expect(parseBranchAnswer("book it", 3)).toBeNull();
   });
 });
+
+describe("runTurn speed and live progress", () => {
+  // greet → listen (book? / otherwise → look up → answer)
+  const qaFlow: AgentFlow = {
+    nodes: [
+      node("start", "start", {}),
+      node("greet", "say", { text: "Hi!" }),
+      node("listen", "branch", { conditions: [{ id: "c-book", label: "Wants to book" }] }),
+      node("book", "end", { message: "Let's book." }),
+      node("kb", "knowledgeLookup", { query: "prices" }),
+      node("answer", "aiResponse", { instructions: "Answer from the results." }),
+      node("bye", "end", { message: "" }),
+    ],
+    edges: [
+      { id: "e1", source: "start", target: "greet" },
+      { id: "e2", source: "greet", target: "listen" },
+      { id: "e3", source: "listen", target: "book", sourceHandle: "c-book" },
+      { id: "e4", source: "listen", target: "kb", sourceHandle: "else" },
+      { id: "e5", source: "kb", target: "answer" },
+      { id: "e6", source: "answer", target: "bye" },
+    ],
+  };
+
+  function searcher() {
+    const calls: string[] = [];
+    return {
+      calls,
+      knowledge: {
+        async search(options: { query: string }) {
+          calls.push(options.query);
+          return {
+            searchQuery: options.query,
+            results: [
+              { documentTitle: "Prices", heading: null, content: "A haircut is £30.", score: 9 },
+            ],
+            latencyMs: 1,
+            llm: [],
+          };
+        },
+      },
+    };
+  }
+
+  /** A model that answers a Branch decision only when told to. */
+  function slowDecision(path: string) {
+    let release!: () => void;
+    const released = new Promise<void>((resolve) => (release = resolve));
+    const llm: LanguageModelProvider = {
+      name: "slow",
+      model: "slow-1",
+      async complete(): Promise<CompletionResult> {
+        await released;
+        return {
+          text: JSON.stringify({ reason: "test", path }),
+          model: "slow-1",
+          latencyMs: 5,
+          usage: null,
+          costUsd: 0,
+        };
+      },
+    };
+    return { llm, release };
+  }
+
+  /** A replies model that streams its answer in pieces. */
+  function streamingReplies(pieces: string[]) {
+    const llm: LanguageModelProvider = {
+      name: "stream",
+      model: "stream-1",
+      async complete(_messages, options): Promise<CompletionResult> {
+        pieces.forEach((piece) => options?.onToken?.(piece));
+        return { text: pieces.join(""), model: "stream-1", latencyMs: 5, usage: null, costUsd: 0 };
+      },
+    };
+    return llm;
+  }
+
+  async function greeted(deps: Parameters<typeof runTurn>[3]) {
+    return (await runTurn(qaFlow, null, { type: "start" }, deps)).state;
+  }
+
+  it("starts the knowledge search while the Branch is still being decided", async () => {
+    const { calls, knowledge } = searcher();
+    const decision = slowDecision("Otherwise");
+    const deps = { decisions: decision.llm, replies: streamingReplies(["Sure."]), knowledge };
+    const pending = runTurn(
+      qaFlow,
+      await greeted(deps),
+      { type: "reply", text: "Haircut price?" },
+      deps,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    // The decision hasn't answered yet, but the search has already started.
+    expect(calls).toEqual(["Haircut price?"]);
+    decision.release();
+    const done = await pending;
+    expect(calls).toHaveLength(1);
+    expect(done.events.find((e) => e.type === "knowledgeLookup")).toMatchObject({
+      results: [{ excerpt: "A haircut is £30." }],
+    });
+  });
+
+  it("doesn't use the early search when another path wins", async () => {
+    const { knowledge } = searcher();
+    const decision = slowDecision("Wants to book");
+    decision.release();
+    const deps = { decisions: decision.llm, replies: null, knowledge };
+    const done = await runTurn(
+      qaFlow,
+      await greeted(deps),
+      { type: "reply", text: "Book me" },
+      deps,
+    );
+    expect(done.events.some((e) => e.type === "knowledgeLookup")).toBe(false);
+    expect(done.events.at(-1)).toMatchObject({ type: "end", message: "Let's book." });
+  });
+
+  it("reports each step and streams the reply's checked sentences", async () => {
+    const { knowledge } = searcher();
+    const decision = slowDecision("Otherwise");
+    decision.release();
+    const updates: unknown[] = [];
+    const deps = {
+      decisions: decision.llm,
+      replies: streamingReplies(["A haircut is ", "£30. Anything ", "else I can help with?"]),
+      knowledge,
+      onProgress: (update: unknown) => updates.push(update),
+    };
+    await runTurn(qaFlow, await greeted(deps), { type: "reply", text: "Haircut price?" }, deps);
+    expect(updates).toEqual([
+      { type: "step", nodeId: "listen", step: "deciding" },
+      { type: "step", nodeId: "kb", step: "searching" },
+      { type: "step", nodeId: "answer", step: "writing" },
+      { type: "text", nodeId: "answer", text: "A haircut is £30." },
+    ]);
+  });
+
+  it("stops streaming at a sentence that fails the checks, before it is shown", async () => {
+    const { knowledge } = searcher();
+    const decision = slowDecision("Otherwise");
+    decision.release();
+    const updates: { type: string; text?: string }[] = [];
+    const replies = streamingReplies(["Happy to help. ", "It costs £99. ", "Anything else?"]);
+    // The guard asks for the reply again once; this time it's grounded.
+    const retry = { ...replies, complete: replies.complete };
+    let calls = 0;
+    retry.complete = async (messages, options) =>
+      ++calls === 1
+        ? replies.complete(messages, options)
+        : { text: "A haircut is £30.", model: "stream-1", latencyMs: 5, usage: null, costUsd: 0 };
+    const deps = {
+      decisions: decision.llm,
+      replies: retry,
+      knowledge,
+      onProgress: (update: { type: string; text?: string }) => updates.push(update),
+    };
+    const done = await runTurn(
+      qaFlow,
+      await greeted(deps),
+      { type: "reply", text: "Price?" },
+      deps,
+    );
+    expect(updates.filter((u) => u.type === "text").map((u) => u.text)).toEqual(["Happy to help."]);
+    expect(done.events.find((e) => e.type === "aiResponse")).toMatchObject({
+      text: "A haircut is £30.",
+    });
+  });
+});

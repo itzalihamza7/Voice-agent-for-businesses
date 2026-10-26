@@ -26,7 +26,10 @@ export class FallbackLanguageModel implements LanguageModelProvider {
       return await this.main.complete(messages, options);
     } catch (error) {
       if (!(error instanceof LanguageModelError)) throw error;
-      const result = await this.fallback.complete(messages, options);
+      // The fallback answers in one piece: part of the main model's reply may already have been
+      // streamed, and the whole result replaces it.
+      const { onToken: _onToken, ...rest } = options ?? {};
+      const result = await this.fallback.complete(messages, rest);
       return { ...result, fellBackFrom: { model: this.main.model, error: error.message } };
     }
   }

@@ -206,4 +206,44 @@ describe("OpenAICompatibleProvider", () => {
       "unexpected response shape",
     );
   });
+
+  it("streams a plain reply piece by piece and still returns the whole text and usage", async () => {
+    const events = [
+      { model: "test-model-1", choices: [{ delta: { content: "Hello" } }] },
+      { model: "test-model-1", choices: [{ delta: { content: " there." } }] },
+      { model: "test-model-1", choices: [], usage: { prompt_tokens: 9, completion_tokens: 2 } },
+    ];
+    const sse = events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join("") + "data: [DONE]\n\n";
+    // Split mid-line, as the network does.
+    const bytes = new TextEncoder().encode(sse);
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(bytes.slice(0, 40));
+        controller.enqueue(bytes.slice(40));
+        controller.close();
+      },
+    });
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(body));
+    const pieces: string[] = [];
+    const result = await provider(fetchMock).complete([{ role: "user", content: "Hi" }], {
+      onToken: (piece) => pieces.push(piece),
+    });
+    expect(pieces).toEqual(["Hello", " there."]);
+    expect(result).toMatchObject({
+      text: "Hello there.",
+      usage: { inputTokens: 9, outputTokens: 2 },
+    });
+    expect(JSON.parse(String(fetchMock.mock.calls[0]![1]?.body))).toMatchObject({ stream: true });
+  });
+
+  it("doesn't stream when tools or a JSON schema are asked for", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(json(okBody));
+    const onToken = vi.fn();
+    await provider(fetchMock).complete([{ role: "user", content: "Hi" }], {
+      onToken,
+      jsonSchema: { name: "x", schema: { type: "object" } },
+    });
+    expect(JSON.parse(String(fetchMock.mock.calls[0]![1]?.body)).stream).toBeUndefined();
+    expect(onToken).not.toHaveBeenCalled();
+  });
 });

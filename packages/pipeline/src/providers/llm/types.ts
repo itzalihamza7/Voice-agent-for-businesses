@@ -1,7 +1,7 @@
 // Language model: decides what the agent says next, based on the conversation so far.
 // Implementations: mock.ts (tests), openai-compatible.ts (OpenAI and Ollama) and
 // fallback.ts (tries a backup model when the main one fails).
-// Streaming tokens (roadmap phase 10) and tool calls (phase 5) will be added here later.
+// Tool calls and structured output are options of `complete`; so is streaming (onToken).
 
 /** A function the model asked to call. `arguments` is a JSON string, as the model wrote it. */
 export interface ToolCall {
@@ -35,6 +35,12 @@ export interface CompletionOptions {
   tools?: ToolSpec[];
   /** "auto" = the model decides, "none" = answer in text, { name } = must call that tool. */
   toolChoice?: "auto" | "none" | { name: string };
+  /**
+   * Streams the reply: called with each piece of text as the model writes it. Only for plain
+   * text replies (no tools, no jsonSchema); providers that can't stream simply don't call it.
+   * The result still has the whole text.
+   */
+  onToken?: (text: string) => void;
 }
 
 export interface TokenUsage {

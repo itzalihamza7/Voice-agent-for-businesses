@@ -23,11 +23,34 @@ import { toolArgumentsPrompt } from "./prompts";
 // Every result goes into the transcript, so later steps (Branches, AI replies) can use it.
 
 /** The parts of a conversation turn the tool runner reads and changes. */
+/**
+ * What the caller's screen can show while a turn runs: the step being worked on ("deciding",
+ * "searching", "writing", or a tool by name), and the reply's sentences as they are written and
+ * checked. The turn's result still has everything; these only make waiting shorter.
+ */
+export type ProgressUpdate =
+  | {
+      type: "step";
+      nodeId: string;
+      step: "deciding" | "searching" | "writing" | "tool";
+      detail?: string;
+    }
+  | { type: "text"; nodeId: string; text: string };
+
+/** The parts of a knowledge search's outcome the lookup step reads (see knowledge.ts). */
+export type SearchOutcomeLike = Awaited<
+  ReturnType<import("./knowledge").KnowledgeSearcher["search"]>
+>;
+
 export interface ToolTurn {
   tools: ReadonlyMap<string, Tool> | null;
   now: Date;
   /** The number the call comes from, for tool values bound to it. */
   callerPhone: string | null;
+  /** Live progress for the caller's screen (see ProgressUpdate). */
+  onProgress?: (update: ProgressUpdate) => void;
+  /** Knowledge searches started early (during a Branch decision), by lookup step id. */
+  prefetched?: Map<string, { query: string; outcome: Promise<SearchOutcomeLike | null> }>;
   variables: Record<string, string>;
   transcript: TranscriptEntry[];
   events: ConversationEvent[];
@@ -97,6 +120,7 @@ export async function runToolStep(
   }
 
   // 3. Check the arguments against the tool's schema, then call it.
+  turn.onProgress?.({ type: "step", nodeId: node.id, step: "tool", detail: toolName });
   const started = performance.now();
   const checked = checkArguments(tool.parameters, args);
   const result: ToolResult = checked.ok
@@ -142,6 +166,8 @@ export async function replyWithTools(
   llm: LanguageModelProvider,
   messages: ChatMessage[],
   allowed: readonly Tool[],
+  /** Streams the words of a reply written without tools (the round that offers none). */
+  onToken?: (text: string) => void,
 ): Promise<{ text: string; llm: LlmCallInfo }> {
   const specs = allowed.map(toolSpec);
   const rounds: CompletionResult[] = [];
@@ -152,6 +178,7 @@ export async function replyWithTools(
     const result = await llm.complete(messages, {
       temperature: 0.4,
       ...(offerTools ? { tools: specs, toolChoice: "auto" as const } : {}),
+      ...(!offerTools && onToken ? { onToken } : {}),
     });
     rounds.push(result);
     if (!offerTools || !result.toolCalls?.length) {
@@ -164,6 +191,7 @@ export async function replyWithTools(
       const args = parseObject(call.arguments) ?? {};
       const started = performance.now();
       const checked = tool ? checkArguments(tool.parameters, args) : null;
+      turn.onProgress?.({ type: "step", nodeId, step: "tool", detail: call.name });
       const outcome: ToolResult = !tool
         ? { ok: false, error: `The tool "${call.name}" isn't allowed in this step.` }
         : checked?.ok

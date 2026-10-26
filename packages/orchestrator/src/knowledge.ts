@@ -26,17 +26,67 @@ export interface KnowledgeSearcher {
 // Keeps a long passage from filling the model's context.
 const MAX_PASSAGE_CHARS = 700;
 
+type LookupNode = Extract<FlowNode, { type: "knowledgeLookup" }>;
+
+/** What a lookup step searches for: the caller's last words, or the step's topic. */
+function lookupRequest(
+  turn: ToolTurn,
+  node: LookupNode,
+  variables: Readonly<Record<string, string>>,
+) {
+  const callerSaid =
+    [...turn.transcript].reverse().find((entry) => entry.role === "caller")?.text ?? "";
+  const topic = renderTemplate(node.data.query, variables).trim();
+  return { query: callerSaid || topic, topic };
+}
+
+function searchOptions(
+  node: LookupNode,
+  query: string,
+  topic: string,
+  llm: LanguageModelProvider | null,
+) {
+  return {
+    query,
+    ...(topic && topic !== query ? { context: topic } : {}),
+    mode: node.data.mode,
+    limit: node.data.limit,
+    rewriteWith: node.data.rewrite ? llm : null,
+    rerankWith: node.data.rerank ? llm : null,
+  };
+}
+
+/**
+ * Starts the searches of lookup steps a Branch may lead to, while the Branch is still being
+ * decided: the decision and the search are each about a second or two, so a knowledge answer
+ * comes that much sooner. If another path wins, the search is simply not used.
+ */
+export function prefetchLookups(
+  turn: ToolTurn,
+  nodes: readonly LookupNode[],
+  variables: Readonly<Record<string, string>>,
+  searcher: KnowledgeSearcher | null,
+  llm: LanguageModelProvider | null,
+) {
+  if (!searcher) return;
+  turn.prefetched ??= new Map();
+  for (const node of nodes) {
+    const { query, topic } = lookupRequest(turn, node, variables);
+    if (!query) continue;
+    // A failed early search isn't an error yet: the step searches again if it runs.
+    const outcome = searcher.search(searchOptions(node, query, topic, llm)).catch(() => null);
+    turn.prefetched.set(node.id, { query, outcome });
+  }
+}
+
 export async function lookUpKnowledge(
   turn: ToolTurn,
-  node: Extract<FlowNode, { type: "knowledgeLookup" }>,
+  node: LookupNode,
   variables: Readonly<Record<string, string>>,
   searcher: KnowledgeSearcher | null,
   llm: LanguageModelProvider | null,
 ): Promise<void> {
-  const callerSaid =
-    [...turn.transcript].reverse().find((entry) => entry.role === "caller")?.text ?? "";
-  const topic = renderTemplate(node.data.query, variables).trim();
-  const query = callerSaid || topic;
+  const { query, topic } = lookupRequest(turn, node, variables);
   const base = { type: "knowledgeLookup" as const, nodeId: node.id, query, searchQuery: query };
 
   if (!searcher || !query) {
@@ -50,14 +100,11 @@ export async function lookUpKnowledge(
   }
 
   try {
-    const outcome = await searcher.search({
-      query,
-      ...(topic && topic !== query ? { context: topic } : {}),
-      mode: node.data.mode,
-      limit: node.data.limit,
-      rewriteWith: node.data.rewrite ? llm : null,
-      rerankWith: node.data.rerank ? llm : null,
-    });
+    const early = turn.prefetched?.get(node.id);
+    turn.prefetched?.delete(node.id);
+    const outcome =
+      (early?.query === query ? await early.outcome : null) ??
+      (await searcher.search(searchOptions(node, query, topic, llm)));
     const results = outcome.results.map((hit) => ({
       documentTitle: hit.documentTitle,
       heading: hit.heading,
