@@ -12,11 +12,16 @@
 // A reply that fails is written again once with the problem explained, then replaced by a safe
 // answer. The AI understands; the code checks.
 
-const CARD_NUMBER = /\b(?:\d[ -]?){13,19}\b/g;
+const CARD_NUMBER = /\+?\b(?:\d[ -]?){13,19}\b/g;
 
-/** Removes card numbers from what the caller said. */
+/**
+ * Removes card numbers from what the caller said. A number starting with + or 0 is a phone
+ * number, however long ("+49 151 12345678"): no card starts that way.
+ */
 export function redactCaller(text: string): { text: string; redacted: boolean } {
-  const redacted = text.replace(CARD_NUMBER, "[card number removed]");
+  const redacted = text.replace(CARD_NUMBER, (number) =>
+    /^[+0]/.test(number) ? number : "[card number removed]",
+  );
   return { text: redacted, redacted: redacted !== text };
 }
 
