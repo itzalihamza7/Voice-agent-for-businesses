@@ -14,13 +14,38 @@
 
 const CARD_NUMBER = /\+?\b(?:\d[ -]?){13,19}\b/g;
 
+/** The Luhn check digit test that every payment card number passes. */
+function passesLuhn(digits: string): boolean {
+  let sum = 0;
+  for (let i = 0; i < digits.length; i++) {
+    const digit = Number(digits[digits.length - 1 - i]);
+    sum += i % 2 === 0 ? digit : digit > 4 ? digit * 2 - 9 : digit * 2;
+  }
+  return sum % 10 === 0;
+}
+
+/**
+ * 16 digits or more is longer than any phone number. 13 to 15 digits can be a phone number with
+ * its country code ("49 151 12345678"), so only the cards that short count: American Express
+ * (15 digits, 34 or 37) and Diners Club (14 digits, 300-305, 36 or 38), with a valid check digit.
+ */
+function isCardNumber(digits: string): boolean {
+  if (digits.length >= 16) return true;
+  const shaped =
+    (digits.length === 15 && /^3[47]/.test(digits)) ||
+    (digits.length === 14 && /^3(?:0[0-5]|[68])/.test(digits));
+  return shaped && passesLuhn(digits);
+}
+
 /**
  * Removes card numbers from what the caller said. A number starting with + or 0 is a phone
  * number, however long ("+49 151 12345678"): no card starts that way.
  */
 export function redactCaller(text: string): { text: string; redacted: boolean } {
   const redacted = text.replace(CARD_NUMBER, (number) =>
-    /^[+0]/.test(number) ? number : "[card number removed]",
+    !/^[+0]/.test(number) && isCardNumber(number.replace(/\D/g, ""))
+      ? "[card number removed]"
+      : number,
   );
   return { text: redacted, redacted: redacted !== text };
 }
